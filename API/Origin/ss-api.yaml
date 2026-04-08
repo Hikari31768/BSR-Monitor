@@ -1,0 +1,1580 @@
+openapi: 3.0.0
+info:
+  title: ScoreSaber Public API
+  description: |
+    ScoreSaber's Public API
+
+    Please note this API is in constant development and is subject to change, so if there are any errors please dont hesitate to contact us.
+
+    The current global rate limit is set at a pretty high 400 requests per minute, if for some reason you need higher than this please contact us with your reasoning and we may be able to supply you with special access
+  contact:
+    email: contact@scoresaber.com
+  version: 1.0.0
+servers:
+  - url: 'https://scoresaber.com'
+    description: Production server
+paths:
+  /api/leaderboards:
+    get:
+      summary: Get a list of leaderboards based on filters
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          explode: true
+          style: form
+        - name: verified
+          in: query
+          description: Filter by verified (⚠️️deprecation notice)
+          required: false
+          schema:
+            type: boolean
+          explode: true
+          style: form
+        - name: ranked
+          in: query
+          description: Filter by ranked
+          required: false
+          schema:
+            type: boolean
+          explode: true
+          style: form
+        - name: qualified
+          in: query
+          description: Filter by qualified
+          required: false
+          schema:
+            type: boolean
+          explode: true
+          style: form
+        - name: loved
+          in: query
+          description: Filter by loved
+          required: false
+          schema:
+            type: boolean
+          explode: true
+          style: form
+        - name: minStar
+          in: query
+          description: Filter by minimum star value
+          required: false
+          schema:
+            type: number
+          explode: true
+          style: form
+        - name: maxStar
+          in: query
+          description: Filter by maxiumum star value
+          required: false
+          schema:
+            type: number
+          explode: true
+          style: form
+        - name: category
+          in: query
+          description: 'Which category to sort by (0 = trending, date ranked = 1, scores set = 2, star difficulty = 3, author = 4)'
+          required: false
+          schema:
+            type: number
+            maximum: 4
+            minimum: 0
+          explode: true
+          style: form
+        - name: sort
+          in: query
+          description: 'Which direction to sort (0 = descending, 1 = ascending)'
+          required: false
+          schema:
+            type: number
+            maximum: 1
+            minimum: 0
+          explode: true
+          style: form
+        - name: unique
+          in: query
+          description: Only return one leaderboard of each id
+          required: false
+          schema:
+            type: boolean
+          explode: true
+          style: form
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+          explode: true
+          style: form
+        - name: withMetadata
+          in: query
+          description: (default true)
+          required: false
+          schema:
+            type: boolean
+          explode: true
+          style: form
+      responses:
+        '200':
+          description: A list of leaderboards
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaderboardInfoCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Leaderboards
+  '/api/leaderboard/by-id/{leaderboardId}/info':
+    get:
+      summary: Gets leaderboard information by ScoreSaber leaderboardId
+      parameters:
+        - name: leaderboardId
+          in: path
+          description: ScoreSaber leaderboardId
+          required: true
+          schema:
+            type: number
+          explode: false
+          style: simple
+      responses:
+        '200':
+          description: Leaderboard information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaderboardInfo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Leaderboards
+  '/api/leaderboard/by-hash/{hash}/info':
+    get:
+      summary: Gets leaderboard information by map hash
+      parameters:
+        - name: hash
+          in: path
+          description: Map hash
+          required: true
+          schema:
+            type: string
+          explode: false
+          style: simple
+        - name: difficulty
+          in: query
+          description: '(1 = Easy, 3 = Normal, 5 = Hard, 7 = Expert, 9 = Expert+)'
+          required: true
+          schema:
+            type: integer
+          explode: true
+          style: form
+        - name: gameMode
+          in: query
+          description: (e.g SoloStandard)
+          required: false
+          schema:
+            type: string
+          explode: true
+          style: form
+      responses:
+        '200':
+          description: Leaderboard information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaderboardInfo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Leaderboards
+  '/api/leaderboard/by-id/{leaderboardId}/scores':
+    get:
+      summary: Gets leaderboard scores by ScoreSaber leaderboardId
+      parameters:
+        - name: leaderboardId
+          in: path
+          description: ScoreSaber leaderboardId
+          required: true
+          schema:
+            type: number
+          explode: false
+          style: simple
+        - name: countries
+          in: query
+          description: Filter by ISO 3166-1 alpha-2 code (comma delimitered)
+          required: false
+          schema:
+            type: string
+          explode: true
+          style: form
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          explode: true
+          style: form
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+          explode: true
+          style: form
+        - name: withMetadata
+          in: query
+          description: (default true)
+          required: false
+          schema:
+            type: boolean
+          explode: true
+          style: form
+      responses:
+        '200':
+          description: A colleciton of Score
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoreCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Leaderboards
+  '/api/leaderboard/by-hash/{hash}/scores':
+    get:
+      summary: Gets leaderboard scores by map hash
+      parameters:
+        - name: hash
+          in: path
+          description: Map hash
+          required: true
+          schema:
+            type: string
+          explode: false
+          style: simple
+        - name: difficulty
+          in: query
+          description: '(1 = Easy, 3 = Normal, 5 = Hard, 7 = Expert, 9 = Expert+)'
+          required: true
+          schema:
+            type: integer
+          explode: true
+          style: form
+        - name: countries
+          in: query
+          description: Filter by ISO 3166-1 alpha-2 code (comma delimitered)
+          required: false
+          schema:
+            type: string
+          explode: true
+          style: form
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          explode: true
+          style: form
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+          explode: true
+          style: form
+        - name: gameMode
+          in: query
+          description: (e.g SoloStandard)
+          required: false
+          schema:
+            type: string
+          explode: true
+          style: form
+        - name: withMetadata
+          in: query
+          description: (default true)
+          required: false
+          schema:
+            type: boolean
+          explode: true
+          style: form
+      responses:
+        '200':
+          description: A collection of Score
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScoreCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Leaderboards
+  '/api/leaderboard/get-difficulties/{hash}':
+    get:
+      summary: Gets a leaderboards difficulties by hash
+      parameters:
+        - name: hash
+          in: path
+          description: Map hash
+          required: true
+          schema:
+            type: string
+          explode: false
+          style: simple
+      responses:
+        '200':
+          description: An Array of Difficulty
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Difficulty'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Leaderboards
+  /api/players:
+    get:
+      summary: Get a list of players based on filters
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          explode: true
+          style: form
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: number
+          explode: true
+          style: form
+        - name: countries
+          in: query
+          description: Filter by ISO 3166-1 alpha-2 code (comma delimitered)
+          required: false
+          schema:
+            type: string
+          explode: true
+          style: form
+        - name: withMetadata
+          in: query
+          description: (default true)
+          required: false
+          schema:
+            type: boolean
+          explode: true
+          style: form
+      responses:
+        '200':
+          description: A collection of Player
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlayerCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Players
+  /api/players/count:
+    get:
+      summary: Get a list of active players based on filters
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          explode: true
+          style: form
+        - name: countries
+          in: query
+          description: Filter by ISO 3166-1 alpha-2 code (comma delimitered)
+          required: false
+          schema:
+            type: string
+          explode: true
+          style: form
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: number
+                example: 399
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Players
+  '/api/player/{playerId}/basic':
+    get:
+      summary: Gets a players basic information
+      parameters:
+        - name: playerId
+          in: path
+          required: true
+          schema:
+            type: string
+          explode: false
+          style: simple
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Player'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Players
+  '/api/player/{playerId}/full':
+    get:
+      summary: Gets all the players information
+      parameters:
+        - name: playerId
+          in: path
+          required: true
+          schema:
+            type: string
+          explode: false
+          style: simple
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Player'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Players
+  '/api/player/{playerId}/scores':
+    get:
+      summary: Gets scores by playerId
+      parameters:
+        - name: playerId
+          in: path
+          required: true
+          schema:
+            type: string
+          explode: false
+          style: simple
+        - name: limit
+          in: query
+          description: The amount of scores to return
+          required: false
+          schema:
+            type: integer
+            maximum: 100
+            minimum: 1
+          explode: true
+          style: form
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - top
+              - recent
+          explode: true
+          style: form
+        - name: page
+          in: query
+          description: Page
+          required: false
+          schema:
+            type: integer
+          explode: true
+          style: form
+        - name: withMetadata
+          in: query
+          description: (default true)
+          required: false
+          schema:
+            type: boolean
+          explode: true
+          style: form
+      responses:
+        '200':
+          description: A collection of PlayerScore
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerScoreCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Players
+  /api/auth/getToken:
+    get:
+      summary: Gets logged in users auth token
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IGetTokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Website Auth
+  /api/auth/checkToken:
+    post:
+      summary: Checks users auth token
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/check_token_body'
+      responses:
+        '200':
+          description: OK
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Website Auth
+  /api/auth/logout:
+    get:
+      summary: Logs out a logged in user
+      responses:
+        '200':
+          description: OK
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Website Auth
+  '/api/user/{playerId}/refresh':
+    get:
+      summary: Get logged in user information
+      parameters:
+        - name: playerId
+          in: path
+          required: true
+          schema:
+            type: string
+          explode: false
+          style: simple
+      responses:
+        '200':
+          description: OK
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Website User
+  /api/user/@me:
+    get:
+      summary: Get logged in user information
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserData'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Website User
+  /api/user/quest-key:
+    get:
+      summary: Generates a new quest key if one doesn't exist
+      responses:
+        '200':
+          description: The quest key
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Website User
+  /api/ranking/requests/top:
+    get:
+      summary: Gets the top 6 rank requests -⚠️deprecation notice
+      responses:
+        '200':
+          description: An Array of RankRequestListing
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RankRequestListing'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Public Ranking
+  /api/ranking/requests/belowTop:
+    get:
+      summary: Gets the rest of the ranking requests - ⚠️deprecation notice
+      responses:
+        '200':
+          description: An Array of RankRequestListing
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RankRequestListing'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Public Ranking
+  '/api/ranking/request/{requestId}':
+    get:
+      summary: Gets rank request information by requestId
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: number
+          explode: false
+          style: simple
+      responses:
+        '200':
+          description: Rank request information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RankRequestInformation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Public Ranking
+  '/api/ranking/request/by-id/{leaderboardId}':
+    get:
+      summary: Gets rank request information by ScoreSaber leaderboardId
+      parameters:
+        - name: leaderboardId
+          in: path
+          description: ScoreSaber leaderboardId
+          required: true
+          schema:
+            type: number
+          explode: false
+          style: simple
+      responses:
+        '200':
+          description: Rank request information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RankRequestInformation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Public Ranking
+  /api/ranking/request/action/rt/create:
+    post:
+      summary: Creates a rank request
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/rt_create_body'
+      responses:
+        '200':
+          description: The created requestId
+          content:
+            text/plain:
+              schema:
+                type: number
+                example: 6534
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Ranking Team
+  /api/ranking/request/action/rt/vote:
+    post:
+      summary: Votes on a given rank request
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/rt_vote_body'
+      responses:
+        '200':
+          description: OK
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Ranking Team
+  /api/ranking/request/action/rt/comment:
+    post:
+      summary: Comments on a given rank request
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/rt_comment_body'
+      responses:
+        '200':
+          description: OK
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Ranking Team
+  /api/ranking/request/action/qat/vote:
+    post:
+      summary: Votes on a given rank request
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/qat_vote_body'
+      responses:
+        '200':
+          description: OK
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Quality Assurance Team
+  /api/ranking/request/action/qat/comment:
+    post:
+      summary: Comments on a given rank request
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/qat_comment_body'
+      responses:
+        '200':
+          description: OK
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Quality Assurance Team
+  /api/ranking/request/action/nat/replace:
+    post:
+      summary: Replaces a rank requests leaderboardId
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/nat_replace_body'
+      responses:
+        '200':
+          description: OK
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Nomination Assessment Team
+  /api/ranking/request/action/nat/qualify:
+    post:
+      summary: Qualifies a rank request
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/nat_qualify_body'
+      responses:
+        '200':
+          description: OK
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Nomination Assessment Team
+  /api/ranking/request/action/nat/deny:
+    post:
+      summary: Denies a rank request
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/nat_deny_body'
+      responses:
+        '200':
+          description: OK
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+      tags:
+        - Nomination Assessment Team
+components:
+  schemas:
+    Metadata:
+      type: object
+      properties:
+        total:
+          type: number
+        page:
+          type: number
+        itemsPerPage:
+          type: number
+      additionalProperties: false
+      required:
+        - itemsPerPage
+        - page
+        - total
+    LeaderboardInfo:
+      type: object
+      properties:
+        id:
+          type: number
+        songHash:
+          type: string
+        songName:
+          type: string
+        songSubName:
+          type: string
+        songAuthorName:
+          type: string
+        levelAuthorName:
+          type: string
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        maxScore:
+          type: number
+        createdDate:
+          type: string
+          format: date-time
+        rankedDate:
+          type: string
+          format: date-time
+          nullable: true
+        qualifiedDate:
+          type: string
+          format: date-time
+          nullable: true
+        lovedDate:
+          type: string
+          format: date-time
+          nullable: true
+        ranked:
+          type: boolean
+        qualified:
+          type: boolean
+        loved:
+          type: boolean
+        maxPP:
+          type: number
+        stars:
+          type: number
+        positiveModifiers:
+          type: boolean
+        plays:
+          type: number
+        dailyPlays:
+          type: number
+        coverImage:
+          type: string
+        playerScore:
+          allOf:
+            - $ref: '#/components/schemas/Score'
+          nullable: true
+        difficulties:
+          type: array
+          items:
+            $ref: '#/components/schemas/Difficulty'
+      required:
+        - coverImage
+        - createdDate
+        - dailyPlays
+        - difficulties
+        - difficulty
+        - difficultyRaw
+        - id
+        - levelAuthorName
+        - loved
+        - lovedDate
+        - maxPP
+        - maxScore
+        - playerScore
+        - plays
+        - positiveModifiers
+        - qualified
+        - qualifiedDate
+        - ranked
+        - rankedDate
+        - songAuthorName
+        - songHash
+        - songName
+        - songSubName
+        - stars
+    LeaderboardInfoCollection:
+      type: object
+      properties:
+        leaderboards:
+          type: array
+          items:
+            $ref: '#/components/schemas/LeaderboardInfo'
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+      additionalProperties: false
+      required:
+        - leaderboards
+        - metadata
+    LeaderboardPlayer:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        profilePicture:
+          type: string
+        country:
+          type: string
+        permissions:
+          type: number
+        role:
+          type: string
+      additionalProperties: false
+      required:
+        - country
+        - id
+        - name
+        - permissions
+        - profilePicture
+        - role
+    Difficulty:
+      type: object
+      properties:
+        leaderboardId:
+          type: number
+        difficulty:
+          type: number
+        gameMode:
+          type: string
+        difficultyRaw:
+          type: string
+      additionalProperties: false
+      required:
+        - difficulty
+        - difficultyRaw
+        - gameMode
+        - leaderboardId
+    ScoreCollection:
+      type: object
+      properties:
+        scores:
+          type: array
+          items:
+            $ref: '#/components/schemas/Score'
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+      additionalProperties: false
+      required:
+        - metadata
+        - scores
+    Score:
+      type: object
+      properties:
+        id:
+          type: number
+        leaderboardPlayerInfo:
+          $ref: '#/components/schemas/LeaderboardPlayer'
+        rank:
+          type: number
+        baseScore:
+          type: number
+        modifiedScore:
+          type: number
+        pp:
+          type: number
+        weight:
+          type: number
+        modifiers:
+          type: string
+        multiplier:
+          type: number
+        badCuts:
+          type: number
+        missedNotes:
+          type: number
+        maxCombo:
+          type: number
+        fullCombo:
+          type: boolean
+        hmd:
+          type: number
+        hasReplay:
+          type: boolean
+        timeSet:
+          type: string
+          format: date-time
+        deviceHmd:
+          type: string
+          nullable: true
+        deviceControllerLeft:
+          type: string
+          nullable: true
+        deviceControllerRight:
+          type: string
+          nullable: true
+      additionalProperties: false
+      required:
+        - badCuts
+        - baseScore
+        - fullCombo
+        - hasReplay
+        - hmd
+        - id
+        - maxCombo
+        - missedNotes
+        - modifiedScore
+        - modifiers
+        - multiplier
+        - pp
+        - rank
+        - timeSet
+        - weight
+        - deviceHmd
+        - deviceControllerLeft
+        - deviceControllerRight
+    PlayerCollection:
+      type: object
+      properties:
+        players:
+          type: array
+          items:
+            $ref: '#/components/schemas/Player'
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+      additionalProperties: false
+      required:
+        - metadata
+        - players
+    Player:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        profilePicture:
+          type: string
+        bio:
+          type: string
+          nullable: true
+        country:
+          type: string
+        pp:
+          type: number
+        rank:
+          type: number
+        countryRank:
+          type: number
+        role:
+          type: string
+        badges:
+          allOf:
+            - type: array
+              items:
+                $ref: '#/components/schemas/Badge'
+          nullable: true
+        histories:
+          type: string
+        scoreStats:
+          allOf:
+            - $ref: '#/components/schemas/ScoreStats'
+          nullable: true
+        permissions:
+          type: number
+        banned:
+          type: boolean
+        inactive:
+          type: boolean
+        firstSeen:
+          type: string
+          format: date-time
+          nullable: true
+      additionalProperties: false
+      required:
+        - badges
+        - banned
+        - bio
+        - country
+        - countryRank
+        - histories
+        - id
+        - inactive
+        - name
+        - permissions
+        - pp
+        - profilePicture
+        - rank
+        - role
+        - scoreStats
+        - firstSeen
+    ScoreStats:
+      type: object
+      properties:
+        totalScore:
+          type: number
+        totalRankedScore:
+          type: number
+        averageRankedAccuracy:
+          type: number
+        totalPlayCount:
+          type: number
+        rankedPlayCount:
+          type: number
+        replaysWatched:
+          type: number
+      additionalProperties: false
+      required:
+        - averageRankedAccuracy
+        - rankedPlayCount
+        - replaysWatched
+        - totalPlayCount
+        - totalRankedScore
+        - totalScore
+    Badge:
+      type: object
+      properties:
+        description:
+          type: string
+        image:
+          type: string
+      additionalProperties: false
+      required:
+        - description
+        - image
+    PlayerScoreCollection:
+      type: object
+      properties:
+        playerScores:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlayerScore'
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+      additionalProperties: false
+      required:
+        - metadata
+        - playerScores
+    PlayerScore:
+      type: object
+      properties:
+        score:
+          $ref: '#/components/schemas/Score'
+        leaderboard:
+          $ref: '#/components/schemas/LeaderboardInfo'
+      additionalProperties: false
+      required:
+        - leaderboard
+        - score
+    VoteGroup:
+      type: object
+      properties:
+        upvotes:
+          type: number
+        downvotes:
+          type: number
+        myVote:
+          type: boolean
+        neutral:
+          type: number
+      additionalProperties: false
+      required:
+        - downvotes
+        - myVote
+        - upvotes
+    RankRequestListing:
+      type: object
+      properties:
+        requestId:
+          type: number
+        weight:
+          type: number
+        leaderboardInfo:
+          $ref: '#/components/schemas/LeaderboardInfo'
+        created_at:
+          type: string
+        totalRankVotes:
+          $ref: '#/components/schemas/VoteGroup'
+        totalQATVotes:
+          $ref: '#/components/schemas/VoteGroup'
+        difficultyCount:
+          type: number
+      additionalProperties: false
+      required:
+        - created_at
+        - difficultyCount
+        - leaderboardInfo
+        - requestId
+        - totalQATVotes
+        - totalRankVotes
+        - weight
+    RankRequestInformation:
+      type: object
+      properties:
+        requestId:
+          type: number
+        requestDescription:
+          type: string
+        leaderboardInfo:
+          $ref: '#/components/schemas/LeaderboardInfo'
+        created_at:
+          type: string
+        rankVotes:
+          $ref: '#/components/schemas/VoteGroup'
+        qatVotes:
+          $ref: '#/components/schemas/VoteGroup'
+        rankComments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
+        qatComments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
+        requestType:
+          type: number
+        approved:
+          type: number
+        difficulties:
+          type: array
+          items:
+            $ref: '#/components/schemas/RankingDifficulty'
+      additionalProperties: false
+      required:
+        - approved
+        - created_at
+        - difficulties
+        - leaderboardInfo
+        - qatComments
+        - qatVotes
+        - rankComments
+        - rankVotes
+        - requestDescription
+        - requestId
+        - requestType
+    RankingDifficulty:
+      type: object
+      properties:
+        requestId:
+          type: number
+        difficulty:
+          type: number
+      additionalProperties: false
+      required:
+        - difficulty
+        - requestId
+    Comment:
+      type: object
+      properties:
+        username:
+          type: string
+        userId:
+          type: string
+        comment:
+          type: string
+        timeStamp:
+          type: string
+      additionalProperties: false
+      required:
+        - comment
+        - timeStamp
+        - userId
+        - username
+    UserData:
+      type: object
+      properties:
+        playerId:
+          type: string
+        permissions:
+          type: number
+        questKey:
+          type: string
+      additionalProperties: false
+      required:
+        - permissions
+        - playerId
+        - questKey
+    IGetTokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+      required:
+        - token
+    ScoreSaberError:
+      type: object
+      properties:
+        errorMessage:
+          type: string
+      required:
+        - errorMessage
+    rt_create_body:
+      type: object
+      properties:
+        leaderboardId:
+          type: string
+        requestType:
+          description: '(0 = unrank, 1 rank)'
+          type: integer
+          maximum: 1
+          minimum: 0
+        description:
+          type: string
+      required:
+        - description
+        - leaderboardId
+        - requestType
+    rt_vote_body:
+      type: object
+      properties:
+        requestId:
+          type: string
+        vote:
+          description: '(0 = down, 1 up)'
+          type: integer
+          maximum: 1
+          minimum: 0
+      required:
+        - requestId
+        - vote
+    rt_comment_body:
+      type: object
+      properties:
+        requestId:
+          type: string
+        comment:
+          type: string
+      required:
+        - requestId
+        - vote
+    qat_vote_body:
+      type: object
+      properties:
+        requestId:
+          type: string
+        vote:
+          description: '(0 = down, 1 up, 2 = neutral)'
+          type: integer
+          maximum: 1
+          minimum: 0
+      required:
+        - requestId
+        - vote
+    qat_comment_body:
+      type: object
+      properties:
+        requestId:
+          type: string
+        comment:
+          type: string
+      required:
+        - requestId
+        - vote
+    nat_replace_body:
+      type: object
+      properties:
+        requestId:
+          description: The requestId affected
+          type: number
+        leaderboardId:
+          description: The leaderboardId to replace the current requests leaderboardId
+          type: number
+        description:
+          description: An updated description
+          type: string
+      required:
+        - description
+        - leaderboardId
+        - requestId
+    nat_qualify_body:
+      type: object
+      properties:
+        requestId:
+          type: number
+      required:
+        - requestId
+    nat_deny_body:
+      type: object
+      properties:
+        requestId:
+          type: number
+      required:
+        - requestId
+    check_token_body:
+      type: object
+      properties:
+        token:
+          type: string
+      required:
+        - token
+  responses:
+    NotFound:
+      description: The specified resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ScoreSaberError'
+    BadRequest:
+      description: Schema validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ScoreSaberError'
+    Unauthorized:
+      description: Not logged in
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ScoreSaberError'
+    Forbidden:
+      description: You don't have permission to view this!
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ScoreSaberError'
+    Unprocessable:
+      description: 'Schema correct, content unprocessable'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ScoreSaberError'
+    UnexpectedError:
+      description: Unexpected Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ScoreSaberError'
+tags:
+  - name: Leaderboards
+    description: Leaderboard related queries
+  - name: Players
+    description: Player related queries
+  - name: Website User
+    description: User actions
+  - name: Website Auth
+    description: Website auth
+  - name: Public Ranking
+    description: Non-protected ranking related queries
+  - name: Ranking Team
+    description: Ranking Team related operations
+  - name: Quality Assurance Team
+    description: Quality Assurance Team related operations
+  - name: Nomination Assessment Team
+    description: Nomination Assessment Team related operations
