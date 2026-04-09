@@ -1854,23 +1854,6 @@ paths:
           schema:
             type: integer
             format: int32
-      requestBody:
-        content:
-          application/*+json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/PlaylistResponse'
-          application/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/PlaylistResponse'
-          text/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/PlaylistResponse'
       responses:
         '200':
           description: Leaderboards retrieved successfully
@@ -3492,23 +3475,6 @@ paths:
           description: 'Playlits Ids to filter, default is null'
           schema:
             type: string
-      requestBody:
-        content:
-          application/*+json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/PlaylistResponse'
-          application/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/PlaylistResponse'
-          text/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/PlaylistResponse'
       responses:
         '200':
           description: Scores retrieved successfully
@@ -3969,7 +3935,7 @@ paths:
       tags:
         - PlayerScores
     get:
-      operationId: PlayerScores_GetCompactScores
+      operationId: PlayerScores_GetCompactScoresGet
       summary: Retrieve player's scores in a compact form
       description: Fetches a paginated list of scores for a specified player ID. Returns less info to save bandwith or processing time
       parameters:
@@ -4371,23 +4337,6 @@ paths:
           schema:
             type: integer
             format: int32
-      requestBody:
-        content:
-          application/*+json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/PlaylistResponse'
-          application/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/PlaylistResponse'
-          text/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/PlaylistResponse'
       responses:
         '200':
           description: Scores retrieved successfully
@@ -5427,23 +5376,6 @@ paths:
           description: Override current user ID
           schema:
             type: string
-      requestBody:
-        content:
-          application/*+json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/PlaylistResponse'
-          application/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/PlaylistResponse'
-          text/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/PlaylistResponse'
       responses:
         '200':
           description: Maps retrieved successfully
