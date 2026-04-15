@@ -2,3 +2,5 @@
 
 .playwright/
 .playwright-cli/
+.thunder/
+.vscode/

@@ -4,7 +4,7 @@ info:
   description: 'Retrieves players, scores, rankings, maps, leaderboards and much more for Beat Saber.'
   version: v1
 servers:
-  - url: 'https://api.beatleader.xyz'
+  - url: 'https://api.beatleader.com'
 paths:
   /beasties/nominations:
     get:
