@@ -5,9 +5,9 @@ BeatSaber 玩家成绩监控应用。
 ## 技术栈
 
 - **框架**: Tauri
-- **前端**: TypeScript + React
-- **数据库**: SQLite（通过 Tauri 插件，前端直连）
-- **后端**: Rust（少量，仅必要系统调用）
+- **前端**: TypeScript + React（UI 展示）
+- **后端**: Rust（数据库操作、核心业务逻辑、API 调用）
+- **数据库**: SQLite
 
 ## 核心模块
 
