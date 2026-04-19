@@ -118,3 +118,83 @@ cargo build
 - 所有命令编译通过
 - 命令可在前端通过 `invoke` 调用
 - 错误正确转换为字符串返回
+
+---
+
+# 本次任务完成记录
+
+## 操作罗列
+
+1. 创建 `src-tauri/src/commands` 模块结构：
+   - `mod.rs` - 模块入口
+   - `player.rs` - 玩家相关命令
+   - `score.rs` - 成绩相关命令
+   - `map.rs` - 谱面相关命令
+   - `playlist.rs` - 歌单相关命令
+   - `leaderboard.rs` - 排行榜命令
+2. 实现玩家管理命令：`add_player`、`get_player_list`、`get_player`、`delete_player`、`update_player`
+3. 实现成绩管理命令：`update_player_scores`、`get_player_scores`、`get_player_score_count`
+4. 实现谱面管理命令：`get_map_by_key`、`get_map_by_hash`
+5. 实现歌单管理命令：`add_playlist`、`get_playlist_list`、`get_playlist`、`delete_playlist`、`get_playlist_maps`
+6. 实现排行榜查询命令：`get_leaderboard`
+7. 在 `lib.rs` 中注册所有命令
+
+## 流程归纳
+
+### 模块结构
+
+```
+src-tauri/src/commands/
+├── mod.rs           # 模块入口
+├── player.rs        # 玩家管理命令
+├── score.rs         # 成绩管理命令
+├── map.rs           # 谱面管理命令
+├── playlist.rs      # 歌单管理命令
+└── leaderboard.rs   # 排行榜查询命令
+```
+
+### 命令设计要点
+
+- 所有命令使用 `#[tauri::command]` 宏标记
+- 异步命令返回 `Result<T, String>`
+- 通过 `AppHandle` 和 `Manager` trait 获取数据库连接（`Mutex<Connection>`）
+- 数据库操作在获取锁后执行，API 调用在锁释放后执行（避免跨 await 持有锁）
+- 错误统一使用 `.map_err(|e| e.to_string())` 转换为字符串
+
+### 异步命令处理模式
+
+由于 `rusqlite::Connection` 不是 `Send + Sync`，不能在异步上下文中跨 await 持有数据库锁。采用模式：
+
+```rust
+// 1. API 调用（不持有数据库锁）
+let response = api.get_xxx().await?;
+
+// 2. 数据库操作（获取锁，执行，释放锁）
+{
+    let state = app.try_state::<Mutex<Connection>>()?;
+    let guard = state.lock()?;
+    db::insert_xxx(&guard, &data)?;
+}
+```
+
+## 验收结果
+
+```
+Compiling bsr-monitor v0.1.0
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.14s
+```
+
+**验收通过**：所有命令编译通过，无错误。
+
+## 新增文件
+
+- [src/commands/mod.rs](../src-tauri/src/commands/mod.rs)
+- [src/commands/player.rs](../src-tauri/src/commands/player.rs)
+- [src/commands/score.rs](../src-tauri/src/commands/score.rs)
+- [src/commands/map.rs](../src-tauri/src/commands/map.rs)
+- [src/commands/playlist.rs](../src-tauri/src/commands/playlist.rs)
+- [src/commands/leaderboard.rs](../src-tauri/src/commands/leaderboard.rs)
+
+## 修改文件
+
+- [src/lib.rs](../src-tauri/src/lib.rs) - 添加 `pub mod commands` 和命令注册
