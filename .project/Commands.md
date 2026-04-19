@@ -20,7 +20,7 @@ src-tauri/src/commands/
 
 | 命令 | 参数 | 返回 | 说明 |
 |------|------|------|------|
-| `add_player` | id, live_url, alias | PlayerInfo | 添加玩家（含全量拉取成绩） |
+| `add_player` | id, live_url, alias | PlayerInfo | 添加或更新玩家。已存在则刷新信息+增量拉新成绩，不存在则全量拉取 |
 | `get_player_list` | - | Vec<PlayerInfo> | 获取玩家列表 |
 | `get_player` | id | Option<PlayerInfo> | 获取单个玩家 |
 | `delete_player` | id | - | 删除玩家 |
@@ -45,7 +45,7 @@ src-tauri/src/commands/
 
 | 命令 | 参数 | 返回 | 说明 |
 |------|------|------|------|
-| `add_playlist` | playlist_id | Playlist | 添加歌单 |
+| `add_playlist` | playlist_id | Playlist | 添加或更新歌单。已存在则刷新信息+重新拉取谱面，不存在则全量添加 |
 | `get_playlist_list` | - | Vec<Playlist> | 获取歌单列表 |
 | `get_playlist` | playlist_id | Option<Playlist> | 获取单个歌单 |
 | `delete_playlist` | playlist_id | - | 删除歌单 |
@@ -104,3 +104,40 @@ const player = await invoke("get_player", { id: "123" });
 ```
 
 注意：`invoke` 只能在 Tauri WebView 中使用，普通浏览器无法调用。
+
+## 进度事件
+
+耗时命令（`add_player`、`add_playlist`）在执行过程中通过 Tauri 事件系统向前端推送实时进度。
+
+### 事件
+
+| 事件名 | Payload 类型 | 说明 |
+|--------|-------------|------|
+| `progress-update` | `ProgressPayload` | 进度更新 |
+
+### ProgressPayload 结构
+
+```rust
+pub struct ProgressPayload {
+    pub task_type: String,        // "add_player" 或 "add_playlist"
+    pub task_id: String,          // UUID，区分不同任务
+    pub stage: String,            // 当前阶段标识
+    pub progress: f64,            // 0.0 - 100.0
+    pub total: Option<u64>,       // 总数
+    pub current: Option<u64>,     // 当前完成数
+    pub message: Option<String>,  // 状态消息
+    pub player_name: Option<String>,       // 玩家昵称（add_player）
+    pub player_avatar_url: Option<String>, // 玩家头像（add_player）
+}
+```
+
+### 前端使用
+
+```typescript
+const unlisten = await listen('progress-update', (event) => {
+  const { task_type, task_id, stage, progress, message } = event.payload;
+  // 更新 UI 进度显示
+});
+// 操作完成后清理
+unlisten();
+```
