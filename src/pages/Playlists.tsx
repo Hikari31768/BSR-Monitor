@@ -67,21 +67,21 @@ export default function Playlists() {
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-200">歌单管理</h1>
+    <div className="animate-fade-in">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-2xl font-bold text-[#f0f0f5] tracking-tight">📋 歌单管理</h1>
         <button
           onClick={() => setShowAddModal(true)}
-          className="px-4 py-2 bg-bs-accent-primary text-white rounded-lg hover:bg-bs-accent-primary/80"
+          className="px-4 py-2.5 rounded-lg font-medium text-sm bg-[#ff6b6b] text-white hover:bg-[#ff5252] transition-all shadow-lg hover:shadow-[#ff6b6b]/30"
         >
-          添加歌单
+          ➕ 添加歌单
         </button>
       </div>
 
       {playlists.length === 0 ? (
         <EmptyState message="暂无歌单，点击上方按钮添加" icon="📋" />
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))' }}>
           {playlists.map(playlist => (
             <PlaylistCard
               key={playlist.playlist_id}
@@ -93,7 +93,6 @@ export default function Playlists() {
         </div>
       )}
 
-      {/* 添加歌单模态框 */}
       <Modal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
@@ -101,25 +100,25 @@ export default function Playlists() {
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">BeatSaver 歌单 ID</label>
+            <label className="block text-sm text-[#a0a0b0] mb-2">BeatSaver 歌单 ID</label>
             <input
               type="text"
               value={addId}
               onChange={(e) => setAddId(e.target.value)}
               placeholder="如: 1"
-              className="w-full px-4 py-2 bg-bs-dark-700 border border-bs-dark-600 rounded-lg text-gray-200 focus:border-bs-accent-primary focus:outline-none"
+              className="w-full px-4 py-3 bg-[#1e1e28] border border-[#2a2a3a] rounded-lg text-[#f0f0f5] placeholder-[#6b7280] focus:border-[#ff6b6b] focus:ring-2 focus:ring-[#ff6b6b]/20 focus:outline-none transition-all"
             />
           </div>
-          <div className="flex gap-3 justify-end">
+          <div className="flex gap-3 justify-end pt-4">
             <button
               onClick={() => setShowAddModal(false)}
-              className="px-4 py-2 bg-bs-dark-700 text-gray-300 rounded-lg hover:bg-bs-dark-600"
+              className="px-4 py-2.5 rounded-lg font-medium text-sm bg-[#1e1e28] text-[#a0a0b0] hover:bg-[#252533] hover:text-[#f0f0f5] transition-all"
             >
               取消
             </button>
             <button
               onClick={handleAddPlaylist}
-              className="px-4 py-2 bg-bs-accent-primary text-white rounded-lg hover:bg-bs-accent-primary/80"
+              className="px-4 py-2.5 rounded-lg font-medium text-sm bg-[#ff6b6b] text-white hover:bg-[#ff5252] transition-all"
             >
               添加
             </button>
@@ -127,43 +126,39 @@ export default function Playlists() {
         </div>
       </Modal>
 
-      {/* 删除确认模态框 */}
       <Modal
         isOpen={showDeleteModal !== null}
         onClose={() => setShowDeleteModal(null)}
         title="确认删除"
       >
-        <p className="text-gray-300 mb-4">确定要删除该歌单吗？</p>
+        <p className="text-[#a0a0b0] mb-6">确定要删除该歌单吗？</p>
         <div className="flex gap-3 justify-end">
           <button
             onClick={() => setShowDeleteModal(null)}
-            className="px-4 py-2 bg-bs-dark-700 text-gray-300 rounded-lg hover:bg-bs-dark-600"
+            className="px-4 py-2.5 rounded-lg font-medium text-sm bg-[#1e1e28] text-[#a0a0b0] hover:bg-[#252533] hover:text-[#f0f0f5] transition-all"
           >
             取消
           </button>
           <button
             onClick={() => handleDeletePlaylist(showDeleteModal!)}
-            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-500/80"
+            className="px-4 py-2.5 rounded-lg font-medium text-sm bg-red-500 text-white hover:bg-red-600 transition-all"
           >
             删除
           </button>
         </div>
       </Modal>
 
-      {/* 查看谱面列表模态框 */}
       <Modal
         isOpen={showMapsModal !== null}
         onClose={() => setShowMapsModal(null)}
         title="歌单谱面列表"
       >
-        <div className="max-h-[400px] overflow-auto space-y-3">
+        <div className="max-h-[60vh] overflow-auto space-y-3 pr-2">
           {playlistMaps.length === 0 ? (
-            <p className="text-gray-400">暂无谱面</p>
+            <EmptyState message="暂无谱面" icon="🎵" />
           ) : (
             playlistMaps.map((pm) => (
-              pm.map && (
-                <MapCard key={pm.map_key} map={pm.map} />
-              )
+              pm.map && <MapCard key={pm.map_key} map={pm.map} />
             ))
           )}
         </div>

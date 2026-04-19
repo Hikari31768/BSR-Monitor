@@ -10,33 +10,43 @@ const navItems = [
 
 export default function Sidebar() {
   return (
-    <aside className="w-60 bg-bs-dark-700 border-r border-bs-dark-600 flex flex-col">
-      <div className="p-4 border-b border-bs-dark-600">
-        <h1 className="text-xl font-bold text-bs-accent-primary">BSR Monitor</h1>
-        <p className="text-xs text-gray-400">BeatSaber 成绩监控</p>
+    <aside className="w-64 bg-[#15151c] border-r border-[#2a2a3a] flex flex-col shrink-0">
+      {/* Logo 区域 */}
+      <div className="p-6 border-b border-[#2a2a3a]">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff6b6b] to-[#9b59b6] flex items-center justify-center text-white text-lg font-bold shadow-lg">
+            BS
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-[#f0f0f5] tracking-tight">BSR Monitor</h1>
+            <p className="text-xs text-[#6b7280]">BeatSaber 成绩监控</p>
+          </div>
+        </div>
       </div>
 
-      <nav className="flex-1 p-2 space-y-1">
+      {/* 导航菜单 */}
+      <nav className="flex-1 p-4 space-y-1">
         {navItems.map(item => (
           <NavLink
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
                 isActive
-                  ? 'bg-bs-accent-primary/20 text-bs-accent-primary border border-bs-accent-primary/30'
-                  : 'text-gray-300 hover:bg-bs-dark-600'
+                  ? 'bg-[#ff6b6b]/10 text-[#ff6b6b] border border-[#ff6b6b]/20'
+                  : 'text-[#a0a0b0] hover:bg-[#1e1e28] hover:text-[#f0f0f5]'
               }`
             }
           >
-            <span>{item.icon}</span>
-            <span>{item.label}</span>
+            <span className="text-lg">{item.icon}</span>
+            <span className="font-medium">{item.label}</span>
           </NavLink>
         ))}
       </nav>
 
-      <div className="p-4 border-t border-bs-dark-600 text-xs text-gray-500">
-        v0.1.0
+      {/* 底部信息 */}
+      <div className="p-4 border-t border-[#2a2a3a]">
+        <p className="text-xs text-[#6b7280]">v0.1.0</p>
       </div>
     </aside>
   );
