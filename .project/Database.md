@@ -205,7 +205,7 @@
 |--------|------|------|
 | playlistId | INTEGER | 外键，关联 Playlist 表 |
 | mapKey | VARCHAR(16) | 外键，关联 Map 表 |
-| order | FLOAT | 谱面在歌单中的顺序 |
+| mapOrder | FLOAT | 谱面在歌单中的顺序 |
 
 **复合主键**: `(playlistId, mapKey)`
 
@@ -221,6 +221,6 @@
 |----------|--------|
 | 父级 `playlist.playlistId` | `playlistId` |
 | `map.id` | `mapKey` |
-| `order` | `order` |
+| `order` | `mapOrder` |
 
 **填充策略**: 遍历 maps 数组，逐条插入关联关系。同时可利用 `map` 字段（MapDetail）填充 Map 和 MapDiff 表。

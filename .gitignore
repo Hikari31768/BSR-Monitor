@@ -4,3 +4,18 @@
 .playwright-cli/
 .thunder/
 .vscode/
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+src-tauri/target/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+*.log
