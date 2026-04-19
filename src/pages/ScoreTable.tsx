@@ -10,6 +10,7 @@ import {
 import ScoreTableHeader from '../components/ScoreTableHeader';
 import MapScoreGroup from '../components/MapScoreGroup';
 import PlayerSelectModal from '../components/PlayerSelectModal';
+import PlaylistSelect from '../components/PlaylistSelect';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 
@@ -188,14 +189,10 @@ export default function ScoreTable() {
   }
 
   return (
-    <div className="animate-fade-in">
-      {/* 标题 */}
-      <div className="flex items-center justify-between mb-6">
+    <div className="animate-fade-in h-full flex flex-col">
+      {/* 标题和模式切换同一行 */}
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-[#f0f0f5] tracking-tight">🎯 打谱查询</h1>
-      </div>
-
-      {/* 模式切换 */}
-      <div className="bg-[#15151c] rounded-xl p-4 border border-[#2a2a3a] shadow-lg mb-6">
         <div className="flex gap-2">
           <button
             onClick={() => setViewMode('single')}
@@ -220,53 +217,39 @@ export default function ScoreTable() {
         </div>
       </div>
 
-      {/* 单谱面输入 */}
+      {/* 单谱面输入 - 精简版 */}
       {viewMode === 'single' && (
-        <div className="bg-[#15151c] rounded-xl p-6 border border-[#2a2a3a] shadow-lg mb-6">
-          <label className="block text-sm text-[#a0a0b0] mb-2">谱面查询</label>
-          <div className="flex gap-4">
-            <input
-              type="text"
-              value={mapInput}
-              onChange={(e) => setMapInput(e.target.value)}
-              placeholder="输入谱面 Key 或 Hash..."
-              className="flex-1 px-4 py-3 bg-[#1e1e28] border border-[#2a2a3a] rounded-lg text-[#f0f0f5] placeholder-[#6b7280] focus:border-[#ff6b6b] focus:ring-2 focus:ring-[#ff6b6b]/20 focus:outline-none transition-all"
-              onKeyDown={(e) => e.key === 'Enter' && searchMap()}
-            />
-            <button
-              onClick={searchMap}
-              disabled={loadingData || !mapInput.trim()}
-              className="px-6 py-3 rounded-lg font-medium text-sm bg-[#ff6b6b] text-white hover:bg-[#ff5252] transition-all shadow-lg hover:shadow-[#ff6b6b]/30 disabled:opacity-50"
-            >
-              {loadingData ? '⏳' : '🔍 查询'}
-            </button>
-          </div>
-          <p className="mt-2 text-xs text-[#6b7280]">
-            支持输入 Key（如 1a2b3）或 Hash（40位十六进制）
-          </p>
+        <div className="flex gap-4 mb-4">
+          <input
+            type="text"
+            value={mapInput}
+            onChange={(e) => setMapInput(e.target.value)}
+            placeholder="输入谱面 Key 或 Hash..."
+            className="flex-1 px-4 py-3 bg-[#1e1e28] border border-[#2a2a3a] rounded-lg text-[#f0f0f5] placeholder-[#6b7280] focus:border-[#ff6b6b] focus:ring-2 focus:ring-[#ff6b6b]/20 focus:outline-none transition-all"
+            onKeyDown={(e) => e.key === 'Enter' && searchMap()}
+          />
+          <button
+            onClick={searchMap}
+            disabled={loadingData || !mapInput.trim()}
+            className="px-6 py-3 rounded-lg font-medium text-sm bg-[#ff6b6b] text-white hover:bg-[#ff5252] transition-all shadow-lg hover:shadow-[#ff6b6b]/30 disabled:opacity-50"
+          >
+            {loadingData ? '⏳' : '🔍 查询'}
+          </button>
         </div>
       )}
 
-      {/* 歌单选择 */}
+      {/* 歌单选择 - 精简版 */}
       {viewMode === 'playlist' && (
-        <div className="bg-[#15151c] rounded-xl p-6 border border-[#2a2a3a] shadow-lg mb-6">
-          <label className="block text-sm text-[#a0a0b0] mb-2">选择歌单</label>
-          <select
-            value={selectedPlaylistId || ''}
-            onChange={(e) => setSelectedPlaylistId(e.target.value ? parseInt(e.target.value) : null)}
-            className="w-full px-4 py-3 bg-[#1e1e28] border border-[#2a2a3a] rounded-lg text-[#f0f0f5] focus:border-[#ff6b6b] focus:ring-2 focus:ring-[#ff6b6b]/20 focus:outline-none transition-all"
-          >
-            <option value="">请选择歌单</option>
-            {playlists.map(playlist => (
-              <option key={playlist.playlist_id} value={playlist.playlist_id}>
-                {playlist.name} ({playlist.total_maps || 0} 首)
-              </option>
-            ))}
-          </select>
+        <div className="mb-4 space-y-3">
+          <PlaylistSelect
+            playlists={playlists}
+            selectedId={selectedPlaylistId}
+            onSelect={setSelectedPlaylistId}
+          />
 
           {/* 分页控制 */}
           {playlistData && playlistData.total_pages > 1 && (
-            <div className="flex items-center justify-between mt-4 pt-4 border-t border-[#2a2a3a]">
+            <div className="flex items-center justify-between">
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage <= 1 || loadingData}
@@ -289,9 +272,9 @@ export default function ScoreTable() {
         </div>
       )}
 
-      {/* 成绩表格 */}
+      {/* 成绩表格 - 占据剩余高度，独立滚动 */}
       {(displayData.length > 0 || loadingData) && (
-        <div className="bg-[#15151c] rounded-xl border border-[#2a2a3a] shadow-lg overflow-hidden">
+        <div className="bg-[#15151c] rounded-xl border border-[#2a2a3a] shadow-lg overflow-hidden flex-1 flex flex-col min-h-0">
           {/* 表头 */}
           <ScoreTableHeader
             players={sortedPlayers}
@@ -300,17 +283,17 @@ export default function ScoreTable() {
             onReorderPlayers={handleReorderPlayers}
           />
 
-          {/* 表格内容 */}
+          {/* 表格内容 - 可滚动区域 */}
           {loadingData ? (
-            <div className="p-8">
+            <div className="p-8 flex-1">
               <LoadingSpinner />
             </div>
           ) : displayData.length === 0 ? (
-            <div className="p-8">
+            <div className="p-8 flex-1">
               <EmptyState message="暂无数据" icon="📊" />
             </div>
           ) : (
-            <div className="divide-y divide-[#2a2a3a]">
+            <div className="divide-y divide-[#2a2a3a] overflow-auto flex-1">
               {displayData.map((mapData, mapIndex) => (
                 <MapScoreGroup
                   key={mapData.map.key}

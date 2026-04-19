@@ -35,7 +35,7 @@ export default function ScoreTableHeader({
   const gridColumns = `18rem 6rem ${players.map(() => '7rem').join(' ')} 7rem`;
 
   return (
-    <div className="sticky top-0 z-10 bg-[#1e1e28] border-b border-[#2a2a3a]">
+    <div className="bg-[#1e1e28] border-b border-[#2a2a3a] flex-shrink-0">
       <div
         className="grid"
         style={{ gridTemplateColumns: gridColumns }}
