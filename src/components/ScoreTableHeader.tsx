@@ -31,16 +31,22 @@ export default function ScoreTableHeader({
     setDraggedId(null);
   }
 
+  // 计算网格列定义，与 MapScoreGroup 保持一致
+  const gridColumns = `18rem 6rem ${players.map(() => '7rem').join(' ')} 7rem`;
+
   return (
     <div className="sticky top-0 z-10 bg-[#1e1e28] border-b border-[#2a2a3a]">
-      <div className="flex">
+      <div
+        className="grid"
+        style={{ gridTemplateColumns: gridColumns }}
+      >
         {/* 谱面信息列 */}
-        <div className="w-72 flex-shrink-0 p-4 border-r border-[#2a2a3a]">
+        <div className="p-4 border-r border-[#2a2a3a]">
           <span className="text-sm font-medium text-[#a0a0b0]">谱面信息</span>
         </div>
 
         {/* 难度信息列 */}
-        <div className="w-24 flex-shrink-0 p-4 border-r border-[#2a2a3a]">
+        <div className="p-4 border-r border-[#2a2a3a]">
           <span className="text-sm font-medium text-[#a0a0b0]">难度</span>
         </div>
 
@@ -48,7 +54,7 @@ export default function ScoreTableHeader({
         {players.map((player) => (
           <div
             key={player.id}
-            className="w-28 flex-shrink-0 p-4 border-r border-[#2a2a3a] group relative"
+            className="p-4 border-r border-[#2a2a3a] group relative"
             draggable
             onDragStart={() => handleDragStart(player.id)}
             onDragOver={(e) => handleDragOver(e, player.id)}
@@ -83,7 +89,7 @@ export default function ScoreTableHeader({
         ))}
 
         {/* 添加玩家列 */}
-        <div className="w-28 flex-shrink-0 p-4 flex items-center justify-center">
+        <div className="p-4 flex items-center justify-center">
           <button
             onClick={onAddPlayer}
             className="w-10 h-10 rounded-full bg-[#2a2a3a] hover:bg-[#ff6b6b] text-[#f0f0f5] hover:text-white transition-all flex items-center justify-center text-xl"

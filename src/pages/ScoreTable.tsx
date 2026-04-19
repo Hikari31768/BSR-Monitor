@@ -8,8 +8,7 @@ import {
   PlaylistScoresResponse,
 } from '../types';
 import ScoreTableHeader from '../components/ScoreTableHeader';
-import ScoreTableRow from '../components/ScoreTableRow';
-import NoScoreMapRow from '../components/NoScoreMapRow';
+import MapScoreGroup from '../components/MapScoreGroup';
 import PlayerSelectModal from '../components/PlayerSelectModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
@@ -313,29 +312,14 @@ export default function ScoreTable() {
           ) : (
             <div className="divide-y divide-[#2a2a3a]">
               {displayData.map((mapData, mapIndex) => (
-                <div key={mapData.map.key}>
-                  {mapData.scores.length > 0 ? (
-                    mapData.scores.map((scoreRow, rowIndex) => (
-                      <ScoreTableRow
-                        key={`${mapData.map.key}-${scoreRow.mode}-${scoreRow.difficulty}`}
-                        map={mapData.map}
-                        scoreRow={scoreRow}
-                        players={sortedPlayers}
-                        isFirstRow={rowIndex === 0}
-                        totalRows={mapData.scores.length}
-                        noScoreDiffs={mapData.no_score_diffs}
-                        showMapDivider={viewMode === 'playlist' && mapIndex < displayData.length - 1}
-                      />
-                    ))
-                  ) : (
-                    <NoScoreMapRow
-                      map={mapData.map}
-                      noScoreDiffs={mapData.no_score_diffs}
-                      players={sortedPlayers}
-                      showMapDivider={viewMode === 'playlist' && mapIndex < displayData.length - 1}
-                    />
-                  )}
-                </div>
+                <MapScoreGroup
+                  key={mapData.map.key}
+                  map={mapData.map}
+                  scores={mapData.scores}
+                  noScoreDiffs={mapData.no_score_diffs}
+                  players={sortedPlayers}
+                  showMapDivider={viewMode === 'playlist' && mapIndex < displayData.length - 1}
+                />
               ))}
             </div>
           )}
