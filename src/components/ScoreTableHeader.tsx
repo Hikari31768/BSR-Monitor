@@ -41,12 +41,12 @@ export default function ScoreTableHeader({
         style={{ gridTemplateColumns: gridColumns }}
       >
         {/* 谱面信息列 */}
-        <div className="p-4 border-r border-[#2a2a3a]">
+        <div className="p-4 border-r border-[#2a2a3a] flex items-center justify-center">
           <span className="text-sm font-medium text-[#a0a0b0]">谱面信息</span>
         </div>
 
         {/* 难度信息列 */}
-        <div className="p-4 border-r border-[#2a2a3a]">
+        <div className="p-4 border-r border-[#2a2a3a] flex items-center justify-center">
           <span className="text-sm font-medium text-[#a0a0b0]">难度</span>
         </div>
 

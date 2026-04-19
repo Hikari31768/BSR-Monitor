@@ -58,7 +58,7 @@ export default function MapScoreGroup({
           {noScoreDiffs.length > 0 && (
             <div className="mt-3 pt-3 border-t border-[#2a2a3a]/50 space-y-1">
               {noScoreDiffs.map(group => (
-                <div key={group.mode} className="flex items-center gap-2">
+                <div key={group.mode} className="flex items-center justify-center gap-2">
                   <ModeIcon mode={group.mode} size={14} />
                   <div className="flex gap-1">
                     {group.difficulties.map(diff => (
@@ -120,7 +120,7 @@ export default function MapScoreGroup({
         {noScoreDiffs.length > 0 && (
           <div className="mt-3 pt-3 border-t border-[#2a2a3a]/50 space-y-1">
             {noScoreDiffs.map(group => (
-              <div key={group.mode} className="flex items-center gap-2">
+              <div key={group.mode} className="flex items-center justify-center gap-2">
                 <ModeIcon mode={group.mode} size={14} />
                 <div className="flex gap-1">
                   {group.difficulties.map(diff => (
