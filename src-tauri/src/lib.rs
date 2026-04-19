@@ -1,5 +1,6 @@
 mod database;
 pub mod api;
+pub mod business;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

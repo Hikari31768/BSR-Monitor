@@ -1,7 +1,8 @@
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
 // Map 表数据结构
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Map {
     pub key: String,
     pub song_name: String,
@@ -13,7 +14,7 @@ pub struct Map {
 }
 
 // MapDiff 表数据结构
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MapDiff {
     pub key: String,
     pub hash: String,
@@ -23,7 +24,7 @@ pub struct MapDiff {
 }
 
 // PlayerInfo 表数据结构
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlayerInfo {
     pub id: String,
     pub name: String,
@@ -32,8 +33,16 @@ pub struct PlayerInfo {
     pub alias: Option<String>,
 }
 
+// 用于添加玩家时的输入参数
+#[derive(Debug, Default)]
+pub struct AddPlayerParams {
+    pub id: String,
+    pub live_url: Option<String>,
+    pub alias: Option<String>,
+}
+
 // PlayerScore 表数据结构
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlayerScore {
     pub player_id: String,
     pub score_id: i64,
@@ -47,7 +56,7 @@ pub struct PlayerScore {
 }
 
 // Playlist 表数据结构
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Playlist {
     pub playlist_id: i64,
     pub name: String,
@@ -62,7 +71,7 @@ pub struct Playlist {
 }
 
 // PlaylistMap 表数据结构
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlaylistMap {
     pub playlist_id: i64,
     pub map_key: String,
@@ -70,7 +79,6 @@ pub struct PlaylistMap {
 }
 
 // 难度值转换
-#[allow(dead_code)]
 pub fn difficulty_from_value(value: i32) -> String {
     match value {
         1 => "Easy",
@@ -82,7 +90,6 @@ pub fn difficulty_from_value(value: i32) -> String {
     }.to_string()
 }
 
-#[allow(dead_code)]
 pub fn difficulty_to_value(name: &str) -> i32 {
     match name {
         "Easy" => 1,
@@ -95,17 +102,10 @@ pub fn difficulty_to_value(name: &str) -> i32 {
 }
 
 // leaderboardId 解析
-#[allow(dead_code)]
-pub fn parse_leaderboard_id(leaderboard_id: &str) -> (Option<String>, String, i32, i32) {
-    // 格式: {key}{版本段}{难度}{模式}
-    // 版本段: 空=首次上传，x=第二次，xx=第三次...
-    // 难度: 1=Easy, 3=Normal, 5=Hard, 7=Expert, 9=ExpertPlus
-    // 模式: 0=Legacy, 1=Standard, 2=OneSaber, 3=NoArrows, 4=90Degree, 5=360Degree, 6=Lightshow, 7=Lawless
-
+pub fn parse_leaderboard_id(leaderboard_id: &str) -> (Option<String>, i32, i32) {
     let x_count = leaderboard_id.matches('x').count();
 
     if x_count > 0 {
-        // 存在版本段：以 x 为锚点分割
         let parts: Vec<&str> = leaderboard_id.split('x').collect();
         if parts.len() >= 2 {
             let key = parts[0].to_string();
@@ -113,27 +113,414 @@ pub fn parse_leaderboard_id(leaderboard_id: &str) -> (Option<String>, String, i3
             if suffix.len() >= 2 {
                 let difficulty = suffix[0..1].parse::<i32>().unwrap_or(0);
                 let mode = suffix[1..].parse::<i32>().unwrap_or(0);
-                return (Some(key), String::new(), difficulty, mode);
+                return (Some(key), difficulty, mode);
             }
         }
-        return (None, String::new(), 0, 0);
+        return (None, 0, 0);
     } else {
-        // 无版本段：从末尾取模式值（1位或多位），再取难度值（1位）
         if leaderboard_id.len() >= 2 {
             let mode_start = leaderboard_id.len() - 1;
-            // 尝试判断模式值位数
             let mode = leaderboard_id[mode_start..].parse::<i32>().unwrap_or(0);
-            if mode > 7 {
-                // 模式值可能超过1位（非常规模式）
-                let difficulty = leaderboard_id[mode_start - 1..mode_start].parse::<i32>().unwrap_or(0);
-                let key = &leaderboard_id[0..mode_start - 1];
-                return (Some(key.to_string()), String::new(), difficulty, mode);
+            let difficulty = leaderboard_id[mode_start - 1..mode_start].parse::<i32>().unwrap_or(0);
+            let key = &leaderboard_id[0..mode_start - 1];
+            return (Some(key.to_string()), difficulty, mode);
+        }
+        return (None, 0, 0);
+    }
+}
+
+// ============ Map CRUD ============
+
+pub fn insert_map(conn: &Connection, map: &Map) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT OR REPLACE INTO Map (key, songName, songAuthorName, levelAuthorName, rating, coverURL, previewURL)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        rusqlite::params![
+            map.key,
+            map.song_name,
+            map.song_author_name,
+            map.level_author_name,
+            map.rating,
+            map.cover_url,
+            map.preview_url
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn get_map_by_key(conn: &Connection, key: &str) -> Result<Option<Map>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT key, songName, songAuthorName, levelAuthorName, rating, coverURL, previewURL FROM Map WHERE key = ?1"
+    )?;
+
+    let result = stmt.query_row([key], |row| {
+        Ok(Map {
+            key: row.get(0)?,
+            song_name: row.get(1)?,
+            song_author_name: row.get(2)?,
+            level_author_name: row.get(3)?,
+            rating: row.get(4)?,
+            cover_url: row.get(5)?,
+            preview_url: row.get(6)?,
+        })
+    });
+
+    match result {
+        Ok(map) => Ok(Some(map)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn insert_map_diff(conn: &Connection, diff: &MapDiff) -> Result<(), rusqlite::Error> {
+    // 先将该 key 下所有记录的 isCurrent 改为 false
+    conn.execute(
+        "UPDATE MapDiff SET isCurrent = 0 WHERE key = ?1",
+        [diff.key.clone()],
+    )?;
+
+    // 插入新记录
+    conn.execute(
+        "INSERT OR REPLACE INTO MapDiff (key, hash, isCurrent, mode, difficulty)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![
+            diff.key,
+            diff.hash,
+            diff.is_current,
+            diff.mode,
+            diff.difficulty
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn get_map_diffs_by_key(conn: &Connection, key: &str) -> Result<Vec<MapDiff>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT key, hash, isCurrent, mode, difficulty FROM MapDiff WHERE key = ?1"
+    )?;
+
+    let diffs = stmt.query_map([key], |row| {
+        Ok(MapDiff {
+            key: row.get(0)?,
+            hash: row.get(1)?,
+            is_current: row.get(2)?,
+            mode: row.get(3)?,
+            difficulty: row.get(4)?,
+        })
+    })?.collect::<Result<Vec<_>, _>>()?;
+
+    Ok(diffs)
+}
+
+// ============ PlayerInfo CRUD ============
+
+pub fn insert_player(conn: &Connection, player: &PlayerInfo) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT OR REPLACE INTO PlayerInfo (id, name, avatarURL, liveURL, alias)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![
+            player.id,
+            player.name,
+            player.avatar_url,
+            player.live_url,
+            player.alias
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn get_player_by_id(conn: &Connection, id: &str) -> Result<Option<PlayerInfo>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, avatarURL, liveURL, alias FROM PlayerInfo WHERE id = ?1"
+    )?;
+
+    let result = stmt.query_row([id], |row| {
+        Ok(PlayerInfo {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            avatar_url: row.get(2)?,
+            live_url: row.get(3)?,
+            alias: row.get(4)?,
+        })
+    });
+
+    match result {
+        Ok(player) => Ok(Some(player)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn get_all_players(conn: &Connection) -> Result<Vec<PlayerInfo>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, avatarURL, liveURL, alias FROM PlayerInfo"
+    )?;
+
+    let players = stmt.query_map([], |row| {
+        Ok(PlayerInfo {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            avatar_url: row.get(2)?,
+            live_url: row.get(3)?,
+            alias: row.get(4)?,
+        })
+    })?.collect::<Result<Vec<_>, _>>()?;
+
+    Ok(players)
+}
+
+pub fn delete_player(conn: &Connection, id: &str) -> Result<(), rusqlite::Error> {
+    // 先删除该玩家的所有成绩
+    conn.execute(
+        "DELETE FROM PlayerScore WHERE playerId = ?1",
+        [id],
+    )?;
+
+    // 再删除玩家信息
+    conn.execute(
+        "DELETE FROM PlayerInfo WHERE id = ?1",
+        [id],
+    )?;
+    Ok(())
+}
+
+pub fn update_player(conn: &Connection, player: &PlayerInfo) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "UPDATE PlayerInfo SET name = ?2, avatarURL = ?3, liveURL = ?4, alias = ?5 WHERE id = ?1",
+        rusqlite::params![
+            player.id,
+            player.name,
+            player.avatar_url,
+            player.live_url,
+            player.alias
+        ],
+    )?;
+    Ok(())
+}
+
+// ============ PlayerScore CRUD ============
+
+pub fn insert_score(conn: &Connection, score: &PlayerScore) -> Result<bool, rusqlite::Error> {
+    // 检查是否已存在
+    let existing = get_score_by_pk(conn, &score.player_id, &score.hash, &score.mode, &score.difficulty)?;
+
+    match existing {
+        Some(existing_score) => {
+            // 如果新成绩时间更晚，更新记录
+            if score.epoch_time > existing_score.epoch_time {
+                conn.execute(
+                    "UPDATE PlayerScore SET scoreId = ?2, leaderboardId = ?3, mapKey = ?4, accuracy = ?5, epochTime = ?6
+                     WHERE playerId = ?1 AND hash = ?7 AND mode = ?8 AND difficulty = ?9",
+                    rusqlite::params![
+                        score.player_id,
+                        score.score_id,
+                        score.leaderboard_id,
+                        score.map_key,
+                        score.accuracy,
+                        score.epoch_time,
+                        score.hash,
+                        score.mode,
+                        score.difficulty
+                    ],
+                )?;
+                Ok(true) // 更新成功
             } else {
-                let difficulty = leaderboard_id[mode_start - 1..mode_start].parse::<i32>().unwrap_or(0);
-                let key = &leaderboard_id[0..mode_start - 1];
-                return (Some(key.to_string()), String::new(), difficulty, mode);
+                Ok(false) // 不需要更新
             }
         }
-        return (None, String::new(), 0, 0);
+        None => {
+            // 插入新记录
+            conn.execute(
+                "INSERT INTO PlayerScore (playerId, scoreId, leaderboardId, mapKey, hash, mode, difficulty, accuracy, epochTime)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                rusqlite::params![
+                    score.player_id,
+                    score.score_id,
+                    score.leaderboard_id,
+                    score.map_key,
+                    score.hash,
+                    score.mode,
+                    score.difficulty,
+                    score.accuracy,
+                    score.epoch_time
+                ],
+            )?;
+            Ok(true) // 插入成功
+        }
     }
+}
+
+pub fn get_score_by_pk(conn: &Connection, player_id: &str, hash: &str, mode: &str, difficulty: &str) -> Result<Option<PlayerScore>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT playerId, scoreId, leaderboardId, mapKey, hash, mode, difficulty, accuracy, epochTime
+         FROM PlayerScore WHERE playerId = ?1 AND hash = ?2 AND mode = ?3 AND difficulty = ?4"
+    )?;
+
+    let result = stmt.query_row(rusqlite::params![player_id, hash, mode, difficulty], |row| {
+        Ok(PlayerScore {
+            player_id: row.get(0)?,
+            score_id: row.get(1)?,
+            leaderboard_id: row.get(2)?,
+            map_key: row.get(3)?,
+            hash: row.get(4)?,
+            mode: row.get(5)?,
+            difficulty: row.get(6)?,
+            accuracy: row.get(7)?,
+            epoch_time: row.get(8)?,
+        })
+    });
+
+    match result {
+        Ok(score) => Ok(Some(score)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn get_scores_by_player(conn: &Connection, player_id: &str) -> Result<Vec<PlayerScore>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT playerId, scoreId, leaderboardId, mapKey, hash, mode, difficulty, accuracy, epochTime
+         FROM PlayerScore WHERE playerId = ?1 ORDER BY epochTime DESC"
+    )?;
+
+    let scores = stmt.query_map([player_id], |row| {
+        Ok(PlayerScore {
+            player_id: row.get(0)?,
+            score_id: row.get(1)?,
+            leaderboard_id: row.get(2)?,
+            map_key: row.get(3)?,
+            hash: row.get(4)?,
+            mode: row.get(5)?,
+            difficulty: row.get(6)?,
+            accuracy: row.get(7)?,
+            epoch_time: row.get(8)?,
+        })
+    })?.collect::<Result<Vec<_>, _>>()?;
+
+    Ok(scores)
+}
+
+pub fn get_score_count_by_player(conn: &Connection, player_id: &str) -> Result<i64, rusqlite::Error> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM PlayerScore WHERE playerId = ?1",
+        [player_id],
+        |row| row.get(0),
+    )?;
+    Ok(count)
+}
+
+// ============ Playlist CRUD ============
+
+pub fn insert_playlist(conn: &Connection, playlist: &Playlist) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT OR REPLACE INTO Playlist (playlistId, name, description, playlistImage, ownerId, ownerName, totalMaps, createdAt, songsChangedAt, downloadURL)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        rusqlite::params![
+            playlist.playlist_id,
+            playlist.name,
+            playlist.description,
+            playlist.playlist_image,
+            playlist.owner_id,
+            playlist.owner_name,
+            playlist.total_maps,
+            playlist.created_at,
+            playlist.songs_changed_at,
+            playlist.download_url
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn get_playlist_by_id(conn: &Connection, playlist_id: i64) -> Result<Option<Playlist>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT playlistId, name, description, playlistImage, ownerId, ownerName, totalMaps, createdAt, songsChangedAt, downloadURL FROM Playlist WHERE playlistId = ?1"
+    )?;
+
+    let result = stmt.query_row([playlist_id], |row| {
+        Ok(Playlist {
+            playlist_id: row.get(0)?,
+            name: row.get(1)?,
+            description: row.get(2)?,
+            playlist_image: row.get(3)?,
+            owner_id: row.get(4)?,
+            owner_name: row.get(5)?,
+            total_maps: row.get(6)?,
+            created_at: row.get(7)?,
+            songs_changed_at: row.get(8)?,
+            download_url: row.get(9)?,
+        })
+    });
+
+    match result {
+        Ok(playlist) => Ok(Some(playlist)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn get_all_playlists(conn: &Connection) -> Result<Vec<Playlist>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT playlistId, name, description, playlistImage, ownerId, ownerName, totalMaps, createdAt, songsChangedAt, downloadURL FROM Playlist"
+    )?;
+
+    let playlists = stmt.query_map([], |row| {
+        Ok(Playlist {
+            playlist_id: row.get(0)?,
+            name: row.get(1)?,
+            description: row.get(2)?,
+            playlist_image: row.get(3)?,
+            owner_id: row.get(4)?,
+            owner_name: row.get(5)?,
+            total_maps: row.get(6)?,
+            created_at: row.get(7)?,
+            songs_changed_at: row.get(8)?,
+            download_url: row.get(9)?,
+        })
+    })?.collect::<Result<Vec<_>, _>>()?;
+
+    Ok(playlists)
+}
+
+pub fn delete_playlist(conn: &Connection, playlist_id: i64) -> Result<(), rusqlite::Error> {
+    // 先删除歌单与谱面的关联
+    conn.execute(
+        "DELETE FROM PlaylistMap WHERE playlistId = ?1",
+        [playlist_id],
+    )?;
+
+    // 再删除歌单元数据
+    conn.execute(
+        "DELETE FROM Playlist WHERE playlistId = ?1",
+        [playlist_id],
+    )?;
+    Ok(())
+}
+
+pub fn insert_playlist_map(conn: &Connection, playlist_map: &PlaylistMap) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT OR REPLACE INTO PlaylistMap (playlistId, mapKey, mapOrder)
+         VALUES (?1, ?2, ?3)",
+        rusqlite::params![
+            playlist_map.playlist_id,
+            playlist_map.map_key,
+            playlist_map.map_order
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn get_playlist_maps(conn: &Connection, playlist_id: i64) -> Result<Vec<PlaylistMap>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT playlistId, mapKey, mapOrder FROM PlaylistMap WHERE playlistId = ?1 ORDER BY mapOrder"
+    )?;
+
+    let maps = stmt.query_map([playlist_id], |row| {
+        Ok(PlaylistMap {
+            playlist_id: row.get(0)?,
+            map_key: row.get(1)?,
+            map_order: row.get(2)?,
+        })
+    })?.collect::<Result<Vec<_>, _>>()?;
+
+    Ok(maps)
 }
