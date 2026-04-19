@@ -76,6 +76,7 @@ pub struct PlaylistMap {
     pub playlist_id: i64,
     pub map_key: String,
     pub map_order: f32,
+    pub map: Option<Map>,
 }
 
 // 难度值转换
@@ -409,6 +410,16 @@ pub fn get_score_count_by_player(conn: &Connection, player_id: &str) -> Result<i
     Ok(count)
 }
 
+/// 获取玩家最新成绩的 epoch_time
+pub fn get_latest_score_time(conn: &Connection, player_id: &str) -> Result<Option<i64>, rusqlite::Error> {
+    let result: Option<i64> = conn.query_row(
+        "SELECT MAX(epochTime) FROM PlayerScore WHERE playerId = ?1",
+        [player_id],
+        |row| row.get(0),
+    )?;
+    Ok(result)
+}
+
 // ============ Playlist CRUD ============
 
 pub fn insert_playlist(conn: &Connection, playlist: &Playlist) -> Result<(), rusqlite::Error> {
@@ -496,6 +507,15 @@ pub fn delete_playlist(conn: &Connection, playlist_id: i64) -> Result<(), rusqli
     Ok(())
 }
 
+/// 仅删除歌单的谱面关联（用于更新）
+pub fn delete_playlist_maps(conn: &Connection, playlist_id: i64) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "DELETE FROM PlaylistMap WHERE playlistId = ?1",
+        [playlist_id],
+    )?;
+    Ok(())
+}
+
 pub fn insert_playlist_map(conn: &Connection, playlist_map: &PlaylistMap) -> Result<(), rusqlite::Error> {
     conn.execute(
         "INSERT OR REPLACE INTO PlaylistMap (playlistId, mapKey, mapOrder)
@@ -511,14 +531,34 @@ pub fn insert_playlist_map(conn: &Connection, playlist_map: &PlaylistMap) -> Res
 
 pub fn get_playlist_maps(conn: &Connection, playlist_id: i64) -> Result<Vec<PlaylistMap>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT playlistId, mapKey, mapOrder FROM PlaylistMap WHERE playlistId = ?1 ORDER BY mapOrder"
+        "SELECT pm.playlistId, pm.mapKey, pm.mapOrder,
+                m.key, m.songName, m.songAuthorName, m.levelAuthorName, m.rating, m.coverURL, m.previewURL
+         FROM PlaylistMap pm
+         LEFT JOIN Map m ON pm.mapKey = m.key
+         WHERE pm.playlistId = ?1
+         ORDER BY pm.mapOrder"
     )?;
 
     let maps = stmt.query_map([playlist_id], |row| {
+        let key: Option<String> = row.get(3)?;
+        let map = if let Some(_) = key {
+            Some(Map {
+                key: row.get(3)?,
+                song_name: row.get(4)?,
+                song_author_name: row.get(5)?,
+                level_author_name: row.get(6)?,
+                rating: row.get(7)?,
+                cover_url: row.get(8)?,
+                preview_url: row.get(9)?,
+            })
+        } else {
+            None
+        };
         Ok(PlaylistMap {
             playlist_id: row.get(0)?,
             map_key: row.get(1)?,
             map_order: row.get(2)?,
+            map,
         })
     })?.collect::<Result<Vec<_>, _>>()?;
 

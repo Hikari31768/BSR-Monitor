@@ -15,5 +15,5 @@ export function formatAccuracy(accuracy: number): string {
 
 export function formatRating(rating?: number): string {
   if (!rating) return '未评分';
-  return `${rating.toFixed(1)}%`;
+  return `${(rating * 100).toFixed(1)}%`;
 }

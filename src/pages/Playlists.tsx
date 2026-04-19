@@ -36,33 +36,44 @@ export default function Playlists() {
   async function handleAddPlaylist() {
     if (!addId) return;
 
-    // 检查是否已经在处理中
+    // 检查是否已存在
     const playlistId = parseInt(addId);
-    const isProcessing = playlists.some(p => p.playlist_id === playlistId && p.loading);
+    const existingIdx = playlists.findIndex(p => p.playlist_id === playlistId);
+    const isExisting = existingIdx !== -1;
+    const isProcessing = isExisting
+      ? playlists[existingIdx].loading
+      : false;
+
     if (isProcessing) {
-      alert('该歌单正在添加中，请稍候...');
+      alert('该歌单正在处理中，请稍候...');
       return;
     }
 
     try {
-      // 立即添加待处理的歌单到列表
+      // 如果已存在，更新现有条目状态；否则添加临时条目
       const tempPlaylist: Playlist & { loading?: boolean; progress?: number; status_message?: string } = {
-        playlist_id: playlistId,
-        name: '加载中...',
-        description: undefined,
-        playlist_image: undefined,
-        owner_id: undefined,
-        owner_name: undefined,
-        total_maps: undefined,
-        created_at: undefined,
-        songs_changed_at: undefined,
-        download_url: undefined,
+        ...(isExisting ? playlists[existingIdx] : {
+          playlist_id: playlistId,
+          name: '加载中...',
+          description: undefined,
+          playlist_image: undefined,
+          owner_id: undefined,
+          owner_name: undefined,
+          total_maps: undefined,
+          created_at: undefined,
+          songs_changed_at: undefined,
+          download_url: undefined,
+        }),
         loading: true,
         progress: 0,
-        status_message: '准备添加...'
+        status_message: isExisting ? '正在更新...' : '准备添加...'
       };
 
-      setPlaylists(prev => [...prev, tempPlaylist]);
+      if (isExisting) {
+        setPlaylists(prev => prev.map((p, i) => i === existingIdx ? tempPlaylist : p));
+      } else {
+        setPlaylists(prev => [...prev, tempPlaylist]);
+      }
       setShowAddModal(false);
       setAddId('');
 
@@ -99,15 +110,19 @@ export default function Playlists() {
         // 操作成功，重新加载列表
         loadPlaylists();
       } catch (e) {
-        // 操作失败，从列表中移除临时歌单并显示错误
-        setPlaylists(prev => prev.filter(p => p.playlist_id !== playlistId));
-        alert(`添加失败: ${e}`);
+        // 操作失败，恢复原有状态或移除临时条目
+        if (isExisting) {
+          setPlaylists(prev => prev.map((p, i) => i === existingIdx ? { ...p, loading: false, progress: undefined, status_message: undefined } : p));
+        } else {
+          setPlaylists(prev => prev.filter(p => p.playlist_id !== playlistId));
+        }
+        alert(`${isExisting ? '更新' : '添加'}失败: ${e}`);
       } finally {
         // 清理事件监听器
         unlisten();
       }
     } catch (e) {
-      alert(`添加失败: ${e}`);
+      alert(`操作失败: ${e}`);
     }
   }
 

@@ -7,12 +7,36 @@ use std::sync::Mutex;
 use uuid::Uuid;
 use crate::progress::{ProgressPayload, emit_progress_event};
 
-/// 添加歌单 - 支持进度反馈
+/// 添加歌单或增量更新（如已存在）- 支持进度反馈
 #[tauri::command]
 pub async fn add_playlist(app: AppHandle, playlist_id: i32) -> Result<Playlist, String> {
     let task_id = Uuid::new_v4().to_string();
     let api = BeatSaverApi::new();
 
+    // 检查是否已存在
+    let existing = {
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        db::get_playlist_by_id(&guard, playlist_id as i64).map_err(|e| e.to_string())?
+    };
+
+    if existing.is_some() {
+        // 已存在 -> 增量更新
+        update_existing_playlist(app, playlist_id, task_id, api).await
+    } else {
+        // 不存在 -> 全量添加
+        add_new_playlist(app, playlist_id, task_id, api).await
+    }
+}
+
+/// 全量添加新歌单
+async fn add_new_playlist(
+    app: AppHandle,
+    playlist_id: i32,
+    task_id: String,
+    api: BeatSaverApi,
+) -> Result<Playlist, String> {
     // 发送初始进度
     let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
         .with_progress("fetching_playlist".to_string(), 5.0)
@@ -30,7 +54,7 @@ pub async fn add_playlist(app: AppHandle, playlist_id: i32) -> Result<Playlist, 
     // 发送进度 - 开始保存歌单信息
     let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
         .with_progress("saving_playlist_info".to_string(), 10.0)
-        .with_message("正在保存歌单信息...".to_string());
+        .with_message(format!("已获取歌单: {}", playlist.name));
     emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
 
     // 存入歌单
@@ -68,6 +92,81 @@ pub async fn add_playlist(app: AppHandle, playlist_id: i32) -> Result<Playlist, 
     let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
         .with_progress("completed".to_string(), 100.0)
         .with_message(format!("完成！共处理 {} 首歌曲", total_maps));
+    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+
+    Ok(playlist)
+}
+
+/// 增量更新已存在的歌单
+async fn update_existing_playlist(
+    app: AppHandle,
+    playlist_id: i32,
+    task_id: String,
+    api: BeatSaverApi,
+) -> Result<Playlist, String> {
+    // 发送初始进度
+    let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
+        .with_progress("fetching_playlist".to_string(), 5.0)
+        .with_message("正在获取最新歌单信息...".to_string());
+    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+
+    // 拉取第一页
+    let first_page = api.get_playlist(playlist_id, 0)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // 转换歌单元数据
+    let playlist = convert_playlist_response(&first_page);
+
+    // 发送进度
+    let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
+        .with_progress("saving_playlist_info".to_string(), 10.0)
+        .with_message(format!("已获取歌单: {}", playlist.name));
+    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+
+    // 更新歌单信息
+    {
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        db::insert_playlist(&guard, &playlist).map_err(|e| e.to_string())?;
+    }
+
+    // 删除旧谱面关联（重新拉取）
+    {
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        db::delete_playlist_maps(&guard, playlist_id as i64).map_err(|e| e.to_string())?;
+    }
+
+    // 处理第一页的谱面
+    save_playlist_maps_with_progress(&app, playlist_id, &first_page, &task_id, 1, 1)?;
+
+    // 如果有更多页面，继续拉取
+    let total_maps = first_page.playlist.stats.as_ref().map(|s| s.total_maps).unwrap_or(0);
+    let total_pages = if total_maps > 0 { (total_maps + 49) / 50 } else { 1 };
+
+    if total_pages > 1 {
+        // 发送进度 - 开始处理后续页面
+        let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
+            .with_count("processing_pages".to_string(), 1, total_pages as u64)
+            .with_message(format!("开始处理 {} 页谱面...", total_pages));
+        emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+
+        for page in 1..total_pages {
+            let page_response = api.get_playlist(playlist_id, page as i32)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            save_playlist_maps_with_progress(&app, playlist_id, &page_response, &task_id, page as u64 + 1, total_pages as u64)?;
+        }
+    }
+
+    // 发送完成进度
+    let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
+        .with_progress("completed".to_string(), 100.0)
+        .with_message(format!("更新完成！共处理 {} 首歌曲", total_maps));
     emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
 
     Ok(playlist)
@@ -120,6 +219,7 @@ fn save_playlist_maps_with_progress(
             playlist_id: playlist_id as i64,
             map_key: map_with_order.map.id.clone(),
             map_order: map_with_order.order,
+            map: None,
         };
         let state = app.try_state::<Mutex<rusqlite::Connection>>()
             .ok_or("Database not initialized")?;

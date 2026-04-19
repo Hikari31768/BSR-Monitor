@@ -30,7 +30,7 @@ export default function MapCard({ map, diffs }: MapCardProps) {
           <p className="text-[#6b7280] text-sm truncate">谱师: {map.level_author_name}</p>
           <div className="flex items-center gap-3 mt-3">
             <span className="text-[#4ecdc4] font-medium">
-              ⭐ {formatRating(map.rating)}
+              👍 {formatRating(map.rating)}
             </span>
             <span className="text-[#6b7280] text-xs">
               Key: {map.key}

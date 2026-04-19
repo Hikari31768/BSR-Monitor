@@ -10,6 +10,8 @@ pub struct ProgressPayload {
     pub total: Option<u64>,      // 总数（如果有）
     pub current: Option<u64>,    // 当前完成数（如果有）
     pub message: Option<String>, // 状态消息
+    pub player_name: Option<String>,     // 玩家昵称（add_player 时使用）
+    pub player_avatar_url: Option<String>, // 玩家头像（add_player 时使用）
 }
 
 impl ProgressPayload {
@@ -22,6 +24,8 @@ impl ProgressPayload {
             total: None,
             current: None,
             message: None,
+            player_name: None,
+            player_avatar_url: None,
         }
     }
 
@@ -41,6 +45,12 @@ impl ProgressPayload {
 
     pub fn with_message(mut self, message: String) -> Self {
         self.message = Some(message);
+        self
+    }
+
+    pub fn with_player_info(mut self, name: String, avatar_url: String) -> Self {
+        self.player_name = Some(name);
+        self.player_avatar_url = Some(avatar_url);
         self
     }
 }

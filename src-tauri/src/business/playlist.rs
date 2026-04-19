@@ -66,6 +66,7 @@ fn save_playlist_maps(conn: &Connection, playlist_id: i32, page: &PlaylistPage) 
             playlist_id: playlist_id as i64,
             map_key: map_with_order.map.id.clone(),
             map_order: map_with_order.order,
+            map: None,
         };
         db::insert_playlist_map(conn, &playlist_map)?;
     }

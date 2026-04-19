@@ -40,28 +40,39 @@ export default function Players() {
   async function handleAddPlayer() {
     if (!addForm.id) return;
 
-    // 检查是否已经在处理中
-    const isProcessing = players.some(p => p.id === addForm.id && p.loading);
+    // 检查是否已存在
+    const existingIdx = players.findIndex(p => p.id === addForm.id);
+    const isExisting = existingIdx !== -1;
+    const isProcessing = isExisting
+      ? players[existingIdx].loading
+      : false;
+
     if (isProcessing) {
-      alert('该玩家正在添加中，请稍候...');
+      alert('该玩家正在处理中，请稍候...');
       return;
     }
 
     try {
-      // 立即添加待处理的玩家到列表
+      // 如果已存在，更新现有条目状态；否则添加临时条目
       const tempPlayer: PlayerWithScoreCount & { loading?: boolean; progress?: number; status_message?: string } = {
-        id: addForm.id,
-        name: '加载中...',
-        avatar_url: undefined,
-        live_url: addForm.liveUrl || undefined,
-        alias: addForm.alias || undefined,
-        score_count: 0,
+        ...(isExisting ? players[existingIdx] : {
+          id: addForm.id,
+          name: '加载中...',
+          avatar_url: undefined,
+          live_url: addForm.liveUrl || undefined,
+          alias: addForm.alias || undefined,
+          score_count: 0,
+        }),
         loading: true,
         progress: 0,
-        status_message: '准备添加...'
+        status_message: isExisting ? '正在更新...' : '准备添加...'
       };
 
-      setPlayers(prev => [...prev, tempPlayer]);
+      if (isExisting) {
+        setPlayers(prev => prev.map((p, i) => i === existingIdx ? tempPlayer : p));
+      } else {
+        setPlayers(prev => [...prev, tempPlayer]);
+      }
       setShowAddModal(false);
       setAddForm({ id: '', liveUrl: '', alias: '' });
 
@@ -75,6 +86,8 @@ export default function Players() {
           total?: number;
           current?: number;
           message?: string;
+          player_name?: string;
+          player_avatar_url?: string;
         };
 
         // 只处理当前任务的进度
@@ -83,6 +96,8 @@ export default function Players() {
             p.id === addForm.id
               ? {
                   ...p,
+                  name: progressData.player_name || p.name,
+                  avatar_url: progressData.player_avatar_url || p.avatar_url,
                   progress: progressData.progress,
                   status_message: progressData.message || `阶段: ${progressData.stage}`
                 }
@@ -102,15 +117,19 @@ export default function Players() {
         // 操作成功，重新加载列表
         loadPlayers();
       } catch (e) {
-        // 操作失败，从列表中移除临时玩家并显示错误
-        setPlayers(prev => prev.filter(p => p.id !== addForm.id));
-        alert(`添加失败: ${e}`);
+        // 操作失败，从列表中移除临时玩家或恢复原有状态
+        if (isExisting) {
+          setPlayers(prev => prev.map((p, i) => i === existingIdx ? { ...p, loading: false, progress: undefined, status_message: undefined } : p));
+        } else {
+          setPlayers(prev => prev.filter(p => p.id !== addForm.id));
+        }
+        alert(`${isExisting ? '更新' : '添加'}失败: ${e}`);
       } finally {
         // 清理事件监听器
         unlisten();
       }
     } catch (e) {
-      alert(`添加失败: ${e}`);
+      alert(`操作失败: ${e}`);
     }
   }
 
