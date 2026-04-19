@@ -80,7 +80,7 @@ export default function ScoreTableHeader({
             {/* 删除按钮（悬停显示） */}
             <button
               onClick={() => onRemovePlayer(player.id)}
-              className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-red-600"
+              className="absolute top-1 right-1 w-5 h-5 rounded bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-red-600 z-10"
               title="移除玩家"
             >
               ×
