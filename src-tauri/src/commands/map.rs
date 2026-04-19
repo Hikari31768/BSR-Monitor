@@ -36,21 +36,20 @@ pub async fn get_map_by_key(app: AppHandle, key: String) -> Result<Map, String> 
         db::insert_map(&guard, &map).map_err(|e| e.to_string())?;
     }
 
-    // 存入 MapDiff 表
+    // 存入 MapDiff 表（批量插入）
     if let Some(version) = map_detail.versions.first() {
-        for diff in &version.diffs {
-            let map_diff = MapDiff {
-                key: key.clone(),
-                hash: version.hash.clone(),
-                is_current: true,
-                mode: diff.characteristic.clone(),
-                difficulty: diff.difficulty.clone(),
-            };
-            let state = app.try_state::<Mutex<rusqlite::Connection>>()
-                .ok_or("Database not initialized")?;
-            let guard = state.lock().map_err(|e| e.to_string())?;
-            db::insert_map_diff(&guard, &map_diff).map_err(|e| e.to_string())?;
-        }
+        let diffs: Vec<MapDiff> = version.diffs.iter().map(|diff| MapDiff {
+            key: key.clone(),
+            hash: version.hash.clone(),
+            is_current: true,
+            mode: diff.characteristic.clone(),
+            difficulty: diff.difficulty.clone(),
+        }).collect();
+
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        db::insert_map_diffs_batch(&guard, &key, &diffs).map_err(|e| e.to_string())?;
     }
 
     Ok(map)
@@ -68,6 +67,7 @@ pub async fn get_map_by_hash(app: AppHandle, hash: String) -> Result<Map, String
 
     // 转换并存入数据库
     let map = convert_map_detail(&map_detail);
+    let key = map_detail.id.clone();
 
     // 存入 Map 表
     {
@@ -77,21 +77,20 @@ pub async fn get_map_by_hash(app: AppHandle, hash: String) -> Result<Map, String
         db::insert_map(&guard, &map).map_err(|e| e.to_string())?;
     }
 
-    // 存入 MapDiff 表
+    // 存入 MapDiff 表（批量插入）
     if let Some(version) = map_detail.versions.first() {
-        for diff in &version.diffs {
-            let map_diff = MapDiff {
-                key: map_detail.id.clone(),
-                hash: version.hash.clone(),
-                is_current: true,
-                mode: diff.characteristic.clone(),
-                difficulty: diff.difficulty.clone(),
-            };
-            let state = app.try_state::<Mutex<rusqlite::Connection>>()
-                .ok_or("Database not initialized")?;
-            let guard = state.lock().map_err(|e| e.to_string())?;
-            db::insert_map_diff(&guard, &map_diff).map_err(|e| e.to_string())?;
-        }
+        let diffs: Vec<MapDiff> = version.diffs.iter().map(|diff| MapDiff {
+            key: key.clone(),
+            hash: version.hash.clone(),
+            is_current: true,
+            mode: diff.characteristic.clone(),
+            difficulty: diff.difficulty.clone(),
+        }).collect();
+
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        db::insert_map_diffs_batch(&guard, &key, &diffs).map_err(|e| e.to_string())?;
     }
 
     Ok(map)

@@ -173,14 +173,8 @@ pub fn get_map_by_key(conn: &Connection, key: &str) -> Result<Option<Map>, rusql
     }
 }
 
-pub fn insert_map_diff(conn: &Connection, diff: &MapDiff) -> Result<(), rusqlite::Error> {
-    // 先将该 key 下所有记录的 isCurrent 改为 false
-    conn.execute(
-        "UPDATE MapDiff SET isCurrent = 0 WHERE key = ?1",
-        [diff.key.clone()],
-    )?;
-
-    // 插入新记录
+/// 插入单个难度记录（不重置 isCurrent，用于增量更新）
+pub fn insert_map_diff_single(conn: &Connection, diff: &MapDiff) -> Result<(), rusqlite::Error> {
     conn.execute(
         "INSERT OR REPLACE INTO MapDiff (key, hash, isCurrent, mode, difficulty)
          VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -192,6 +186,35 @@ pub fn insert_map_diff(conn: &Connection, diff: &MapDiff) -> Result<(), rusqlite
             diff.difficulty
         ],
     )?;
+    Ok(())
+}
+
+/// 批量插入同一版本的多个难度（先重置旧版本，再插入新版本）
+pub fn insert_map_diffs_batch(conn: &Connection, key: &str, diffs: &[MapDiff]) -> Result<(), rusqlite::Error> {
+    if diffs.is_empty() {
+        return Ok(());
+    }
+
+    // 先将该 key 下所有记录的 isCurrent 改为 false（标记为旧版本）
+    conn.execute(
+        "UPDATE MapDiff SET isCurrent = 0 WHERE key = ?1",
+        [key],
+    )?;
+
+    // 批量插入新记录（都标记为当前版本）
+    for diff in diffs {
+        conn.execute(
+            "INSERT OR REPLACE INTO MapDiff (key, hash, isCurrent, mode, difficulty)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![
+                diff.key,
+                diff.hash,
+                true, // 新版本都是当前版本
+                diff.mode,
+                diff.difficulty
+            ],
+        )?;
+    }
     Ok(())
 }
 
@@ -563,4 +586,101 @@ pub fn get_playlist_maps(conn: &Connection, playlist_id: i64) -> Result<Vec<Play
     })?.collect::<Result<Vec<_>, _>>()?;
 
     Ok(maps)
+}
+
+/// 获取谱面所有版本的 hash 列表
+pub fn get_map_hashes_by_key(conn: &Connection, key: &str) -> Result<Vec<String>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT hash FROM MapDiff WHERE key = ?1"
+    )?;
+
+    let hashes = stmt.query_map([key], |row| {
+        row.get::<_, String>(0)
+    })?.collect::<Result<Vec<_>, _>>()?;
+
+    Ok(hashes)
+}
+
+/// 获取指定 hash 对应的 key
+pub fn get_map_key_by_hash(conn: &Connection, hash: &str) -> Result<Option<String>, rusqlite::Error> {
+    let result: Result<String, rusqlite::Error> = conn.query_row(
+        "SELECT DISTINCT key FROM MapDiff WHERE hash = ?1 LIMIT 1",
+        [hash],
+        |row| row.get(0),
+    );
+
+    match result {
+        Ok(key) => Ok(Some(key)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+/// 获取玩家在指定 hash 列表中的成绩
+pub fn get_scores_by_hashes_and_player(
+    conn: &Connection,
+    hashes: &[String],
+    player_id: &str,
+) -> Result<Vec<PlayerScore>, rusqlite::Error> {
+    if hashes.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let placeholders = hashes.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT playerId, scoreId, leaderboardId, mapKey, hash, mode, difficulty, accuracy, epochTime
+         FROM PlayerScore WHERE playerId = ? AND hash IN ({})",
+        placeholders
+    );
+
+    let mut params: Vec<&dyn rusqlite::ToSql> = vec![&player_id];
+    for hash in hashes {
+        params.push(hash);
+    }
+
+    let mut stmt = conn.prepare(&sql)?;
+    let scores = stmt.query_map(rusqlite::params_from_iter(params), |row| {
+        Ok(PlayerScore {
+            player_id: row.get(0)?,
+            score_id: row.get(1)?,
+            leaderboard_id: row.get(2)?,
+            map_key: row.get(3)?,
+            hash: row.get(4)?,
+            mode: row.get(5)?,
+            difficulty: row.get(6)?,
+            accuracy: row.get(7)?,
+            epoch_time: row.get(8)?,
+        })
+    })?.collect::<Result<Vec<_>, _>>()?;
+
+    Ok(scores)
+}
+
+/// 获取歌单谱面分页（按 mapOrder 排序）
+pub fn get_playlist_maps_paginated(
+    conn: &Connection,
+    playlist_id: i64,
+    page: i32,
+    page_size: i32,
+) -> Result<(Vec<String>, i32), rusqlite::Error> {
+    // 获取总数
+    let total: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM PlaylistMap WHERE playlistId = ?1",
+        [playlist_id],
+        |row| row.get(0),
+    )?;
+
+    let total_pages = ((total as f64) / (page_size as f64)).ceil() as i32;
+    let offset = (page - 1) * page_size;
+
+    // 获取指定页的 map keys
+    let mut stmt = conn.prepare(
+        "SELECT mapKey FROM PlaylistMap WHERE playlistId = ?1 ORDER BY mapOrder LIMIT ?2 OFFSET ?3"
+    )?;
+
+    let keys = stmt.query_map(rusqlite::params![playlist_id, page_size, offset], |row| {
+        row.get::<_, String>(0)
+    })?.collect::<Result<Vec<_>, _>>()?;
+
+    Ok((keys, total_pages))
 }

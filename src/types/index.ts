@@ -93,6 +93,41 @@ export interface PlayerWithScoreCount extends PlayerInfo {
   score_count: number;
 }
 
+// ============ 打谱查询相关类型 ============
+
+export interface ScoreRow {
+  mode: string;
+  difficulty: string;
+  is_current_version: boolean;
+  scores: PlayerScoreCell[];
+}
+
+export interface PlayerScoreCell {
+  player_id: string;
+  accuracy: number;
+}
+
+export interface MapScoresResponse {
+  map: Map;
+  current_diffs: CurrentDiffInfo[];
+  scores: ScoreRow[];
+}
+
+export interface CurrentDiffInfo {
+  mode: string;
+  difficulty: string;
+  hash: string;
+}
+
+export interface PlaylistScoresResponse {
+  playlist: Playlist;
+  page: number;
+  total_pages: number;
+  maps: MapScoresResponse[];
+}
+
+// ============ 样式常量 ============
+
 export const difficultyColors: Record<string, string> = {
   'Easy': 'text-green-400 bg-green-500/20',
   'Normal': 'text-blue-400 bg-blue-500/20',

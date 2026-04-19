@@ -22,6 +22,8 @@ pub fn run() {
             commands::score::update_player_scores,
             commands::score::get_player_scores,
             commands::score::get_player_score_count,
+            commands::score::get_map_scores,
+            commands::score::get_playlist_scores,
             commands::map::get_map_by_key,
             commands::map::get_map_by_hash,
             commands::playlist::add_playlist,

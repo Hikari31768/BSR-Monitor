@@ -197,21 +197,21 @@ fn save_playlist_maps_with_progress(
             db::insert_map(&guard, &map).map_err(|e| e.to_string())?;
         }
 
-        // 存入难度信息
+        // 存入难度信息（批量插入）
         if let Some(version) = map_with_order.map.versions.first() {
-            for diff in &version.diffs {
-                let map_diff = MapDiff {
-                    key: map_with_order.map.id.clone(),
-                    hash: version.hash.clone(),
-                    is_current: true,
-                    mode: diff.characteristic.clone(),
-                    difficulty: diff.difficulty.clone(),
-                };
-                let state = app.try_state::<Mutex<rusqlite::Connection>>()
-                    .ok_or("Database not initialized")?;
-                let guard = state.lock().map_err(|e| e.to_string())?;
-                db::insert_map_diff(&guard, &map_diff).map_err(|e| e.to_string())?;
-            }
+            let key = map_with_order.map.id.clone();
+            let diffs: Vec<MapDiff> = version.diffs.iter().map(|diff| MapDiff {
+                key: key.clone(),
+                hash: version.hash.clone(),
+                is_current: true,
+                mode: diff.characteristic.clone(),
+                difficulty: diff.difficulty.clone(),
+            }).collect();
+
+            let state = app.try_state::<Mutex<rusqlite::Connection>>()
+                .ok_or("Database not initialized")?;
+            let guard = state.lock().map_err(|e| e.to_string())?;
+            db::insert_map_diffs_batch(&guard, &key, &diffs).map_err(|e| e.to_string())?;
         }
 
         // 存入关联关系

@@ -72,16 +72,15 @@ pub fn save_map_detail(conn: &Connection, map_detail: &MapDetail) -> Result<(), 
 
 /// 保存谱面版本信息
 fn save_map_version(conn: &Connection, key: &str, version: &MapVersion, is_current: bool) -> Result<(), BusinessError> {
-    for diff in &version.diffs {
-        let map_diff = MapDiff {
-            key: key.to_string(),
-            hash: version.hash.clone(),
-            is_current,
-            mode: diff.characteristic.clone(),
-            difficulty: diff.difficulty.clone(),
-        };
-        db::insert_map_diff(conn, &map_diff)?;
-    }
+    let diffs: Vec<MapDiff> = version.diffs.iter().map(|diff| MapDiff {
+        key: key.to_string(),
+        hash: version.hash.clone(),
+        is_current,
+        mode: diff.characteristic.clone(),
+        difficulty: diff.difficulty.clone(),
+    }).collect();
+
+    db::insert_map_diffs_batch(conn, key, &diffs)?;
     Ok(())
 }
 
