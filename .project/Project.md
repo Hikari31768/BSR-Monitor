@@ -15,6 +15,7 @@ BeatSaber 玩家成绩监控应用。
 
 - [数据库设计](./Database.md)
 - [API 模块](./API.md)
+- [命令层](./Commands.md)
 
 ## 业务流程
 
