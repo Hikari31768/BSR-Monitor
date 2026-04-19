@@ -51,7 +51,50 @@ src-tauri/src/commands/
 | `delete_playlist` | playlist_id | - | 删除歌单 |
 | `get_playlist_maps` | playlist_id | Vec<PlaylistMap> | 获取歌单谱面列表 |
 
-### 排行榜
+### 打谱查询
+
+| 命令 | 参数 | 返回 | 说明 |
+|------|------|------|------|
+| `get_map_scores` | key, player_ids | MapScoresResponse | 查询单个谱面在指定玩家下的成绩，支持跨版本合并 |
+| `get_playlist_scores` | playlist_id, page, player_ids | PlaylistScoresResponse | 查询歌单某页谱面在指定玩家下的成绩（每页100谱面） |
+
+### 打谱查询响应类型
+
+```typescript
+interface MapScoresResponse {
+  map: Map;                    // 谱面基本信息
+  current_diffs: MapDiff[];    // 当前版本所有难度
+  no_score_groups: NoScoreDiffGroup[];  // 无分数难度（按模式分组）
+  scores: ScoreRowData[];      // 成绩数据行
+}
+
+interface ScoreRowData {
+  mode: string;
+  difficulty: string;
+  is_current_version: boolean;
+  scores: PlayerScoreCell[];   // 各玩家成绩
+}
+
+interface PlayerScoreCell {
+  player_id: string;
+  accuracy: number;
+  is_current_version: boolean;
+}
+
+interface NoScoreDiffGroup {
+  mode: string;
+  difficulties: string[];      // 该模式下无分数的难度列表
+}
+
+interface PlaylistScoresResponse {
+  playlist: Playlist;
+  page: number;
+  total_pages: number;
+  maps: MapScoresResponse[];
+}
+```
+
+### 排行榜查询
 
 | 命令 | 参数 | 返回 | 说明 |
 |------|------|------|------|
