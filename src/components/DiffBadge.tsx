@@ -1,6 +1,7 @@
 interface DiffBadgeProps {
   difficulty: string;
   showFull?: boolean;
+  size?: 'normal' | 'sm';
 }
 
 const difficultyConfig: Record<string, { abbr: string; color: string; bgColor: string }> = {
@@ -11,12 +12,16 @@ const difficultyConfig: Record<string, { abbr: string; color: string; bgColor: s
   ExpertPlus: { abbr: 'E+', color: '#7049ae', bgColor: 'rgba(112, 73, 174, 0.2)' },
 };
 
-export default function DiffBadge({ difficulty, showFull = false }: DiffBadgeProps) {
+export default function DiffBadge({ difficulty, showFull = false, size = 'normal' }: DiffBadgeProps) {
   const config = difficultyConfig[difficulty] || { abbr: '?', color: '#888', bgColor: 'rgba(136, 136, 136, 0.2)' };
+
+  const sizeClasses = size === 'sm'
+    ? 'px-1 py-0 text-[10px]'
+    : 'px-2 py-0.5 text-xs';
 
   return (
     <span
-      className="inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-semibold"
+      className={`inline-flex items-center justify-center rounded font-semibold ${sizeClasses}`}
       style={{
         color: config.color,
         backgroundColor: config.bgColor,

@@ -95,6 +95,11 @@ export interface PlayerWithScoreCount extends PlayerInfo {
 
 // ============ 打谱查询相关类型 ============
 
+export interface NoScoreDiffGroup {
+  mode: string;
+  difficulties: string[];
+}
+
 export interface ScoreRow {
   mode: string;
   difficulty: string;
@@ -111,6 +116,7 @@ export interface MapScoresResponse {
   map: Map;
   current_diffs: CurrentDiffInfo[];
   scores: ScoreRow[];
+  no_score_diffs: NoScoreDiffGroup[];
 }
 
 export interface CurrentDiffInfo {

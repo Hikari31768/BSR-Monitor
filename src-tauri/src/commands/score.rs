@@ -32,12 +32,20 @@ pub struct PlayerScoreCell {
     pub accuracy: f32,
 }
 
+/// 无成绩难度的分组（按模式）
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NoScoreDiffGroup {
+    pub mode: String,
+    pub difficulties: Vec<String>,
+}
+
 /// MapScoresResponse 结构
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MapScoresResponse {
     pub map: db::Map,
     pub current_diffs: Vec<CurrentDiffInfo>,
     pub scores: Vec<ScoreRowData>,
+    pub no_score_diffs: Vec<NoScoreDiffGroup>, // 无成绩的难度（按模式分组）
 }
 
 /// PlaylistScoresResponse 结构
@@ -108,10 +116,11 @@ pub fn get_map_scores(
         scores_by_diff.entry(key).or_default().push((score.player_id.clone(), score));
     }
 
-    // 8. 构建成绩行
+    // 8. 构建成绩行（只包含有成绩的难度）和无成绩难度分组
     let mut score_rows: Vec<ScoreRowData> = Vec::new();
+    let mut no_score_diffs_by_mode: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
 
-    // 8.1 首先添加所有当前版本难度
+    // 8.1 首先处理所有当前版本难度
     for diff in &current_diffs {
         let key = (diff.mode.clone(), diff.difficulty.clone());
         let player_scores = scores_by_diff.get(&key).cloned().unwrap_or_default();
@@ -132,12 +141,21 @@ pub fn get_map_scores(
             })
             .collect();
 
-        score_rows.push(ScoreRowData {
-            mode: diff.mode.clone(),
-            difficulty: diff.difficulty.clone(),
-            is_current_version: true,
-            scores,
-        });
+        if !scores.is_empty() {
+            // 有成绩：加入成绩行
+            score_rows.push(ScoreRowData {
+                mode: diff.mode.clone(),
+                difficulty: diff.difficulty.clone(),
+                is_current_version: true,
+                scores,
+            });
+        } else {
+            // 无成绩：加入无成绩分组
+            no_score_diffs_by_mode
+                .entry(diff.mode.clone())
+                .or_default()
+                .push(diff.difficulty.clone());
+        }
     }
 
     // 8.2 然后添加有成绩但不在当前版本的难度
@@ -170,7 +188,7 @@ pub fn get_map_scores(
         }
     }
 
-    // 9. 按难度排序
+    // 9. 按难度排序成绩行
     score_rows.sort_by(|a, b| {
         let mode_order = mode_sort_order(&a.mode).cmp(&mode_sort_order(&b.mode));
         if mode_order != std::cmp::Ordering::Equal {
@@ -179,10 +197,25 @@ pub fn get_map_scores(
         difficulty_sort_order(&a.difficulty).cmp(&difficulty_sort_order(&b.difficulty))
     });
 
+    // 10. 构建无成绩难度分组（按模式排序，每个模式内难度排序）
+    let mut no_score_diffs: Vec<NoScoreDiffGroup> = no_score_diffs_by_mode
+        .into_iter()
+        .map(|(mode, difficulties)| {
+            let mut sorted_diffs = difficulties;
+            sorted_diffs.sort_by_key(|d| difficulty_sort_order(d));
+            NoScoreDiffGroup {
+                mode,
+                difficulties: sorted_diffs,
+            }
+        })
+        .collect();
+    no_score_diffs.sort_by_key(|g| mode_sort_order(&g.mode));
+
     Ok(MapScoresResponse {
         map,
         current_diffs,
         scores: score_rows,
+        no_score_diffs,
     })
 }
 
@@ -259,8 +292,9 @@ pub fn get_playlist_scores(
         }
 
         let mut score_rows: Vec<ScoreRowData> = Vec::new();
+        let mut no_score_diffs_by_mode: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
 
-        // 首先添加所有当前版本难度
+        // 首先处理所有当前版本难度
         for diff in &current_diffs {
             let key = (diff.mode.clone(), diff.difficulty.clone());
 
@@ -282,12 +316,19 @@ pub fn get_playlist_scores(
                 })
                 .collect();
 
-            score_rows.push(ScoreRowData {
-                mode: diff.mode.clone(),
-                difficulty: diff.difficulty.clone(),
-                is_current_version: true,
-                scores,
-            });
+            if !scores.is_empty() {
+                score_rows.push(ScoreRowData {
+                    mode: diff.mode.clone(),
+                    difficulty: diff.difficulty.clone(),
+                    is_current_version: true,
+                    scores,
+                });
+            } else {
+                no_score_diffs_by_mode
+                    .entry(diff.mode.clone())
+                    .or_default()
+                    .push(diff.difficulty.clone());
+            }
         }
 
         // 然后添加有成绩但不在当前版本的难度
@@ -328,10 +369,25 @@ pub fn get_playlist_scores(
             difficulty_sort_order(&a.difficulty).cmp(&difficulty_sort_order(&b.difficulty))
         });
 
+        // 构建无成绩难度分组
+        let mut no_score_diffs: Vec<NoScoreDiffGroup> = no_score_diffs_by_mode
+            .into_iter()
+            .map(|(mode, difficulties)| {
+                let mut sorted_diffs = difficulties;
+                sorted_diffs.sort_by_key(|d| difficulty_sort_order(d));
+                NoScoreDiffGroup {
+                    mode,
+                    difficulties: sorted_diffs,
+                }
+            })
+            .collect();
+        no_score_diffs.sort_by_key(|g| mode_sort_order(&g.mode));
+
         maps.push(MapScoresResponse {
             map,
             current_diffs,
             scores: score_rows,
+            no_score_diffs,
         });
     }
 

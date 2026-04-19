@@ -1,4 +1,4 @@
-import { Map, ScoreRow } from '../types';
+import { Map, ScoreRow, NoScoreDiffGroup } from '../types';
 import DiffBadge from './DiffBadge';
 import ModeIcon from './ModeIcon';
 import { PlayerInfo } from '../types';
@@ -9,6 +9,7 @@ interface ScoreTableRowProps {
   players: PlayerInfo[];
   isFirstRow: boolean;
   totalRows: number; // 该谱面总共有多少难度行
+  noScoreDiffs: NoScoreDiffGroup[]; // 无成绩的难度分组
   showMapDivider?: boolean;
 }
 
@@ -18,6 +19,7 @@ export default function ScoreTableRow({
   players,
   isFirstRow,
   totalRows,
+  noScoreDiffs,
   showMapDivider,
 }: ScoreTableRowProps) {
   // 查找每个玩家的成绩
@@ -47,23 +49,40 @@ export default function ScoreTableRow({
         style={isFirstRow && totalRows > 1 ? { height: `${mapCellHeight}px` } : {}}
       >
         {isFirstRow && (
-          <div className="flex gap-3">
-            {map.cover_url && (
-              <img
-                src={map.cover_url}
-                alt={map.song_name}
-                className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
-              />
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-[#f0f0f5] truncate" title={map.song_name}>
-                {map.song_name}
-              </p>
-              <p className="text-xs text-[#6b7280] truncate" title={map.level_author_name}>
-                {map.level_author_name}
-              </p>
-              <p className="text-xs text-[#a0a0b0] mt-1">{map.key}</p>
+          <div>
+            <div className="flex gap-3">
+              {map.cover_url && (
+                <img
+                  src={map.cover_url}
+                  alt={map.song_name}
+                  className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-[#f0f0f5] truncate" title={map.song_name}>
+                  {map.song_name}
+                </p>
+                <p className="text-xs text-[#6b7280] truncate" title={map.level_author_name}>
+                  {map.level_author_name}
+                </p>
+                <p className="text-xs text-[#a0a0b0] mt-1">{map.key}</p>
+              </div>
             </div>
+            {/* 无成绩难度列表 */}
+            {noScoreDiffs.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-[#2a2a3a]/50 space-y-1">
+                {noScoreDiffs.map(group => (
+                  <div key={group.mode} className="flex items-center gap-2">
+                    <ModeIcon mode={group.mode} size={14} />
+                    <div className="flex gap-1">
+                      {group.difficulties.map(diff => (
+                        <DiffBadge key={diff} difficulty={diff} size="sm" />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
