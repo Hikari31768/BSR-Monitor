@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { PlayerInfo, PlayerWithScoreCount } from '../types';
 import PlayerCard from '../components/PlayerCard';
 import Modal from '../components/Modal';
@@ -7,7 +8,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 
 export default function Players() {
-  const [players, setPlayers] = useState<PlayerWithScoreCount[]>([]);
+  const [players, setPlayers] = useState<(PlayerWithScoreCount & { loading?: boolean; progress?: number; status_message?: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
@@ -38,21 +39,89 @@ export default function Players() {
 
   async function handleAddPlayer() {
     if (!addForm.id) return;
+
+    // 检查是否已经在处理中
+    const isProcessing = players.some(p => p.id === addForm.id && p.loading);
+    if (isProcessing) {
+      alert('该玩家正在添加中，请稍候...');
+      return;
+    }
+
     try {
-      await invoke('add_player', {
+      // 立即添加待处理的玩家到列表
+      const tempPlayer: PlayerWithScoreCount & { loading?: boolean; progress?: number; status_message?: string } = {
         id: addForm.id,
-        liveUrl: addForm.liveUrl || null,
-        alias: addForm.alias || null
-      });
+        name: '加载中...',
+        avatar_url: undefined,
+        live_url: addForm.liveUrl || undefined,
+        alias: addForm.alias || undefined,
+        score_count: 0,
+        loading: true,
+        progress: 0,
+        status_message: '准备添加...'
+      };
+
+      setPlayers(prev => [...prev, tempPlayer]);
       setShowAddModal(false);
       setAddForm({ id: '', liveUrl: '', alias: '' });
-      loadPlayers();
+
+      // 监听进度事件
+      const unlisten = await listen('progress-update', (event) => {
+        const progressData = event.payload as {
+          task_type: string;
+          task_id: string;
+          stage: string;
+          progress: number;
+          total?: number;
+          current?: number;
+          message?: string;
+        };
+
+        // 只处理当前任务的进度
+        if (progressData.task_type === 'add_player') {
+          setPlayers(prev => prev.map(p =>
+            p.id === addForm.id
+              ? {
+                  ...p,
+                  progress: progressData.progress,
+                  status_message: progressData.message || `阶段: ${progressData.stage}`
+                }
+              : p
+          ));
+        }
+      });
+
+      // 执行长时间操作
+      try {
+        await invoke('add_player', {
+          id: addForm.id,
+          liveUrl: addForm.liveUrl || null,
+          alias: addForm.alias || null
+        });
+
+        // 操作成功，重新加载列表
+        loadPlayers();
+      } catch (e) {
+        // 操作失败，从列表中移除临时玩家并显示错误
+        setPlayers(prev => prev.filter(p => p.id !== addForm.id));
+        alert(`添加失败: ${e}`);
+      } finally {
+        // 清理事件监听器
+        unlisten();
+      }
     } catch (e) {
       alert(`添加失败: ${e}`);
     }
   }
 
   async function handleDeletePlayer(id: string) {
+    // 检查是否正在添加中，不允许删除
+    const player = players.find(p => p.id === id);
+    if (player && player.loading) {
+      alert('无法删除正在添加的玩家');
+      return;
+    }
+
     try {
       await invoke('delete_player', { id });
       setShowDeleteModal(null);
@@ -84,7 +153,8 @@ export default function Players() {
         <h1 className="text-2xl font-bold text-[#f0f0f5] tracking-tight">👤 玩家管理</h1>
         <button
           onClick={() => setShowAddModal(true)}
-          className="px-4 py-2.5 rounded-lg font-medium text-sm bg-[#ff6b6b] text-white hover:bg-[#ff5252] transition-all shadow-lg hover:shadow-[#ff6b6b]/30"
+          className="px-4 py-2.5 rounded-lg font-medium text-sm bg-[#ff6b6b] text-white hover:bg-[#ff5252] transition-all shadow-lg hover:shadow-[#ff6b6b]/30 disabled:opacity-50"
+          disabled={loading}
         >
           ➕ 添加玩家
         </button>

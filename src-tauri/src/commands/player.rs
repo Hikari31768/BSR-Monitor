@@ -4,8 +4,10 @@ use crate::api::BeatLeaderApi;
 use crate::database::operations::{PlayerInfo};
 use crate::database::operations as db;
 use std::sync::Mutex;
+use uuid::Uuid;
+use crate::progress::{ProgressPayload, emit_progress_event};
 
-/// 添加玩家（含全量拉取成绩）
+/// 添加玩家（含全量拉取成绩）- 支持进度反馈
 #[tauri::command]
 pub async fn add_player(
     app: AppHandle,
@@ -13,9 +15,16 @@ pub async fn add_player(
     live_url: Option<String>,
     alias: Option<String>,
 ) -> Result<PlayerInfo, String> {
+    let task_id = Uuid::new_v4().to_string();
     let api = BeatLeaderApi::new();
 
-    // Step 1: 调用 API 获取玩家信息
+    // Step 1: 发送初始进度
+    let payload = ProgressPayload::new("add_player".to_string(), task_id.clone())
+        .with_progress("fetching_player_info".to_string(), 10.0)
+        .with_message("正在获取玩家信息...".to_string());
+    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+
+    // Step 2: 调用 API 获取玩家信息
     let player_response = api.get_player(&id)
         .await
         .map_err(|e| e.to_string())?;
@@ -29,7 +38,13 @@ pub async fn add_player(
         alias,
     };
 
-    // Step 2: 存入数据库
+    // 发送第二阶段进度
+    let payload = ProgressPayload::new("add_player".to_string(), task_id.clone())
+        .with_progress("saving_player_info".to_string(), 20.0)
+        .with_message("正在保存玩家信息...".to_string());
+    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+
+    // Step 3: 存入数据库
     {
         let state = app.try_state::<Mutex<rusqlite::Connection>>()
             .ok_or("Database not initialized")?;
@@ -37,9 +52,16 @@ pub async fn add_player(
         db::insert_player(&guard, &player_info).map_err(|e| e.to_string())?;
     }
 
-    // Step 3: 全量拉取成绩
+    // Step 4: 发送开始拉取成绩进度
+    let payload = ProgressPayload::new("add_player".to_string(), task_id.clone())
+        .with_progress("fetching_scores".to_string(), 30.0)
+        .with_message("开始拉取成绩...".to_string());
+    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+
+    // Step 5: 全量拉取成绩
     let page_size = 100;
     let mut page = 1;
+    let mut total_scores = 0;
 
     loop {
         // API 调用
@@ -81,6 +103,14 @@ pub async fn add_player(
             }
         }
 
+        // 更新进度
+        total_scores += scores_to_insert.len();
+        let _current_progress = 30.0 + ((page as f64 / 10.0) * 7.0); // 假设最多10页，每页7%的进度
+        let payload = ProgressPayload::new("add_player".to_string(), task_id.clone())
+            .with_count("fetching_scores".to_string(), page as u64, response.metadata.total as u64)
+            .with_message(format!("正在拉取第 {} 页成绩 (共约 {} 页)，已累计 {} 条成绩...", page, (response.metadata.total + page_size - 1) / page_size, total_scores));
+        emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+
         // 检查是否还有更多页
         let total_pages = (response.metadata.total + response.metadata.items_per_page - 1)
             / response.metadata.items_per_page;
@@ -89,6 +119,12 @@ pub async fn add_player(
         }
         page += 1;
     }
+
+    // 发送完成进度
+    let payload = ProgressPayload::new("add_player".to_string(), task_id.clone())
+        .with_progress("completed".to_string(), 100.0)
+        .with_message(format!("完成！共拉取 {} 条成绩", total_scores));
+    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
 
     Ok(player_info)
 }

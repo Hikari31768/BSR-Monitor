@@ -2,6 +2,7 @@ mod database;
 pub mod api;
 pub mod business;
 pub mod commands;
+pub mod progress;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

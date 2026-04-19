@@ -8,48 +8,92 @@ interface PlaylistCardProps {
 
 export default function PlaylistCard({ playlist, onDelete, onViewMaps }: PlaylistCardProps) {
   return (
-    <div className="bg-[#15151c] rounded-xl p-5 border border-[#2a2a3a] shadow-lg transition-all duration-300 hover:border-[#4ecdc4]/50 hover:shadow-xl hover:shadow-[#4ecdc4]/5 group">
+    <div className={`bg-[#15151c] rounded-xl p-5 border transition-all duration-300 ${
+      playlist.loading
+        ? 'border-[#f59e0b]/50 shadow-xl shadow-[#f59e0b]/20'
+        : 'border-[#2a2a3a] shadow-lg hover:border-[#4ecdc4]/50 hover:shadow-xl hover:shadow-[#4ecdc4]/5 group'
+    }`}>
       <div className="flex items-start gap-4">
         {/* 封面 */}
         {playlist.playlist_image ? (
           <img
             src={playlist.playlist_image}
             alt={playlist.name}
-            className="w-14 h-14 rounded-xl object-cover ring-2 ring-[#2a2a3a] group-hover:ring-[#4ecdc4]/50 transition-all"
+            className={`w-14 h-14 rounded-xl object-cover ${
+              playlist.loading
+                ? 'ring-2 ring-[#f59e0b]/50'
+                : 'ring-2 ring-[#2a2a3a] group-hover:ring-[#4ecdc4]/50'
+            } transition-all`}
           />
         ) : (
-          <div className="w-14 h-14 rounded-xl bg-[#1e1e28] flex items-center justify-center text-2xl ring-2 ring-[#2a2a3a] group-hover:ring-[#4ecdc4]/50 transition-all">
+          <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl ${
+            playlist.loading
+              ? 'bg-[#f59e0b]/10 ring-2 ring-[#f59e0b]/50'
+              : 'bg-[#1e1e28] ring-2 ring-[#2a2a3a] group-hover:ring-[#4ecdc4]/50'
+          } transition-all`}>
             📋
           </div>
         )}
 
         {/* 信息 */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-[#f0f0f5] font-semibold text-lg truncate">{playlist.name}</h3>
-          {playlist.owner_name && (
+          <h3 className={`font-semibold text-lg truncate ${
+            playlist.loading ? 'text-[#fbbf24]' : 'text-[#f0f0f5]'
+          }`}>{playlist.name}</h3>
+          {playlist.owner_name && !playlist.loading && (
             <p className="text-[#a0a0b0] text-sm truncate">by {playlist.owner_name}</p>
           )}
           <div className="flex items-center gap-2 mt-2">
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#3b82f6]/15 text-[#60a5fa] border border-[#3b82f6]/30">
-              {playlist.total_maps || 0} 谱面
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+              playlist.loading
+                ? 'bg-[#f59e0b]/15 text-[#fbbf24] border border-[#f59e0b]/30'
+                : 'bg-[#3b82f6]/15 text-[#60a5fa] border border-[#3b82f6]/30'
+            }`}>
+              {playlist.loading ? '处理中...' : `${playlist.total_maps || 0} 谱面`}
             </span>
           </div>
+
+          {/* 进度条和状态消息 */}
+          {playlist.loading && (
+            <div className="mt-3">
+              <div className="w-full bg-[#2a2a3a] rounded-full h-2">
+                <div
+                  className="bg-[#f59e0b] h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${playlist.progress || 0}%` }}
+                ></div>
+              </div>
+              <p className="text-[#fbbf24] text-xs mt-1 truncate">
+                {playlist.status_message || '正在添加歌单...'}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* 操作按钮 */}
         <div className="flex flex-col gap-2">
-          <button
-            onClick={onViewMaps}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#1e1e28] text-[#a0a0b0] hover:bg-[#252533] hover:text-[#f0f0f5] transition-all"
-          >
-            👁️ 查看
-          </button>
-          <button
-            onClick={onDelete}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all"
-          >
-            🗑️ 删除
-          </button>
+          {!playlist.loading ? (
+            <>
+              <button
+                onClick={onViewMaps}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#1e1e28] text-[#a0a0b0] hover:bg-[#252533] hover:text-[#f0f0f5] transition-all"
+              >
+                👁️ 查看
+              </button>
+              <button
+                onClick={onDelete}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all"
+              >
+                🗑️ 删除
+              </button>
+            </>
+          ) : (
+            <button
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#f59e0b]/20 text-[#fbbf24] border border-[#f59e0b]/30 cursor-not-allowed"
+              disabled
+            >
+              ⏳ 处理中
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { Playlist, PlaylistMap } from '../types';
 import PlaylistCard from '../components/PlaylistCard';
 import MapCard from '../components/MapCard';
@@ -8,7 +9,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 
 export default function Playlists() {
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [playlists, setPlaylists] = useState<(Playlist & { loading?: boolean; progress?: number; status_message?: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<number | null>(null);
@@ -34,17 +35,90 @@ export default function Playlists() {
 
   async function handleAddPlaylist() {
     if (!addId) return;
+
+    // 检查是否已经在处理中
+    const playlistId = parseInt(addId);
+    const isProcessing = playlists.some(p => p.playlist_id === playlistId && p.loading);
+    if (isProcessing) {
+      alert('该歌单正在添加中，请稍候...');
+      return;
+    }
+
     try {
-      await invoke('add_playlist', { playlistId: parseInt(addId) });
+      // 立即添加待处理的歌单到列表
+      const tempPlaylist: Playlist & { loading?: boolean; progress?: number; status_message?: string } = {
+        playlist_id: playlistId,
+        name: '加载中...',
+        description: undefined,
+        playlist_image: undefined,
+        owner_id: undefined,
+        owner_name: undefined,
+        total_maps: undefined,
+        created_at: undefined,
+        songs_changed_at: undefined,
+        download_url: undefined,
+        loading: true,
+        progress: 0,
+        status_message: '准备添加...'
+      };
+
+      setPlaylists(prev => [...prev, tempPlaylist]);
       setShowAddModal(false);
       setAddId('');
-      loadPlaylists();
+
+      // 监听进度事件
+      const unlisten = await listen('progress-update', (event) => {
+        const progressData = event.payload as {
+          task_type: string;
+          task_id: string;
+          stage: string;
+          progress: number;
+          total?: number;
+          current?: number;
+          message?: string;
+        };
+
+        // 只处理当前任务的进度
+        if (progressData.task_type === 'add_playlist') {
+          setPlaylists(prev => prev.map(p =>
+            p.playlist_id === playlistId
+              ? {
+                  ...p,
+                  progress: progressData.progress,
+                  status_message: progressData.message || `阶段: ${progressData.stage}`
+                }
+              : p
+          ));
+        }
+      });
+
+      // 执行长时间操作
+      try {
+        await invoke('add_playlist', { playlistId });
+
+        // 操作成功，重新加载列表
+        loadPlaylists();
+      } catch (e) {
+        // 操作失败，从列表中移除临时歌单并显示错误
+        setPlaylists(prev => prev.filter(p => p.playlist_id !== playlistId));
+        alert(`添加失败: ${e}`);
+      } finally {
+        // 清理事件监听器
+        unlisten();
+      }
     } catch (e) {
       alert(`添加失败: ${e}`);
     }
   }
 
   async function handleDeletePlaylist(id: number) {
+    // 检查是否正在添加中，不允许删除
+    const playlist = playlists.find(p => p.playlist_id === id);
+    if (playlist && playlist.loading) {
+      alert('无法删除正在添加的歌单');
+      return;
+    }
+
     try {
       await invoke('delete_playlist', { playlistId: id });
       setShowDeleteModal(null);
@@ -72,7 +146,8 @@ export default function Playlists() {
         <h1 className="text-2xl font-bold text-[#f0f0f5] tracking-tight">📋 歌单管理</h1>
         <button
           onClick={() => setShowAddModal(true)}
-          className="px-4 py-2.5 rounded-lg font-medium text-sm bg-[#ff6b6b] text-white hover:bg-[#ff5252] transition-all shadow-lg hover:shadow-[#ff6b6b]/30"
+          className="px-4 py-2.5 rounded-lg font-medium text-sm bg-[#ff6b6b] text-white hover:bg-[#ff5252] transition-all shadow-lg hover:shadow-[#ff6b6b]/30 disabled:opacity-50"
+          disabled={loading}
         >
           ➕ 添加歌单
         </button>

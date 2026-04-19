@@ -4,6 +4,9 @@ export interface PlayerInfo {
   avatar_url?: string;
   live_url?: string;
   alias?: string;
+  loading?: boolean;
+  progress?: number;
+  status_message?: string;
 }
 
 export interface PlayerScore {
@@ -47,6 +50,9 @@ export interface Playlist {
   created_at?: string;
   songs_changed_at?: string;
   download_url?: string;
+  loading?: boolean;
+  progress?: number;
+  status_message?: string;
 }
 
 export interface PlaylistMap {
