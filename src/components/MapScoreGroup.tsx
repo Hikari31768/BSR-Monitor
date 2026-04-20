@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Map, ScoreRow, NoScoreDiffGroup, PlayerInfo } from '../types';
 import DiffBadge from './DiffBadge';
 import ModeIcon from './ModeIcon';
+import CoverWithAudio from './CoverWithAudio';
 
 function CopyKeyButton({ mapKey }: { mapKey: string }) {
   const [copied, setCopied] = useState(false);
@@ -74,13 +75,7 @@ export default function MapScoreGroup({
         {/* 谱面信息 */}
         <div className="group p-4 border-r border-[#2a2a3a]">
           <div className="flex gap-3">
-            {map.cover_url && (
-              <img
-                src={map.cover_url}
-                alt={map.song_name}
-                className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
-              />
-            )}
+            <CoverWithAudio map={map} />
             <div className="flex-1 min-w-0">
               <p className="font-medium text-[#f0f0f5] truncate">{map.song_name}</p>
               <p className="text-xs text-[#6b7280] truncate">{map.level_author_name}</p>
@@ -138,13 +133,7 @@ export default function MapScoreGroup({
       {/* 谱面信息列 - 跨所有行 */}
       <div className="group p-4 border-r border-[#2a2a3a] row-span-full">
         <div className="flex gap-3">
-          {map.cover_url && (
-            <img
-              src={map.cover_url}
-              alt={map.song_name}
-              className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
-            />
-          )}
+          <CoverWithAudio map={map} />
           <div className="flex-1 min-w-0">
             <p className="font-medium text-[#f0f0f5] truncate">{map.song_name}</p>
             <p className="text-xs text-[#6b7280] truncate">{map.level_author_name}</p>

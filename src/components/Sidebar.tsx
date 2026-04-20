@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useAudio } from '../contexts/AudioContext';
 
 const navItems = [
   { path: '/', label: '打谱查询', icon: '🎯' },
@@ -7,6 +8,8 @@ const navItems = [
 ];
 
 export default function Sidebar() {
+  const { volume, setVolume } = useAudio();
+
   return (
     <aside className="w-64 bg-[#15151c] border-r border-[#2a2a3a] flex flex-col shrink-0">
       {/* Logo 区域 */}
@@ -42,8 +45,28 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* 底部信息 */}
-      <div className="p-4 border-t border-[#2a2a3a]">
+      {/* 音量控制 */}
+      <div className="p-4 border-t border-[#2a2a3a] space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-[#6b7280]">音量</span>
+          <span className="text-xs text-[#6b7280]">{Math.round(volume * 100)}%</span>
+        </div>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          value={volume}
+          onChange={e => setVolume(parseFloat(e.target.value))}
+          className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+          style={{
+            background: `linear-gradient(to right, #7c3aed ${volume * 100}%, #2a2a3a ${volume * 100}%)`,
+          }}
+        />
+      </div>
+
+      {/* 底部版本 */}
+      <div className="px-4 pb-3">
         <p className="text-xs text-[#6b7280]">v0.1.0</p>
       </div>
     </aside>
