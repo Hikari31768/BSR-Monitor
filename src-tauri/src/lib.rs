@@ -1,6 +1,5 @@
 mod database;
 pub mod api;
-pub mod business;
 pub mod commands;
 pub mod progress;
 

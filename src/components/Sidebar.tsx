@@ -4,8 +4,6 @@ const navItems = [
   { path: '/', label: '打谱查询', icon: '🎯' },
   { path: '/players', label: '玩家管理', icon: '👤' },
   { path: '/playlists', label: '歌单管理', icon: '📋' },
-  { path: '/scores', label: '成绩查询', icon: '📊' },
-  { path: '/test', label: '测试页面', icon: '🔧' },
 ];
 
 export default function Sidebar() {

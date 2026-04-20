@@ -33,14 +33,6 @@ pub struct PlayerInfo {
     pub alias: Option<String>,
 }
 
-// 用于添加玩家时的输入参数
-#[derive(Debug, Default)]
-pub struct AddPlayerParams {
-    pub id: String,
-    pub live_url: Option<String>,
-    pub alias: Option<String>,
-}
-
 // PlayerScore 表数据结构
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlayerScore {
@@ -89,17 +81,6 @@ pub fn difficulty_from_value(value: i32) -> String {
         9 => "ExpertPlus",
         _ => "Unknown",
     }.to_string()
-}
-
-pub fn difficulty_to_value(name: &str) -> i32 {
-    match name {
-        "Easy" => 1,
-        "Normal" => 3,
-        "Hard" => 5,
-        "Expert" => 7,
-        "ExpertPlus" => 9,
-        _ => 0,
-    }
 }
 
 // leaderboardId 解析
@@ -171,22 +152,6 @@ pub fn get_map_by_key(conn: &Connection, key: &str) -> Result<Option<Map>, rusql
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e),
     }
-}
-
-/// 插入单个难度记录（不重置 isCurrent，用于增量更新）
-pub fn insert_map_diff_single(conn: &Connection, diff: &MapDiff) -> Result<(), rusqlite::Error> {
-    conn.execute(
-        "INSERT OR REPLACE INTO MapDiff (key, hash, isCurrent, mode, difficulty)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        rusqlite::params![
-            diff.key,
-            diff.hash,
-            diff.is_current,
-            diff.mode,
-            diff.difficulty
-        ],
-    )?;
-    Ok(())
 }
 
 /// 批量插入同一版本的多个难度（先重置旧版本，再插入新版本）
@@ -595,34 +560,6 @@ pub fn get_playlist_maps(conn: &Connection, playlist_id: i64) -> Result<Vec<Play
     })?.collect::<Result<Vec<_>, _>>()?;
 
     Ok(maps)
-}
-
-/// 获取谱面所有版本的 hash 列表
-pub fn get_map_hashes_by_key(conn: &Connection, key: &str) -> Result<Vec<String>, rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        "SELECT DISTINCT hash FROM MapDiff WHERE key = ?1"
-    )?;
-
-    let hashes = stmt.query_map([key], |row| {
-        row.get::<_, String>(0)
-    })?.collect::<Result<Vec<_>, _>>()?;
-
-    Ok(hashes)
-}
-
-/// 获取指定 hash 对应的 key
-pub fn get_map_key_by_hash(conn: &Connection, hash: &str) -> Result<Option<String>, rusqlite::Error> {
-    let result: Result<String, rusqlite::Error> = conn.query_row(
-        "SELECT DISTINCT key FROM MapDiff WHERE hash = ?1 LIMIT 1",
-        [hash],
-        |row| row.get(0),
-    );
-
-    match result {
-        Ok(key) => Ok(Some(key)),
-        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(e),
-    }
 }
 
 /// 获取玩家在指定 hash 列表中的成绩
