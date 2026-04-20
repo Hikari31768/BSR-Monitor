@@ -1,6 +1,38 @@
+import { useState } from 'react';
 import { Map, ScoreRow, NoScoreDiffGroup, PlayerInfo } from '../types';
 import DiffBadge from './DiffBadge';
 import ModeIcon from './ModeIcon';
+
+function CopyKeyButton({ mapKey }: { mapKey: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleClick() {
+    navigator.clipboard.writeText(`!bsr ${mapKey}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  }
+
+  return (
+    <>
+      <button
+        onClick={handleClick}
+        className="inline-flex items-center justify-center rounded w-5 h-5 text-xs font-semibold leading-none text-[#a78bfa] bg-[#7c3aed]/20 hover:bg-[#7c3aed]/40 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity duration-100"
+        style={{ border: '1px solid rgba(124, 58, 237, 0.4)' }}
+        title="复制 !bsr 命令"
+      >
+        !
+      </button>
+      <span
+        className={`inline-flex items-center justify-center rounded h-5 px-2 text-xs font-semibold leading-none text-[#a78bfa] bg-[#7c3aed]/20 transition-opacity duration-100 ${
+          copied ? 'opacity-100' : 'opacity-0'
+        }`}
+        style={{ border: '1px solid rgba(124, 58, 237, 0.4)' }}
+      >
+        !bsr 已复制
+      </span>
+    </>
+  );
+}
 
 interface MapScoreGroupProps {
   map: Map;
@@ -40,7 +72,7 @@ export default function MapScoreGroup({
         style={{ gridTemplateColumns: gridColumns }}
       >
         {/* 谱面信息 */}
-        <div className="p-4 border-r border-[#2a2a3a]">
+        <div className="group p-4 border-r border-[#2a2a3a]">
           <div className="flex gap-3">
             {map.cover_url && (
               <img
@@ -52,7 +84,10 @@ export default function MapScoreGroup({
             <div className="flex-1 min-w-0">
               <p className="font-medium text-[#f0f0f5] truncate">{map.song_name}</p>
               <p className="text-xs text-[#6b7280] truncate">{map.level_author_name}</p>
-              <p className="text-xs text-[#a0a0b0] mt-1">{map.key}</p>
+              <div className="flex items-center gap-1 mt-1">
+                <p className="text-xs text-[#a0a0b0]">{map.key}</p>
+                <CopyKeyButton mapKey={map.key} />
+              </div>
             </div>
           </div>
           {noScoreDiffs.length > 0 && (
@@ -101,7 +136,7 @@ export default function MapScoreGroup({
       }}
     >
       {/* 谱面信息列 - 跨所有行 */}
-      <div className="p-4 border-r border-[#2a2a3a] row-span-full">
+      <div className="group p-4 border-r border-[#2a2a3a] row-span-full">
         <div className="flex gap-3">
           {map.cover_url && (
             <img
@@ -113,7 +148,10 @@ export default function MapScoreGroup({
           <div className="flex-1 min-w-0">
             <p className="font-medium text-[#f0f0f5] truncate">{map.song_name}</p>
             <p className="text-xs text-[#6b7280] truncate">{map.level_author_name}</p>
-            <p className="text-xs text-[#a0a0b0] mt-1">{map.key}</p>
+            <div className="flex items-center gap-1 mt-1">
+              <p className="text-xs text-[#a0a0b0]">{map.key}</p>
+              <CopyKeyButton mapKey={map.key} />
+            </div>
           </div>
         </div>
         {/* 无成绩难度列表 */}
