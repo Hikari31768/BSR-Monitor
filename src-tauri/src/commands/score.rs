@@ -226,6 +226,7 @@ pub fn get_playlist_scores(
     playlist_id: i64,
     page: i32,
     player_ids: Vec<String>,
+    reverse: bool,
 ) -> Result<PlaylistScoresResponse, String> {
     let state = app.try_state::<Mutex<rusqlite::Connection>>()
         .ok_or("Database not initialized")?;
@@ -237,7 +238,7 @@ pub fn get_playlist_scores(
         .ok_or_else(|| format!("Playlist not found: {}", playlist_id))?;
 
     // 2. 获取分页的谱面 keys
-    let (map_keys, total_pages) = db::get_playlist_maps_paginated(&guard, playlist_id, page, 100)
+    let (map_keys, total_pages) = db::get_playlist_maps_paginated(&guard, playlist_id, page, 100, reverse)
         .map_err(|e| e.to_string())?;
 
     // 3. 逐个查询每个谱面的成绩

@@ -6,6 +6,9 @@ interface ScoreTableHeaderProps {
   onAddPlayer: () => void;
   onRemovePlayer: (playerId: string) => void;
   onReorderPlayers: (draggedId: string, targetId: string) => void;
+  mapSort: 'asc' | 'desc';
+  onToggleMapSort: () => void;
+  showMapSort: boolean;
 }
 
 export default function ScoreTableHeader({
@@ -13,6 +16,9 @@ export default function ScoreTableHeader({
   onAddPlayer,
   onRemovePlayer,
   onReorderPlayers,
+  mapSort,
+  onToggleMapSort,
+  showMapSort,
 }: ScoreTableHeaderProps) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
 
@@ -41,8 +47,25 @@ export default function ScoreTableHeader({
         style={{ gridTemplateColumns: gridColumns }}
       >
         {/* 谱面信息列 */}
-        <div className="p-4 border-r border-[#2a2a3a] flex items-center justify-center">
+        <div className="p-4 border-r border-[#2a2a3a] flex flex-col items-center justify-center gap-2">
           <span className="text-sm font-medium text-[#a0a0b0]">谱面信息</span>
+          {showMapSort && (
+            <button
+              onClick={onToggleMapSort}
+              className={`inline-flex items-center justify-center rounded h-5 px-2 text-xs font-semibold leading-none cursor-pointer transition-colors ${
+                mapSort === 'asc'
+                  ? 'text-[#4ade80] bg-[#22c55e]/20 hover:bg-[#22c55e]/40'
+                  : 'text-[#fb923c] bg-[#f97316]/20 hover:bg-[#f97316]/40'
+              }`}
+              style={{
+                border: mapSort === 'asc'
+                  ? '1px solid rgba(34, 197, 94, 0.4)'
+                  : '1px solid rgba(249, 115, 22, 0.4)',
+              }}
+            >
+              {mapSort === 'asc' ? '歌单正序' : '歌单倒序'}
+            </button>
+          )}
         </div>
 
         {/* 难度信息列 */}

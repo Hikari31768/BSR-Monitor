@@ -608,6 +608,7 @@ pub fn get_playlist_maps_paginated(
     playlist_id: i64,
     page: i32,
     page_size: i32,
+    reverse: bool,
 ) -> Result<(Vec<String>, i32), rusqlite::Error> {
     // 获取总数
     let total: i64 = conn.query_row(
@@ -619,10 +620,14 @@ pub fn get_playlist_maps_paginated(
     let total_pages = ((total as f64) / (page_size as f64)).ceil() as i32;
     let offset = (page - 1) * page_size;
 
+    let order_by = if reverse { "DESC" } else { "ASC" };
+
     // 获取指定页的 map keys
-    let mut stmt = conn.prepare(
-        "SELECT mapKey FROM PlaylistMap WHERE playlistId = ?1 ORDER BY mapOrder LIMIT ?2 OFFSET ?3"
-    )?;
+    let query = format!(
+        "SELECT mapKey FROM PlaylistMap WHERE playlistId = ?1 ORDER BY mapOrder {} LIMIT ?2 OFFSET ?3",
+        order_by
+    );
+    let mut stmt = conn.prepare(&query)?;
 
     let keys = stmt.query_map(rusqlite::params![playlist_id, page_size, offset], |row| {
         row.get::<_, String>(0)

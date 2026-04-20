@@ -37,6 +37,7 @@ export default function ScoreTable() {
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<number | null>(null);
   const [playlistData, setPlaylistData] = useState<PlaylistScoresResponse | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [mapSort, setMapSort] = useState<'asc' | 'desc'>('asc');
 
   // 加载状态
   const [loadingPlayers, setLoadingPlayers] = useState(true);
@@ -124,6 +125,7 @@ export default function ScoreTable() {
         playlistId: selectedPlaylistId,
         page: currentPage,
         playerIds,
+        reverse: mapSort === 'desc',
       });
 
       setPlaylistData(result);
@@ -133,12 +135,13 @@ export default function ScoreTable() {
     } finally {
       setLoadingData(false);
     }
-  }, [selectedPlaylistId, currentPage, selectedPlayers]);
+  }, [selectedPlaylistId, currentPage, selectedPlayers, mapSort]);
 
-  // 切换歌单时重置页码
+  // 切换歌单时重置页码和排序
   useEffect(() => {
     setCurrentPage(1);
     setPlaylistData(null);
+    setMapSort('asc');
   }, [selectedPlaylistId]);
 
   // 页码变化时自动查询
@@ -281,6 +284,9 @@ export default function ScoreTable() {
             onAddPlayer={() => setIsPlayerModalOpen(true)}
             onRemovePlayer={handleRemovePlayer}
             onReorderPlayers={handleReorderPlayers}
+            mapSort={mapSort}
+            onToggleMapSort={() => setMapSort(s => s === 'asc' ? 'desc' : 'asc')}
+            showMapSort={viewMode === 'playlist'}
           />
 
           {/* 表格内容 - 可滚动区域 */}
