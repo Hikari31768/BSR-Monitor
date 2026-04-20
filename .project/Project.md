@@ -11,6 +11,11 @@ BeatSaber 玩家成绩监控应用。
 - **HTTP 客户端**: reqwest (带 json feature)
 - **异步运行时**: tokio (rt-multi-thread, macros)
 
+## 开发指令
+
+- **测试启动**：`npm run tauri dev`
+- **打包发布**：`npm run tauri build`
+
 ## 核心模块
 
 - [数据库设计](./Database.md)

@@ -89,6 +89,15 @@ pub struct PlaylistPage {
     pub maps: Vec<MapDetailWithOrder>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
+#[serde(rename_all = "PascalCase")]
+pub enum PlaylistType {
+    Private,
+    Public,
+    System,
+    Search,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PlaylistFull {
     #[serde(rename = "playlistId")]
@@ -107,6 +116,8 @@ pub struct PlaylistFull {
     pub created_at: Option<String>,
     #[serde(rename = "songsChangedAt", default)]
     pub songs_changed_at: Option<String>,
+    #[serde(rename = "type", default)]
+    pub playlist_type: Option<PlaylistType>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -539,6 +539,15 @@ pub fn delete_playlist_maps(conn: &Connection, playlist_id: i64) -> Result<(), r
     Ok(())
 }
 
+/// 更新歌单的 totalMaps 字段
+pub fn update_playlist_total_maps(conn: &Connection, playlist_id: i64, total_maps: Option<i32>) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "UPDATE Playlist SET totalMaps = ?2 WHERE playlistId = ?1",
+        rusqlite::params![playlist_id, total_maps],
+    )?;
+    Ok(())
+}
+
 pub fn insert_playlist_map(conn: &Connection, playlist_map: &PlaylistMap) -> Result<(), rusqlite::Error> {
     conn.execute(
         "INSERT OR REPLACE INTO PlaylistMap (playlistId, mapKey, mapOrder)

@@ -30,6 +30,8 @@ pub async fn add_playlist(app: AppHandle, playlist_id: i32) -> Result<Playlist, 
     }
 }
 
+const PLAYLIST_PAGE_SIZE: i32 = 500;
+
 /// 全量添加新歌单
 async fn add_new_playlist(
     app: AppHandle,
@@ -48,7 +50,15 @@ async fn add_new_playlist(
         .await
         .map_err(|e| e.to_string())?;
 
-    // 转换歌单元数据
+    println!("[Playlist] First page: {} maps, type: {:?}, API total: {}",
+        first_page.maps.len(),
+        first_page.playlist.playlist_type,
+        first_page.playlist.stats.as_ref().map(|s| s.total_maps).unwrap_or(0));
+
+    // 判断是否为 Search 类型
+    let is_search_type = first_page.playlist.playlist_type == Some(crate::api::PlaylistType::Search);
+
+    // 转换歌单元数据（先使用 API 返回的 total_maps）
     let playlist = convert_playlist_response(&first_page);
 
     // 发送进度 - 开始保存歌单信息
@@ -66,35 +76,61 @@ async fn add_new_playlist(
     }
 
     // 处理第一页的谱面
+    let mut total_actual_count = first_page.maps.len();
     save_playlist_maps_with_progress(&app, playlist_id, &first_page, &task_id, 1, 1)?;
 
-    // 如果有更多页面，继续拉取
-    let total_maps = first_page.playlist.stats.as_ref().map(|s| s.total_maps).unwrap_or(0);
-    let total_pages = if total_maps > 0 { (total_maps + 49) / 50 } else { 1 };
+    // 根据实际返回数量判断是否需要继续拉取
+    let mut current_page = 0;
+    let mut current_page_count = first_page.maps.len();
+    while current_page_count == PLAYLIST_PAGE_SIZE as usize {
+        current_page += 1;
+        println!("[Playlist] Fetching page {}...", current_page);
 
-    if total_pages > 1 {
-        // 发送进度 - 开始处理后续页面
-        let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
-            .with_count("processing_pages".to_string(), 1, total_pages as u64)
-            .with_message(format!("开始处理 {} 页谱面...", total_pages));
-        emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+        let page_response = api.get_playlist(playlist_id, current_page)
+            .await
+            .map_err(|e| e.to_string())?;
 
-        for page in 1..total_pages {
-            let page_response = api.get_playlist(playlist_id, page as i32)
-                .await
-                .map_err(|e| e.to_string())?;
+        current_page_count = page_response.maps.len();
+        println!("[Playlist] Page {} returned {} maps", current_page, current_page_count);
 
-            save_playlist_maps_with_progress(&app, playlist_id, &page_response, &task_id, page as u64 + 1, total_pages as u64)?;
+        if current_page_count == 0 {
+            break;
         }
+
+        total_actual_count += current_page_count;
+        save_playlist_maps_with_progress(&app, playlist_id, &page_response, &task_id, current_page as u64 + 1, current_page as u64 + 1)?;
+    }
+
+    println!("[Playlist] Total fetched: {} maps, is_search: {}", total_actual_count, is_search_type);
+
+    // 对于 Search 类型歌单，更新 total_maps 为实际数量
+    if is_search_type {
+        println!("[Playlist] Updating total_maps to {}", total_actual_count);
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        db::update_playlist_total_maps(&guard, playlist_id as i64, Some(total_actual_count as i32))
+            .map_err(|e| e.to_string())?;
     }
 
     // 发送完成进度
+    let final_total = if is_search_type { total_actual_count as i32 } else { playlist.total_maps.unwrap_or(0) };
     let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
         .with_progress("completed".to_string(), 100.0)
-        .with_message(format!("完成！共处理 {} 首歌曲", total_maps));
+        .with_message(format!("完成！共处理 {} 首歌曲", final_total));
     emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
 
-    Ok(playlist)
+    // 返回最终歌单信息
+    let final_playlist = {
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        db::get_playlist_by_id(&guard, playlist_id as i64)
+            .map_err(|e| e.to_string())?
+            .unwrap_or(playlist)
+    };
+
+    Ok(final_playlist)
 }
 
 /// 增量更新已存在的歌单
@@ -104,6 +140,8 @@ async fn update_existing_playlist(
     task_id: String,
     api: BeatSaverApi,
 ) -> Result<Playlist, String> {
+    println!("[Playlist] Updating existing playlist {}", playlist_id);
+
     // 发送初始进度
     let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
         .with_progress("fetching_playlist".to_string(), 5.0)
@@ -114,6 +152,13 @@ async fn update_existing_playlist(
     let first_page = api.get_playlist(playlist_id, 0)
         .await
         .map_err(|e| e.to_string())?;
+
+    println!("[Playlist] First page: {} maps, type: {:?}",
+        first_page.maps.len(),
+        first_page.playlist.playlist_type);
+
+    // 判断是否为 Search 类型
+    let is_search_type = first_page.playlist.playlist_type == Some(crate::api::PlaylistType::Search);
 
     // 转换歌单元数据
     let playlist = convert_playlist_response(&first_page);
@@ -141,35 +186,61 @@ async fn update_existing_playlist(
     }
 
     // 处理第一页的谱面
+    let mut total_actual_count = first_page.maps.len();
     save_playlist_maps_with_progress(&app, playlist_id, &first_page, &task_id, 1, 1)?;
 
-    // 如果有更多页面，继续拉取
-    let total_maps = first_page.playlist.stats.as_ref().map(|s| s.total_maps).unwrap_or(0);
-    let total_pages = if total_maps > 0 { (total_maps + 49) / 50 } else { 1 };
+    // 根据实际返回数量判断是否需要继续拉取
+    let mut current_page = 0;
+    let mut current_page_count = first_page.maps.len();
+    while current_page_count == PLAYLIST_PAGE_SIZE as usize {
+        current_page += 1;
+        println!("[Playlist] Fetching page {}...", current_page);
 
-    if total_pages > 1 {
-        // 发送进度 - 开始处理后续页面
-        let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
-            .with_count("processing_pages".to_string(), 1, total_pages as u64)
-            .with_message(format!("开始处理 {} 页谱面...", total_pages));
-        emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+        let page_response = api.get_playlist(playlist_id, current_page)
+            .await
+            .map_err(|e| e.to_string())?;
 
-        for page in 1..total_pages {
-            let page_response = api.get_playlist(playlist_id, page as i32)
-                .await
-                .map_err(|e| e.to_string())?;
+        current_page_count = page_response.maps.len();
+        println!("[Playlist] Page {} returned {} maps", current_page, current_page_count);
 
-            save_playlist_maps_with_progress(&app, playlist_id, &page_response, &task_id, page as u64 + 1, total_pages as u64)?;
+        if current_page_count == 0 {
+            break;
         }
+
+        total_actual_count += current_page_count;
+        save_playlist_maps_with_progress(&app, playlist_id, &page_response, &task_id, current_page as u64 + 1, current_page as u64 + 1)?;
+    }
+
+    println!("[Playlist] Total fetched: {} maps, is_search: {}", total_actual_count, is_search_type);
+
+    // 对于 Search 类型歌单，更新 total_maps 为实际数量
+    if is_search_type {
+        println!("[Playlist] Updating total_maps to {}", total_actual_count);
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        db::update_playlist_total_maps(&guard, playlist_id as i64, Some(total_actual_count as i32))
+            .map_err(|e| e.to_string())?;
     }
 
     // 发送完成进度
+    let final_total = if is_search_type { total_actual_count as i32 } else { playlist.total_maps.unwrap_or(0) };
     let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
         .with_progress("completed".to_string(), 100.0)
-        .with_message(format!("更新完成！共处理 {} 首歌曲", total_maps));
+        .with_message(format!("更新完成！共处理 {} 首歌曲", final_total));
     emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
 
-    Ok(playlist)
+    // 返回最终歌单信息
+    let final_playlist = {
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        db::get_playlist_by_id(&guard, playlist_id as i64)
+            .map_err(|e| e.to_string())?
+            .unwrap_or(playlist)
+    };
+
+    Ok(final_playlist)
 }
 
 /// 带进度的保存歌单谱面
