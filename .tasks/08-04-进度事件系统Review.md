@@ -8,7 +8,7 @@
 
 ### 1. 文档对齐
 
-- 对照 [.project/Progress.md](.project/Progress.md) 检查 `ProgressPayload` 字段是否一致
+- 对照 [.project/docs/Progress.md](.project/docs/Progress.md) 检查 `ProgressPayload` 字段是否一致
 - 验证 Builder 方法签名是否与文档描述一致
 - 检查进度阶段（add_player: 10%/20%/30%-100%/100%；add_playlist: 5%/10%/10%-100%/100%）是否在命令层正确发射
 
@@ -34,7 +34,7 @@
 
 ### 1. 文档对齐
 
-- [x] `ProgressPayload` 字段与 `.project/Progress.md` 文档一致
+- [x] `ProgressPayload` 字段与 `.project/docs/Progress.md` 文档一致
 - [x] Builder 方法签名与文档描述一致
 - [x] 进度阶段在命令层正确发射（add_player: 10%/20%/30%-100%/100%；add_playlist: 5%/10%/10%-100%/100%）
 

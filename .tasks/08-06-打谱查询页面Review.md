@@ -18,7 +18,7 @@
 
 ### 1. 文档对齐
 
-- 对照 [.project/UserFeatures.md](.project/UserFeatures.md) 打谱查询功能逐项检查：
+- 对照 [.project/docs/UserFeatures.md](.project/docs/UserFeatures.md) 打谱查询功能逐项检查：
   - 单谱面模式：输入 key 或 hash 查询 — 是否支持
   - 歌单模式：选择歌单、分页批量查询（每页100）— 是否一致
   - 表格展示 `(谱面, 模式, 难度)` 维度 — 是否匹配

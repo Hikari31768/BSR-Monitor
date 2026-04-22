@@ -12,7 +12,7 @@
 
 ### 1. 文档对齐
 
-- 对照 [.project/UserFeatures.md](.project/UserFeatures.md) 玩家管理功能检查：
+- 对照 [.project/docs/UserFeatures.md](.project/docs/UserFeatures.md) 玩家管理功能检查：
   - 卡片网格展示玩家，显示分数数量 — 是否实现
   - 添加玩家（ID + 可选直播地址/备注名），实时进度追踪 — 是否实现
   - 增量更新分数，支持删除 — 是否实现

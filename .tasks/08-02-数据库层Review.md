@@ -11,7 +11,7 @@
 
 ### 1. 文档对齐
 
-- 对照 [.project/Database.md](.project/Database.md) 逐表检查字段是否一致
+- 对照 [.project/docs/Database.md](.project/docs/Database.md) 逐表检查字段是否一致
 - 检查复合主键定义是否与文档描述一致
 - 验证索引创建是否与查询模式匹配
 - 检查 `PlayerScore` 去重策略（按 epochTime 判断更新）是否按文档实现

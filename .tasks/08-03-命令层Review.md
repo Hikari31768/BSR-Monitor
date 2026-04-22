@@ -14,8 +14,8 @@
 
 ### 1. 文档对齐
 
-- 对照 [.project/Commands.md](.project/Commands.md) 检查命令签名、参数、返回值是否一致
-- 验证进度事件发射是否与 [.project/Progress.md](.project/Progress.md) 描述一致
+- 对照 [.project/docs/Commands.md](.project/docs/Commands.md) 检查命令签名、参数、返回值是否一致
+- 验证进度事件发射是否与 [.project/docs/Progress.md](.project/docs/Progress.md) 描述一致
 - 检查 `MapScoresResponse` 和 `PlaylistScoresResponse` 结构是否与文档定义匹配
   - 注意：文档中 `ScoreRowData` 有 `scores: PlayerScoreCell[]`，`PlayerScoreCell` 有 `is_current_version` 字段，但代码中 `PlayerScoreCell` 没有此字段
 

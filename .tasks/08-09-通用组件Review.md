@@ -14,7 +14,7 @@
 
 ### 1. 文档对齐
 
-- 对照 [.project/UserFeatures.md](.project/UserFeatures.md) 全局功能检查：
+- 对照 [.project/docs/UserFeatures.md](.project/docs/UserFeatures.md) 全局功能检查：
   - 侧边栏导航：Logo、三个页面入口、音量滑块、版本号 — 是否完整
   - 暗色主题 + 红色强调色 — 是否一致
   - 通用组件：难度标签、模式图标、弹窗、加载指示器、空状态 — 是否都实现

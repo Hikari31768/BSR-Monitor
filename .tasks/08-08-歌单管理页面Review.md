@@ -13,7 +13,7 @@
 
 ### 1. 文档对齐
 
-- 对照 [.project/UserFeatures.md](.project/UserFeatures.md) 歌单管理功能检查：
+- 对照 [.project/docs/UserFeatures.md](.project/docs/UserFeatures.md) 歌单管理功能检查：
   - 卡片网格展示歌单，显示封面和谱面数量 — 是否实现
   - 通过 BeatSaver 歌单 ID 添加/更新，逐页进度追踪 — 是否实现
   - 查看歌单内谱面列表，支持删除 — 是否实现

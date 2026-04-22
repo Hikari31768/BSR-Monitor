@@ -15,7 +15,7 @@
 
 ### 1. 文档对齐
 
-- 对照 [.project/API.md](.project/API.md) 检查 API 封装是否一致
+- 对照 [.project/docs/API.md](.project/docs/API.md) 检查 API 封装是否一致
 - 检查数据结构是否与文档中的字段映射一致
 - 验证重试机制（最大3次、超时1s、429限流5s）是否按文档实现
 
@@ -56,7 +56,7 @@
 
 ### 1. 文档对齐
 
-- [ ] `CompactScore` 结构体中 `base_score` 和 `modified_score` 字段在 `.project/API.md` 文档中未定义，代码中存在但从未被业务层使用，属于冗余字段
+- [ ] `CompactScore` 结构体中 `base_score` 和 `modified_score` 字段在 `.project/docs/API.md` 文档中未定义，代码中存在但从未被业务层使用，属于冗余字段
 - [ ] `PlayerResponse.country` 字段类型为 `String` + `#[serde(default)]`，文档中未标注是否为可选字段；若 API 可能不返回该字段，`default` 会填入空字符串，建议改为 `Option<String>`
 - [ ] 文档中的难度值映射（1→Easy, 3→Normal, 5→Hard, 7→Expert, 9→ExpertPlus）仅在文档中说明，代码中 `CompactLeaderboard.difficulty` 为裸 `i32`，未使用类型安全的枚举来约束
 
