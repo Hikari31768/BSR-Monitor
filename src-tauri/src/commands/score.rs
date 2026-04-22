@@ -433,7 +433,7 @@ pub async fn update_player_scores(
     app: AppHandle,
     player_id: String,
 ) -> Result<i64, String> {
-    let api = BeatLeaderApi::new();
+    let api = BeatLeaderApi::new().map_err(|e| e.to_string())?;
     let page_size = 100;
     let mut page = 1;
     let mut total_updated = 0;

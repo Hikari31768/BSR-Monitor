@@ -11,7 +11,7 @@ use crate::progress::{ProgressPayload, emit_progress_event};
 #[tauri::command]
 pub async fn add_playlist(app: AppHandle, playlist_id: i32) -> Result<Playlist, String> {
     let task_id = Uuid::new_v4().to_string();
-    let api = BeatSaverApi::new();
+    let api = BeatSaverApi::new().map_err(|e| e.to_string())?;
 
     // 检查是否已存在
     let existing = {
@@ -259,43 +259,28 @@ fn save_playlist_maps_with_progress(
     emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
 
     for (idx, map_with_order) in page.maps.iter().enumerate() {
-        // 存入谱面信息
         let map = convert_map_detail(&map_with_order.map);
-        {
-            let state = app.try_state::<Mutex<rusqlite::Connection>>()
-                .ok_or("Database not initialized")?;
-            let guard = state.lock().map_err(|e| e.to_string())?;
-            db::insert_map(&guard, &map).map_err(|e| e.to_string())?;
-        }
 
-        // 存入难度信息（批量插入）
-        if let Some(version) = map_with_order.map.versions.first() {
-            let key = map_with_order.map.id.clone();
-            let diffs: Vec<MapDiff> = version.diffs.iter().map(|diff| MapDiff {
-                key: key.clone(),
+        let diffs: Vec<MapDiff> = map_with_order.map.versions.first()
+            .map(|version| version.diffs.iter().map(|diff| MapDiff {
+                key: map_with_order.map.id.clone(),
                 hash: version.hash.clone(),
                 is_current: true,
                 mode: diff.characteristic.clone(),
                 difficulty: diff.difficulty.clone(),
-            }).collect();
+            }).collect())
+            .unwrap_or_default();
 
-            let state = app.try_state::<Mutex<rusqlite::Connection>>()
-                .ok_or("Database not initialized")?;
-            let guard = state.lock().map_err(|e| e.to_string())?;
-            db::insert_map_diffs_batch(&guard, &key, &diffs).map_err(|e| e.to_string())?;
-        }
-
-        // 存入关联关系
-        let playlist_map = PlaylistMap {
-            playlist_id: playlist_id as i64,
-            map_key: map_with_order.map.id.clone(),
-            map_order: map_with_order.order,
-            map: None,
-        };
         let state = app.try_state::<Mutex<rusqlite::Connection>>()
             .ok_or("Database not initialized")?;
         let guard = state.lock().map_err(|e| e.to_string())?;
-        db::insert_playlist_map(&guard, &playlist_map).map_err(|e| e.to_string())?;
+        db::save_playlist_map_entry(
+            &guard,
+            playlist_id as i64,
+            &map,
+            &diffs,
+            map_with_order.order,
+        ).map_err(|e| e.to_string())?;
 
         // 每处理完几个谱面更新一次进度（避免频繁更新）
         if idx % 10 == 0 || idx == page.maps.len() - 1 {

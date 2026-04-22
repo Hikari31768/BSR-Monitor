@@ -11,6 +11,9 @@ pub fn init_database(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> 
     let db_path = app_dir.join("bsr_monitor.db");
     let db = rusqlite::Connection::open(&db_path)?;
 
+    // 启用外键约束
+    db.execute_batch("PRAGMA foreign_keys = ON;")?;
+
     schema::create_tables(&db)?;
 
     // Store the connection in app state

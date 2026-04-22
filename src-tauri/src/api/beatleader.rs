@@ -8,6 +8,7 @@ const MAX_RETRIES: u32 = 3;
 pub struct PlayerResponse {
     pub id: String,
     pub name: String,
+    #[serde(default)]
     pub avatar: String,
     #[serde(default)]
     pub country: String,
@@ -42,10 +43,11 @@ pub struct CompactScore {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CompactLeaderboard {
     pub id: String,
-    #[serde(rename = "songHash")]
+    #[serde(rename = "songHash", default)]
     pub song_hash: String,
-    #[serde(rename = "modeName")]
+    #[serde(rename = "modeName", default)]
     pub mode_name: String,
+    #[serde(default)]
     pub difficulty: i32,
 }
 
@@ -69,8 +71,11 @@ pub struct SongResponse {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DifficultyResponse {
     pub value: i32,
+    #[serde(default)]
     pub mode: i32,
+    #[serde(default)]
     pub mode_name: String,
+    #[serde(default)]
     pub difficulty_name: String,
 }
 
@@ -79,10 +84,10 @@ pub struct BeatLeaderApi {
 }
 
 impl BeatLeaderApi {
-    pub fn new() -> Self {
-        Self {
-            client: ApiClient::new(),
-        }
+    pub fn new() -> Result<Self, String> {
+        Ok(Self {
+            client: ApiClient::new()?,
+        })
     }
 
     pub fn with_client(client: ApiClient) -> Self {
@@ -158,6 +163,6 @@ impl BeatLeaderApi {
 
 impl Default for BeatLeaderApi {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("Failed to create default BeatLeaderApi")
     }
 }

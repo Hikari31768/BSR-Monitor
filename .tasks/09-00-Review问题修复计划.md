@@ -74,7 +74,74 @@
 
 ## 09-01 — 后端安全与数据完整性
 
-_（待完成）_
+**状态：已完成**
+
+### 操作罗列
+
+1. **数据库事务保护**
+   - `delete_player`：包裹在 BEGIN/COMMIT/ROLLBACK 显式事务中
+   - `delete_playlist`：同上
+   - 新增 `save_playlist_map_entry`：Map + MapDiff + PlaylistMap 三操作合一事务
+   - `insert_score`：改为原子化 UPDATE-then-INSERT 模式，消除 SELECT-then-UPDATE/INSERT 并发竞争
+
+2. **外键约束启用**
+   - `init_database` 中创建连接后执行 `PRAGMA foreign_keys = ON`
+
+3. **序列化安全（serde default）**
+   - `Metadata`：所有字段添加 `#[serde(default)]`
+   - `PlayerResponse`：`avatar` 添加 `#[serde(default)]`
+   - `CompactLeaderboard`：所有非主键字段添加 `#[serde(default)]`
+   - `SongResponse`：已有 `#[serde(default)]` 的 `author`、`mapper` 不变
+   - `DifficultyResponse`：`mode`、`mode_name`、`difficulty_name` 添加 `#[serde(default)]`
+
+4. **API 客户端 panic 修复**
+   - `ApiClient::new()` 改为 `Result<Self, String>` 返回
+   - `BeatLeaderApi::new()` 和 `BeatSaverApi::new()` 同步改为 `Result`
+   - 所有调用点（player.rs, score.rs, map.rs, playlist.rs, leaderboard.rs）添加 `.map_err(|e| e.to_string())?`
+
+5. **重试机制改进**
+   - `request_with_retry`：超时和 429 分别独立计数
+   - 改为 `for _attempt in 0..=max_retries` 模式
+
+6. **数据库索引优化**
+   - `idx_playerscore_player` 替换为 `idx_playerscore_player_hash` 复合索引
+
+7. **边界情况修复**
+   - `parse_leaderboard_id`：使用 `rsplit_once('x')` 替代 `split('x')`，增加空字符串/单字符错误返回
+   - 删除未使用的 `save_map_with_diffs` 和 `insert_playlist_map` 函数
+
+### 涉及文件变更
+- `src-tauri/src/database/operations.rs`：事务、原子化 insert_score、parse_leaderboard_id、新组合函数
+- `src-tauri/src/database/mod.rs`：PRAGMA foreign_keys
+- `src-tauri/src/database/schema.rs`：复合索引替换
+- `src-tauri/src/api/types.rs`：Metadata serde default
+- `src-tauri/src/api/beatleader.rs`：serde default、Result 返回
+- `src-tauri/src/api/beatsaver.rs`：Result 返回
+- `src-tauri/src/api/client.rs`：Result 返回、重试独立计数器
+- `src-tauri/src/commands/player.rs`：API 构造 Result 处理、delete_player 返回值适配
+- `src-tauri/src/commands/playlist.rs`：save_playlist_map_entry 替代三独立操作、API 构造 Result 处理
+- `src-tauri/src/commands/score.rs`：API 构造 Result 处理
+- `src-tauri/src/commands/map.rs`：API 构造 Result 处理
+- `src-tauri/src/commands/leaderboard.rs`：API 构造 Result 处理
+
+### 验证结果
+- `cargo check`：编译通过，零警告
+- `cargo build`：编译通过
+- `npm run build`：编译通过
+- `npm run tauri dev`：应用正常启动，数据库初始化成功，无 panic、无报错
+- 受影响的命令层（player/playlist/score/map/leaderboard）：API 构造改为 Result 后调用链适配正确
+- 外键 PRAGMA 已在 init_database 中注入，无冲突
+- **CDP 实操测试**（通过 `--remote-debugging-port=9222` + agent-browser 连接 Tauri WebView2）：
+  - 主界面（打谱查询）：正常渲染，输入框联动、按钮状态切换正常
+  - 玩家管理：6→7 个玩家数据完整显示，头像/成绩数正确
+  - 添加玩家弹窗：表单字段正常，关闭/取消正常
+  - 添加玩家全流程：填写 ID → 提交 → API 拉取 → 新玩家 "Nao-Nao" 成功出现在列表，头像正确，0 成绩
+  - 歌单管理：3 个歌单正常显示，查看/删除按钮可点击
+  - 歌单谱面详情：75 首谱面列表滚动正常，成绩百分比显示正确
+  - **单谱面成绩查询**：输入 Key "425d2" → 查询 → 成绩表格正确显示谱面信息、难度标签、玩家成绩百分比
+  - **多人对比**：通过 "+" 按钮添加 Estrella、Nao-Nao，成绩表格动态增加列，无成绩玩家显示空白
+  - **歌单成绩查询**：选择 "BSR Low-Tech (75 首)" → 75 首谱面成绩表格完整加载，双玩家成绩对比正确，"!" 图标标记无成绩难度
+  - 控制台无 JS 报错
 
 ## 09-02 — 前端稳定性修复
 

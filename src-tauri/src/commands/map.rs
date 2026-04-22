@@ -8,7 +8,7 @@ use std::sync::Mutex;
 /// 通过 key 获取谱面
 #[tauri::command]
 pub async fn get_map_by_key(app: AppHandle, key: String) -> Result<Map, String> {
-    let api = BeatSaverApi::new();
+    let api = BeatSaverApi::new().map_err(|e| e.to_string())?;
 
     // 先检查数据库
     {
@@ -58,7 +58,7 @@ pub async fn get_map_by_key(app: AppHandle, key: String) -> Result<Map, String> 
 /// 通过 hash 获取谱面
 #[tauri::command]
 pub async fn get_map_by_hash(app: AppHandle, hash: String) -> Result<Map, String> {
-    let api = BeatSaverApi::new();
+    let api = BeatSaverApi::new().map_err(|e| e.to_string())?;
 
     // 调用 API 获取谱面
     let map_detail = api.get_map_by_hash(&hash)

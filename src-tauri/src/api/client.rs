@@ -14,18 +14,18 @@ pub struct ApiClient {
 }
 
 impl ApiClient {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, String> {
         let client = Client::builder()
             .timeout(DEFAULT_TIMEOUT)
             .user_agent("BSR-Monitor/0.1.0")
             .build()
-            .expect("Failed to create HTTP client");
+            .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
-        Self {
+        Ok(Self {
             client,
             bl_base_url: BL_BASE_URL.to_string(),
             beatsaver_base_url: BEATSAVER_BASE_URL.to_string(),
-        }
+        })
     }
 
     pub fn bl_url(&self, path: &str) -> String {
@@ -44,29 +44,30 @@ impl ApiClient {
     where
         F: Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T, ApiError>> + Send>>,
     {
-        let mut attempts = 0;
+        let mut timeout_count = 0;
+        let mut rate_limit_count = 0;
 
-        loop {
+        for _attempt in 0..=max_retries {
             let result = f().await;
 
             match result {
                 Ok(data) => return Ok(data),
                 Err(ApiError::Http(e)) => {
                     if e.is_timeout() {
-                        if attempts >= max_retries {
+                        timeout_count += 1;
+                        if timeout_count > max_retries {
                             return Err(ApiError::Timeout);
                         }
                         tokio::time::sleep(Duration::from_secs(1)).await;
-                        attempts += 1;
                         continue;
                     }
                     if let Some(status) = e.status() {
                         if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                            if attempts >= max_retries {
+                            rate_limit_count += 1;
+                            if rate_limit_count > max_retries {
                                 return Err(ApiError::RateLimited(60));
                             }
                             tokio::time::sleep(Duration::from_secs(5)).await;
-                            attempts += 1;
                             continue;
                         }
                     }
@@ -75,11 +76,13 @@ impl ApiClient {
                 Err(e) => return Err(e),
             }
         }
+
+        Err(ApiError::Timeout)
     }
 }
 
 impl Default for ApiClient {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("Failed to create default API client")
     }
 }

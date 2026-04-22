@@ -16,7 +16,7 @@ pub async fn add_player(
     alias: Option<String>,
 ) -> Result<PlayerInfo, String> {
     let task_id = Uuid::new_v4().to_string();
-    let api = BeatLeaderApi::new();
+    let api = BeatLeaderApi::new().map_err(|e| e.to_string())?;
 
     // 检查是否已存在
     let existing = {

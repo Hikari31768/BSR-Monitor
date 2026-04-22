@@ -84,30 +84,29 @@ pub fn difficulty_from_value(value: i32) -> String {
 }
 
 // leaderboardId 解析
+/// 解析 leaderboardId，返回 (key, difficulty, mode)
+/// 格式: "keyxD{mode}" 或 "keyD{mode}"，失败返回 (None, 0, 0)
 pub fn parse_leaderboard_id(leaderboard_id: &str) -> (Option<String>, i32, i32) {
-    let x_count = leaderboard_id.matches('x').count();
+    if leaderboard_id.is_empty() {
+        return (None, 0, 0);
+    }
 
-    if x_count > 0 {
-        let parts: Vec<&str> = leaderboard_id.split('x').collect();
-        if parts.len() >= 2 {
-            let key = parts[0].to_string();
-            let suffix = parts.last().copied().unwrap_or("");
-            if suffix.len() >= 2 {
-                let difficulty = suffix[0..1].parse::<i32>().unwrap_or(0);
-                let mode = suffix[1..].parse::<i32>().unwrap_or(0);
-                return (Some(key), difficulty, mode);
-            }
+    if let Some((left, suffix)) = leaderboard_id.rsplit_once('x') {
+        if left.is_empty() || suffix.len() < 2 {
+            return (None, 0, 0);
         }
-        return (None, 0, 0);
+        let difficulty = suffix[0..1].parse::<i32>().unwrap_or(0);
+        let mode = suffix[1..].parse::<i32>().unwrap_or(0);
+        (Some(left.to_string()), difficulty, mode)
     } else {
-        if leaderboard_id.len() >= 2 {
-            let mode_start = leaderboard_id.len() - 1;
-            let mode = leaderboard_id[mode_start..].parse::<i32>().unwrap_or(0);
-            let difficulty = leaderboard_id[mode_start - 1..mode_start].parse::<i32>().unwrap_or(0);
-            let key = &leaderboard_id[0..mode_start - 1];
-            return (Some(key.to_string()), difficulty, mode);
+        if leaderboard_id.len() < 2 {
+            return (None, 0, 0);
         }
-        return (None, 0, 0);
+        let mode_start = leaderboard_id.len() - 1;
+        let mode = leaderboard_id[mode_start..].parse::<i32>().unwrap_or(0);
+        let difficulty = leaderboard_id[mode_start - 1..mode_start].parse::<i32>().unwrap_or(0);
+        let key = &leaderboard_id[0..mode_start - 1];
+        (Some(key.to_string()), difficulty, mode)
     }
 }
 
@@ -182,6 +181,7 @@ pub fn insert_map_diffs_batch(conn: &Connection, key: &str, diffs: &[MapDiff]) -
     }
     Ok(())
 }
+
 
 pub fn get_map_diffs_by_key(conn: &Connection, key: &str) -> Result<Vec<MapDiff>, rusqlite::Error> {
     let mut stmt = conn.prepare(
@@ -258,18 +258,23 @@ pub fn get_all_players(conn: &Connection) -> Result<Vec<PlayerInfo>, rusqlite::E
     Ok(players)
 }
 
-pub fn delete_player(conn: &Connection, id: &str) -> Result<(), rusqlite::Error> {
-    // 先删除该玩家的所有成绩
-    conn.execute(
+pub fn delete_player(conn: &Connection, id: &str) -> Result<(), String> {
+    conn.execute("BEGIN", []).map_err(|e| e.to_string())?;
+    if let Err(e) = conn.execute(
         "DELETE FROM PlayerScore WHERE playerId = ?1",
         [id],
-    )?;
-
-    // 再删除玩家信息
-    conn.execute(
+    ) {
+        let _ = conn.execute("ROLLBACK", []);
+        return Err(e.to_string());
+    }
+    if let Err(e) = conn.execute(
         "DELETE FROM PlayerInfo WHERE id = ?1",
         [id],
-    )?;
+    ) {
+        let _ = conn.execute("ROLLBACK", []);
+        return Err(e.to_string());
+    }
+    conn.execute("COMMIT", []).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -289,54 +294,53 @@ pub fn update_player(conn: &Connection, player: &PlayerInfo) -> Result<(), rusql
 
 // ============ PlayerScore CRUD ============
 
+/// 原子化插入：仅当记录不存在或新成绩时间更晚时才更新/插入
 pub fn insert_score(conn: &Connection, score: &PlayerScore) -> Result<bool, rusqlite::Error> {
-    // 检查是否已存在
-    let existing = get_score_by_pk(conn, &score.player_id, &score.hash, &score.mode, &score.difficulty)?;
+    // 先尝试更新已存在且时间更旧的记录
+    let updated = conn.execute(
+        "UPDATE PlayerScore SET scoreId = ?2, leaderboardId = ?3, mapKey = ?4, accuracy = ?5, epochTime = ?6
+         WHERE playerId = ?1 AND hash = ?7 AND mode = ?8 AND difficulty = ?9
+         AND epochTime < ?10",
+        rusqlite::params![
+            score.player_id,
+            score.score_id,
+            score.leaderboard_id,
+            score.map_key,
+            score.accuracy,
+            score.epoch_time,
+            score.hash,
+            score.mode,
+            score.difficulty,
+            score.epoch_time,
+        ],
+    )?;
 
-    match existing {
-        Some(existing_score) => {
-            // 如果新成绩时间更晚，更新记录
-            if score.epoch_time > existing_score.epoch_time {
-                conn.execute(
-                    "UPDATE PlayerScore SET scoreId = ?2, leaderboardId = ?3, mapKey = ?4, accuracy = ?5, epochTime = ?6
-                     WHERE playerId = ?1 AND hash = ?7 AND mode = ?8 AND difficulty = ?9",
-                    rusqlite::params![
-                        score.player_id,
-                        score.score_id,
-                        score.leaderboard_id,
-                        score.map_key,
-                        score.accuracy,
-                        score.epoch_time,
-                        score.hash,
-                        score.mode,
-                        score.difficulty
-                    ],
-                )?;
-                Ok(true) // 更新成功
-            } else {
-                Ok(false) // 不需要更新
-            }
-        }
-        None => {
-            // 插入新记录
-            conn.execute(
-                "INSERT INTO PlayerScore (playerId, scoreId, leaderboardId, mapKey, hash, mode, difficulty, accuracy, epochTime)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                rusqlite::params![
-                    score.player_id,
-                    score.score_id,
-                    score.leaderboard_id,
-                    score.map_key,
-                    score.hash,
-                    score.mode,
-                    score.difficulty,
-                    score.accuracy,
-                    score.epoch_time
-                ],
-            )?;
-            Ok(true) // 插入成功
-        }
+    if updated > 0 {
+        return Ok(true);
     }
+
+    // 记录不存在或已有更晚成绩，尝试插入（若已存在且未更新说明本地更新，跳过）
+    let inserted = conn.execute(
+        "INSERT INTO PlayerScore (playerId, scoreId, leaderboardId, mapKey, hash, mode, difficulty, accuracy, epochTime)
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9
+         WHERE NOT EXISTS (
+             SELECT 1 FROM PlayerScore
+             WHERE playerId = ?1 AND hash = ?5 AND mode = ?6 AND difficulty = ?7
+         )",
+        rusqlite::params![
+            score.player_id,
+            score.score_id,
+            score.leaderboard_id,
+            score.map_key,
+            score.hash,
+            score.mode,
+            score.difficulty,
+            score.accuracy,
+            score.epoch_time,
+        ],
+    )?;
+
+    Ok(inserted > 0)
 }
 
 pub fn get_score_by_pk(conn: &Connection, player_id: &str, hash: &str, mode: &str, difficulty: &str) -> Result<Option<PlayerScore>, rusqlite::Error> {
@@ -480,18 +484,23 @@ pub fn get_all_playlists(conn: &Connection) -> Result<Vec<Playlist>, rusqlite::E
     Ok(playlists)
 }
 
-pub fn delete_playlist(conn: &Connection, playlist_id: i64) -> Result<(), rusqlite::Error> {
-    // 先删除歌单与谱面的关联
-    conn.execute(
+pub fn delete_playlist(conn: &Connection, playlist_id: i64) -> Result<(), String> {
+    conn.execute("BEGIN", []).map_err(|e| e.to_string())?;
+    if let Err(e) = conn.execute(
         "DELETE FROM PlaylistMap WHERE playlistId = ?1",
         [playlist_id],
-    )?;
-
-    // 再删除歌单元数据
-    conn.execute(
+    ) {
+        let _ = conn.execute("ROLLBACK", []);
+        return Err(e.to_string());
+    }
+    if let Err(e) = conn.execute(
         "DELETE FROM Playlist WHERE playlistId = ?1",
         [playlist_id],
-    )?;
+    ) {
+        let _ = conn.execute("ROLLBACK", []);
+        return Err(e.to_string());
+    }
+    conn.execute("COMMIT", []).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -513,16 +522,34 @@ pub fn update_playlist_total_maps(conn: &Connection, playlist_id: i64, total_map
     Ok(())
 }
 
-pub fn insert_playlist_map(conn: &Connection, playlist_map: &PlaylistMap) -> Result<(), rusqlite::Error> {
-    conn.execute(
-        "INSERT OR REPLACE INTO PlaylistMap (playlistId, mapKey, mapOrder)
-         VALUES (?1, ?2, ?3)",
-        rusqlite::params![
-            playlist_map.playlist_id,
-            playlist_map.map_key,
-            playlist_map.map_order
-        ],
-    )?;
+
+/// 在单一事务中保存 Map + MapDiff + PlaylistMap，用于歌单批量导入
+pub fn save_playlist_map_entry(
+    conn: &Connection,
+    playlist_id: i64,
+    map: &Map,
+    diffs: &[MapDiff],
+    map_order: f32,
+) -> Result<(), String> {
+    conn.execute("BEGIN", []).map_err(|e| e.to_string())?;
+    if let Err(e) = insert_map(conn, map) {
+        let _ = conn.execute("ROLLBACK", []);
+        return Err(e.to_string());
+    }
+    if !diffs.is_empty() {
+        if let Err(e) = insert_map_diffs_batch(conn, &map.key, diffs) {
+            let _ = conn.execute("ROLLBACK", []);
+            return Err(e.to_string());
+        }
+    }
+    if let Err(e) = conn.execute(
+        "INSERT OR REPLACE INTO PlaylistMap (playlistId, mapKey, mapOrder) VALUES (?1, ?2, ?3)",
+        rusqlite::params![playlist_id, map.key, map_order],
+    ) {
+        let _ = conn.execute("ROLLBACK", []);
+        return Err(e.to_string());
+    }
+    conn.execute("COMMIT", []).map_err(|e| e.to_string())?;
     Ok(())
 }
 

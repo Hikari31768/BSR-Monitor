@@ -95,7 +95,7 @@ pub fn create_tables(conn: &Connection) -> Result<(), rusqlite::Error> {
         [],
     )?;
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_playerscore_player ON PlayerScore(playerId)",
+        "CREATE INDEX IF NOT EXISTS idx_playerscore_player_hash ON PlayerScore(playerId, hash)",
         [],
     )?;
     conn.execute(

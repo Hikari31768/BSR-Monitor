@@ -139,10 +139,10 @@ pub struct BeatSaverApi {
 }
 
 impl BeatSaverApi {
-    pub fn new() -> Self {
-        Self {
-            client: ApiClient::new(),
-        }
+    pub fn new() -> Result<Self, String> {
+        Ok(Self {
+            client: ApiClient::new()?,
+        })
     }
 
     pub fn with_client(client: ApiClient) -> Self {
@@ -203,6 +203,6 @@ impl BeatSaverApi {
 
 impl Default for BeatSaverApi {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("Failed to create default BeatSaverApi")
     }
 }
