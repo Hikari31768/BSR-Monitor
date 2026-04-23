@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test:e2e": "cd .e2e && npx playwright test",
+    "test:e2e:headed": "cd .e2e && npx playwright test --headed",
+    "test:e2e:visual": "cd .e2e && VISUAL_TEST=1 npx playwright test",
+    "test:e2e:ui": "cd .e2e && npx playwright test --ui"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.5.0",
@@ -16,6 +20,7 @@
     "react-router-dom": "^7.14.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4.2.2",
     "@tauri-apps/cli": "^2.5.0",
     "@types/react": "^18.3.18",
