@@ -2,17 +2,22 @@
 
 本目录下的开发调试相关文档：
 
-## 应用启动
+## 开发调试命令
 
-```powershell
-npm run tauri dev
-```
+| 命令 | 行为 |
+|------|------|
+| `npm run dev` | 启动开发环境（等价于 `npm run tauri dev`） |
+| `npm run dev:stop` | 停止开发环境（交互式确认） |
+| `npm run dev:force` | 强制停止开发环境 |
+| `npm run dev:restart` | 重启开发环境（先强制杀，再启动） |
 
-## 打包
+## 构建与打包
 
-```powershell
-npm run tauri build
-```
+| 命令 | 行为 |
+|------|------|
+| `npm run build` | 构建前端（tsc + vite build） |
+| `npm run build:tauri` | 构建完整 Tauri 应用 |
+| `npm run preview` | 预览前端构建结果 |
 
 ## 文档索引
 

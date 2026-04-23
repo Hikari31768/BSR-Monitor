@@ -4,8 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "npm run tauri dev",
+    "dev:stop": "powershell -ExecutionPolicy Bypass -File scripts/kill-dev.ps1",
+    "dev:force": "powershell -ExecutionPolicy Bypass -File scripts/kill-dev.ps1 -Force",
+    "dev:restart": "powershell -ExecutionPolicy Bypass -File scripts/kill-dev.ps1 -Force && npm run tauri dev",
     "build": "tsc && vite build",
+    "build:tauri": "tauri build",
     "preview": "vite preview",
     "tauri": "tauri",
     "test:e2e": "cd .e2e && npx playwright test",
