@@ -79,7 +79,7 @@
 | 3 | [09-03](09-03-前后端类型对齐.md) | ✅ 已完成 | UI 状态分离、ScoreRowData 命名统一、LeaderboardResponse 删除、类型映射文档 |
 | 4 | [09-04](09-04-代码重复提取.md)+[09-05](09-05-性能优化.md) | ✅ 已完成 | 提取 common.rs、合并 add_new/update_existing 函数、useMemo 优化、批量接口 |
 | 5 | [09-06](09-06-样式与主题统一.md) | ✅ 已完成 | 难度颜色统一、主题色体系替换、CSS 变量对齐、lucide-react 图标 |
-| 6 | 09-07+08 | ⏳ 待执行 | - |
+| 6 | 09-07+08 | ✅ 已完成 | Modal A11y、表单验证、alert() 替换、Tauri 配置清理、版本动态化、ModeIcon 修复 |
 
 ---
 

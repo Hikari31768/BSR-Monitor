@@ -17,3 +17,9 @@ pub fn convert_map_detail(map_detail: &MapDetail) -> Map {
         preview_url,
     }
 }
+
+/// 获取应用版本号
+#[tauri::command]
+pub fn get_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}

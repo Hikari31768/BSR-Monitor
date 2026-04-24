@@ -1,14 +1,16 @@
 import { Playlist, PlaylistUIState } from '../types';
-import { Clock, Eye, Trash2, List } from 'lucide-react';
+import { Clock, Eye, Trash2, List, RefreshCw } from 'lucide-react';
 
 interface PlaylistCardProps {
   playlist: Playlist;
   uiState?: PlaylistUIState;
   onDelete: () => void;
   onViewMaps: () => void;
+  onUpdate?: () => void;
+  updating?: boolean;
 }
 
-export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps }: PlaylistCardProps) {
+export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, onUpdate, updating }: PlaylistCardProps) {
   const isLoading = uiState?.loading ?? false;
 
   return (
@@ -63,7 +65,7 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps }
               <div className="w-full bg-bs-border rounded-full h-2">
                 <div
                   className="bg-bs-status-warning h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${uiState?.progress || 0}%` }}
+                  style={{ width: `${uiState?.progress ?? 0}%` }}
                 ></div>
               </div>
               <p className="text-bs-status-warning text-xs mt-1 truncate">
@@ -77,6 +79,16 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps }
         <div className="flex flex-col gap-2">
           {!isLoading ? (
             <>
+              {onUpdate && (
+                <button
+                  onClick={onUpdate}
+                  disabled={updating}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all disabled:opacity-50 flex items-center gap-1"
+                >
+                  {updating ? <Clock size={14} /> : <RefreshCw size={14} />}
+                  {updating ? '更新中' : '更新'}
+                </button>
+              )}
               <button
                 onClick={onViewMaps}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all flex items-center gap-1"

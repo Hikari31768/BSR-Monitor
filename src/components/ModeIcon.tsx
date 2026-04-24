@@ -1,28 +1,19 @@
+import { modeNames } from '../constants';
+
 interface ModeIconProps {
-  mode: string;
+  mode: keyof typeof modeIcons;
   size?: number;
 }
 
 const modeIcons: Record<string, string> = {
-  Standard: 'icons/standard.svg',
-  OneSaber: 'icons/onesaber.svg',
-  NoArrows: 'icons/noarrows.svg',
-  '90Degree': 'icons/90degree.svg',
-  '360Degree': 'icons/360degree.svg',
-  Lightshow: 'icons/lightshow.svg',
-  Lawless: 'icons/lawless.svg',
-  Legacy: 'icons/legacy.svg',
-};
-
-const modeNames: Record<string, string> = {
-  Standard: '标准',
-  OneSaber: '单剑',
-  NoArrows: '无箭头',
-  '90Degree': '90度',
-  '360Degree': '360度',
-  Lightshow: '光秀',
-  Lawless: '无限制',
-  Legacy: '旧版',
+  Standard: '/icons/standard.svg',
+  OneSaber: '/icons/onesaber.svg',
+  NoArrows: '/icons/noarrows.svg',
+  '90Degree': '/icons/90degree.svg',
+  '360Degree': '/icons/360degree.svg',
+  Lightshow: '/icons/lightshow.svg',
+  Lawless: '/icons/lawless.svg',
+  Legacy: '/icons/legacy.svg',
 };
 
 export default function ModeIcon({ mode, size = 20 }: ModeIconProps) {
@@ -39,13 +30,15 @@ export default function ModeIcon({ mode, size = 20 }: ModeIconProps) {
           height={size}
           className="object-contain"
           onError={(e) => {
-            // 如果图标加载失败，显示文字缩写
             e.currentTarget.style.display = 'none';
+            const fallback = e.currentTarget.nextElementSibling;
+            if (fallback) (fallback as HTMLElement).style.display = '';
           }}
         />
-      ) : (
-        <span className="text-xs text-bs-text-secondary">{mode.slice(0, 2)}</span>
-      )}
+      ) : null}
+      <span className="text-xs text-bs-text-secondary" style={{ display: iconPath ? 'none' : '' }}>
+        {displayName}
+      </span>
     </div>
   );
 }

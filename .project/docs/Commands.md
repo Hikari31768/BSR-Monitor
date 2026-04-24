@@ -64,7 +64,7 @@ src-tauri/src/commands/
 interface MapScoresResponse {
   map: Map;                    // 谱面基本信息
   current_diffs: MapDiff[];    // 当前版本所有难度
-  no_score_groups: NoScoreDiffGroup[];  // 无分数难度（按模式分组）
+  no_score_diffs: NoScoreDiffGroup[];  // 无分数难度（按模式分组）
   scores: ScoreRowData[];      // 成绩数据行
 }
 
@@ -99,6 +99,13 @@ interface PlaylistScoresResponse {
 | 命令 | 参数 | 返回 | 说明 |
 |------|------|------|------|
 | `get_leaderboard` | leaderboard_id | LeaderboardResponse | 获取排行榜详情 |
+
+### 系统
+
+| 命令 | 参数 | 返回 | 说明 |
+|------|------|------|------|
+| `get_version` | - | String | 获取应用版本号 |
+| `get_active_tasks` | - | Vec<TaskState> | 获取活跃任务状态 |
 
 ## 设计要点
 

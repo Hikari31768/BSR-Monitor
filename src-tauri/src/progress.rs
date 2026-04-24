@@ -37,7 +37,7 @@ impl ProgressPayload {
         Self {
             task_type,
             task_id,
-            stage: "initial".to_string(),
+            stage: String::new(),
             progress: 0.0,
             total: None,
             current: None,
@@ -66,8 +66,12 @@ impl ProgressPayload {
         self
     }
 
-    pub fn with_player_info(mut self, name: String, avatar_url: String) -> Self {
+    pub fn with_player_name(mut self, name: String) -> Self {
         self.player_name = Some(name);
+        self
+    }
+
+    pub fn with_player_avatar_url(mut self, avatar_url: String) -> Self {
         self.player_avatar_url = Some(avatar_url);
         self
     }

@@ -44,6 +44,7 @@ export default function ScoreTable() {
   const [loadingPlayers, setLoadingPlayers] = useState(true);
   const [, setLoadingPlaylists] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
+  const [dataError, setDataError] = useState<string>('');
 
   // 用于追踪玩家数量变化
   const prevPlayerCountRef = useRef(0);
@@ -97,6 +98,7 @@ export default function ScoreTable() {
 
     setLoadingData(true);
     setCurrentMapData(null);
+    setDataError('');
 
     try {
       // 先获取/更新谱面信息（支持 key 或 hash）
@@ -120,7 +122,7 @@ export default function ScoreTable() {
       setCurrentMapData(result);
     } catch (e) {
       console.error('查询谱面失败:', e);
-      alert(`查询失败: ${e}`);
+      setDataError(`查询失败: ${e}`);
     } finally {
       setLoadingData(false);
     }
@@ -134,6 +136,7 @@ export default function ScoreTable() {
 
     setLoadingData(true);
     setPlaylistData(null);
+    setDataError('');
 
     try {
       const playerIds = players.map(p => p.id);
@@ -147,7 +150,7 @@ export default function ScoreTable() {
       setPlaylistData(result);
     } catch (e) {
       console.error('查询歌单失败:', e);
-      alert(`查询失败: ${e}`);
+      setDataError(`查询失败: ${e}`);
     } finally {
       setLoadingData(false);
     }
@@ -273,23 +276,29 @@ export default function ScoreTable() {
 
       {/* 单谱面输入 - 精简版 */}
       {viewMode === 'single' && (
-        <div className="flex gap-4 mb-4">
-          <input
-            type="text"
-            value={mapInput}
-            onChange={(e) => setMapInput(e.target.value)}
-            placeholder="输入谱面 Key 或 Hash..."
-            className="flex-1 px-4 py-3 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary placeholder-bs-text-muted focus:border-bs-accent-primary focus:ring-2 focus:ring-bs-accent-primary/20 focus:outline-none transition-all"
-            onKeyDown={(e) => e.key === 'Enter' && searchMap()}
-          />
-          <button
-            onClick={searchMap}
-            disabled={loadingData || !mapInput.trim()}
-            className="px-6 py-3 rounded-lg font-medium text-sm bg-bs-accent-primary text-white hover:bg-red-500 transition-all shadow-lg hover:shadow-bs-accent-primary/30 disabled:opacity-50 flex items-center gap-2"
-          >
-            {loadingData ? <span className="animate-spin">⟳</span> : <Search size={18} />}
-            查询
-          </button>
+        <div>
+          <div className="flex gap-4 mb-4">
+            <input
+              type="text"
+              value={mapInput}
+              onChange={(e) => setMapInput(e.target.value)}
+              placeholder={selectedPlayers.length === 0 ? "请先选择玩家" : "输入谱面 Key 或 Hash..."}
+              disabled={selectedPlayers.length === 0}
+              className="flex-1 px-4 py-3 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary placeholder-bs-text-muted focus:border-bs-accent-primary focus:ring-2 focus:ring-bs-accent-primary/20 focus:outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              onKeyDown={(e) => e.key === 'Enter' && searchMap()}
+            />
+            <button
+              onClick={searchMap}
+              disabled={loadingData || !mapInput.trim() || selectedPlayers.length === 0}
+              className="px-6 py-3 rounded-lg font-medium text-sm bg-bs-accent-primary text-white hover:bg-red-500 transition-all shadow-lg hover:shadow-bs-accent-primary/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {loadingData ? <span className="animate-spin">⟳</span> : <Search size={18} />}
+              查询
+            </button>
+          </div>
+          {selectedPlayers.length === 0 && (
+            <p className="text-xs text-bs-text-muted -mt-2 mb-4">请先选择玩家后再查询谱面</p>
+          )}
         </div>
       )}
 
@@ -301,6 +310,9 @@ export default function ScoreTable() {
             selectedId={selectedPlaylistId}
             onSelect={setSelectedPlaylistId}
           />
+          {selectedPlaylistId && selectedPlayers.length === 0 && (
+            <p className="text-xs text-bs-text-muted">请先选择玩家后再查询歌单</p>
+          )}
 
           {/* 分页控制 */}
           {playlistData && playlistData.total_pages > 1 && (
@@ -326,6 +338,19 @@ export default function ScoreTable() {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 错误提示 */}
+      {dataError && (
+        <div className="mb-4 p-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/30 text-sm">
+          {dataError}
+          <button
+            onClick={() => setDataError('')}
+            className="ml-2 text-red-400 hover:text-red-300"
+          >
+            关闭
+          </button>
         </div>
       )}
 

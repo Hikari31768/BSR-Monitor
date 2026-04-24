@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAudio } from '../contexts/AudioContext';
+import { invoke } from '@tauri-apps/api/core';
 import { Target, User, List } from 'lucide-react';
 
 const navItems = [
@@ -10,6 +12,13 @@ const navItems = [
 
 export default function Sidebar() {
   const { volume, setVolume } = useAudio();
+  const [version, setVersion] = useState('0.0.0');
+
+  useEffect(() => {
+    invoke<string>('get_version')
+      .then(setVersion)
+      .catch(() => {});
+  }, []);
 
   return (
     <aside className="w-64 bg-bs-bg-secondary border-r border-bs-border flex flex-col shrink-0">
@@ -40,7 +49,7 @@ export default function Sidebar() {
               }`
             }
           >
-            <item.icon size={20} />
+            <item.icon size={20} aria-hidden="true" />
             <span className="font-medium">{item.label}</span>
           </NavLink>
         ))}
@@ -59,6 +68,7 @@ export default function Sidebar() {
           step="0.05"
           value={volume}
           onChange={e => setVolume(parseFloat(e.target.value))}
+          aria-label="音量控制"
           className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-bs-border [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-bs-accent-primary"
           style={{
             background: `linear-gradient(to right, var(--color-accent-primary) ${volume * 100}%, var(--color-border) ${volume * 100}%)`,
@@ -68,7 +78,7 @@ export default function Sidebar() {
 
       {/* 底部版本 */}
       <div className="px-4 pb-3">
-        <p className="text-xs text-bs-text-muted">v0.1.0</p>
+        <p className="text-xs text-bs-text-muted">v{version}</p>
       </div>
     </aside>
   );

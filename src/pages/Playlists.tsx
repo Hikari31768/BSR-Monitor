@@ -19,6 +19,9 @@ export default function Playlists() {
   const [showMapsModal, setShowMapsModal] = useState<number | null>(null);
   const [playlistMaps, setPlaylistMaps] = useState<PlaylistMap[]>([]);
   const [addId, setAddId] = useState('');
+  const [addFormError, setAddFormError] = useState('');
+  const [inlineError, setInlineError] = useState<string>('');
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
   async function loadPlaylists() {
@@ -112,17 +115,25 @@ export default function Playlists() {
   }, []);
 
   async function handleAddPlaylist() {
-    if (!addId) return;
+    if (!addId.trim()) return;
+
+    // 验证歌单 ID 格式（纯数字）
+    if (!/^\d+$/.test(addId.trim())) {
+      setAddFormError('歌单 ID 必须为纯数字');
+      return;
+    }
+
+    setAddFormError('');
 
     // 检查是否已存在
-    const playlistId = parseInt(addId);
+    const playlistId = parseInt(addId.trim());
     const existingIdx = playlists.findIndex(p => p.playlist_id === playlistId);
     const isExisting = existingIdx !== -1;
     const uiState = playlistUIStates[playlistId];
     const isProcessing = isExisting && uiState?.loading;
 
     if (isProcessing) {
-      alert('该歌单正在处理中，请稍候...');
+      setAddFormError('该歌单正在处理中，请稍候...');
       return;
     }
 
@@ -164,6 +175,7 @@ export default function Playlists() {
 
       setShowAddModal(false);
       setAddId('');
+      setAddFormError('');
 
       // 执行长时间操作，将前端生成的 task_id 传给后端
       await invoke<{ task_id: string; playlist: Playlist }>('add_playlist', {
@@ -193,7 +205,7 @@ export default function Playlists() {
         // 恢复原来的名称
         setPlaylists(prev => prev.map((p, i) => i === existingIdx ? { ...p, name: playlists[existingIdx].name } : p));
       }
-      alert(`${isExisting ? '更新' : '添加'}失败: ${e}`);
+      setAddFormError(`${isExisting ? '更新' : '添加'}失败: ${e}`);
     }
   }
 
@@ -203,7 +215,7 @@ export default function Playlists() {
       setShowDeleteModal(null);
       loadPlaylists();
     } catch (e) {
-      alert(`删除失败: ${e}`);
+      setInlineError(`删除失败: ${e}`);
     }
   }
 
@@ -215,7 +227,20 @@ export default function Playlists() {
       setPlaylistMaps(maps);
       setShowMapsModal(playlistId);
     } catch (e) {
-      alert(`获取谱面列表失败: ${e}`);
+      setInlineError(`获取谱面列表失败: ${e}`);
+    }
+  }
+
+  async function handleUpdatePlaylist(playlistId: number) {
+    setUpdatingId(playlistId);
+    setInlineError('');
+    try {
+      await invoke('update_playlist', { playlistId });
+      await loadPlaylists();
+    } catch (e) {
+      setInlineError(`更新失败: ${e}`);
+    } finally {
+      setUpdatingId(null);
     }
   }
 
@@ -247,37 +272,66 @@ export default function Playlists() {
               uiState={playlistUIStates[playlist.playlist_id]}
               onDelete={() => setShowDeleteModal(playlist.playlist_id)}
               onViewMaps={() => handleViewMaps(playlist.playlist_id)}
+              onUpdate={() => handleUpdatePlaylist(playlist.playlist_id)}
+              updating={updatingId === playlist.playlist_id}
             />
           ))}
         </div>
       )}
 
+      {/* 内联错误提示 */}
+      {inlineError && (
+        <div className="mt-4 p-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/30 text-sm">
+          {inlineError}
+          <button
+            onClick={() => setInlineError('')}
+            className="ml-2 text-red-400 hover:text-red-300"
+          >
+            关闭
+          </button>
+        </div>
+      )}
+
       <Modal
         isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
+        onClose={() => { setShowAddModal(false); setAddFormError(''); }}
         title="添加歌单"
       >
         <div className="space-y-4">
+          {addFormError && (
+            <div className="p-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/30 text-sm">
+              {addFormError}
+            </div>
+          )}
           <div>
-            <label className="block text-sm text-bs-text-secondary mb-2">BeatSaver 歌单 ID</label>
+            <label className="block text-sm text-bs-text-secondary mb-2">
+              BeatSaver 歌单 ID <span className="text-red-400">*</span>
+            </label>
             <input
               type="text"
+              inputMode="numeric"
+              pattern="\d*"
               value={addId}
-              onChange={(e) => setAddId(e.target.value)}
+              onChange={(e) => {
+                setAddId(e.target.value.replace(/[^\d]/g, ''));
+                setAddFormError('');
+              }}
               placeholder="如: 1"
               className="w-full px-4 py-3 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary placeholder-bs-text-muted focus:border-bs-accent-primary focus:ring-2 focus:ring-bs-accent-primary/20 focus:outline-none transition-all"
             />
+            <p className="text-xs text-bs-text-muted mt-1">请输入纯数字歌单 ID</p>
           </div>
           <div className="flex gap-3 justify-end pt-4">
             <button
-              onClick={() => setShowAddModal(false)}
+              onClick={() => { setShowAddModal(false); setAddFormError(''); }}
               className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all"
             >
               取消
             </button>
             <button
               onClick={handleAddPlaylist}
-              className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-accent-primary text-white hover:bg-red-500 transition-all"
+              disabled={!addId.trim()}
+              className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-accent-primary text-white hover:bg-red-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               添加
             </button>
@@ -287,13 +341,18 @@ export default function Playlists() {
 
       <Modal
         isOpen={showDeleteModal !== null}
-        onClose={() => setShowDeleteModal(null)}
+        onClose={() => { setShowDeleteModal(null); setInlineError(''); }}
         title="确认删除"
       >
-        <p className="text-bs-text-secondary mb-6">确定要删除该歌单吗？</p>
+        {inlineError && (
+          <div className="p-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/30 text-sm">
+            {inlineError}
+          </div>
+        )}
+        <p className="text-bs-text-secondary mb-6">确定要删除该歌单吗？删除歌单不会移除已下载的谱面文件。</p>
         <div className="flex gap-3 justify-end">
           <button
-            onClick={() => setShowDeleteModal(null)}
+            onClick={() => { setShowDeleteModal(null); setInlineError(''); }}
             className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all"
           >
             取消
@@ -317,7 +376,11 @@ export default function Playlists() {
             <EmptyState message="暂无谱面" />
           ) : (
             playlistMaps.map((pm) => (
-              pm.map && <MapCard key={pm.map_key} map={pm.map} />
+              pm.map ? <MapCard key={pm.map.key} map={pm.map} /> : (
+                <div key={pm.map_key} className="p-4 rounded-lg bg-bs-bg-tertiary border border-bs-border text-bs-text-muted text-sm">
+                  谱面信息缺失 (key: {pm.map_key})
+                </div>
+              )
             ))
           )}
         </div>

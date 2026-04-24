@@ -66,7 +66,7 @@ export default function PlayerCard({ player, uiState, scoreCount, onUpdateScores
               <div className="w-full bg-bs-border rounded-full h-2">
                 <div
                   className="bg-bs-status-warning h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${uiState?.progress || 0}%` }}
+                  style={{ width: `${uiState?.progress ?? 0}%` }}
                 ></div>
               </div>
               <p className="text-bs-status-warning text-xs mt-1 truncate">

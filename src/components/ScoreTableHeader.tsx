@@ -22,6 +22,7 @@ export default function ScoreTableHeader({
   showMapSort,
 }: ScoreTableHeaderProps) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
   function handleDragStart(playerId: string) {
     setDraggedId(playerId);
@@ -29,6 +30,7 @@ export default function ScoreTableHeader({
 
   function handleDragOver(e: React.DragEvent, targetId: string) {
     e.preventDefault();
+    setDropTargetId(targetId);
     if (draggedId && draggedId !== targetId) {
       onReorderPlayers(draggedId, targetId);
     }
@@ -36,6 +38,7 @@ export default function ScoreTableHeader({
 
   function handleDragEnd() {
     setDraggedId(null);
+    setDropTargetId(null);
   }
 
   // 计算网格列定义，与 MapScoreGroup 保持一致
@@ -73,10 +76,15 @@ export default function ScoreTableHeader({
         {players.map((player) => (
           <div
             key={player.id}
-            className="p-4 border-r border-bs-border group relative"
+            className={`p-4 border-r border-bs-border group relative transition-colors ${
+              dropTargetId === player.id && draggedId !== player.id
+                ? 'bg-bs-accent-primary/10'
+                : ''
+            }`}
             draggable
             onDragStart={() => handleDragStart(player.id)}
             onDragOver={(e) => handleDragOver(e, player.id)}
+            onDragLeave={() => setDropTargetId(null)}
             onDragEnd={handleDragEnd}
           >
             <div className="flex flex-col items-center gap-2 cursor-move">
@@ -96,11 +104,12 @@ export default function ScoreTableHeader({
               </span>
             </div>
 
-            {/* 删除按钮（悬停显示） */}
+            {/* 删除按钮 */}
             <button
               onClick={() => onRemovePlayer(player.id)}
-              className="absolute top-1 right-1 w-5 h-5 rounded bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-red-600 z-10"
+              className="absolute top-1 right-1 w-5 h-5 rounded bg-red-500 text-white opacity-0 group-hover:opacity-100 touch-manipulation:opacity-100 transition-opacity flex items-center justify-center hover:bg-red-600 z-10"
               title="移除玩家"
+              aria-label={`移除玩家 ${player.alias || player.name}`}
             >
               <X size={12} />
             </button>

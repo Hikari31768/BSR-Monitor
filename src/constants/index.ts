@@ -18,3 +18,5 @@ export const modeNames: Record<string, string> = {
   'Lawless': '无限制',
   'Legacy': '旧版',
 };
+
+export type GameMode = keyof typeof modeNames;

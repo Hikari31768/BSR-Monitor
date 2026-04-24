@@ -13,6 +13,8 @@ export default function DiffBadge({ difficulty, showFull = false, size = 'normal
 
   return (
     <span
+      title={difficulty}
+      aria-label={difficulty}
       className={`inline-flex items-center justify-center rounded font-semibold border ${sizeClasses} ${difficultyColors[difficulty] || difficultyColors['Unknown']}`}
     >
       {showFull ? difficulty : getDifficultyAbbreviation(difficulty)}

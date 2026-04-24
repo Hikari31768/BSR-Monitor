@@ -1,5 +1,28 @@
 # 数据库设计
 
+### 外键约束
+
+所有外键关系均已启用（`PRAGMA foreign_keys = ON`），确保数据完整性：
+- `PlayerScore.playerId` → `PlayerInfo.id`
+- `MapDiff.key` → `Map.key`
+- `PlaylistMap.playlistId` → `Playlist.playlistId`
+- `PlaylistMap.mapKey` → `Map.key`
+
+### 事务保护
+
+所有涉及多表写入的操作均使用事务保护（`rusqlite::Transaction`），确保原子性：
+- 添加玩家：玩家信息 + 成绩批量写入在同一事务中
+- 添加歌单：歌单信息 + 谱面信息 + 关联关系在同一事务中
+- 谱面更新：Map + MapDiff 的 isCurrent 切换在同一事务中
+
+### 复合索引
+
+为常用查询模式建立了复合索引：
+- `PlayerScore(playerId, hash)` — 按玩家和谱面查询成绩
+- `PlayerScore(epochTime DESC)` — 按时间倒序查询最新成绩
+
+---
+
 ## Map 表
 
 谱面基本信息。

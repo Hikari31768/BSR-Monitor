@@ -96,7 +96,8 @@ async fn fetch_and_save_player(
     let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
         .with_progress("saving_player_info".to_string(), 5.0)
         .with_message(msg.clone())
-        .with_player_info(player_response.name.clone(), player_response.avatar.clone());
+        .with_player_name(player_response.name.clone())
+        .with_player_avatar_url(player_response.avatar.clone());
     emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
     task_state.update(&task_id, 5.0, &msg);
 

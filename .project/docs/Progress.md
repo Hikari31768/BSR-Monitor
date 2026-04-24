@@ -15,9 +15,9 @@ src-tauri/src/
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `task_type` | String | `"add_player"` 或 `"add_playlist"` |
+| `task_type` | TaskType | `"add_player"` 或 `"add_playlist"` |
 | `task_id` | String | UUID，区分不同任务实例 |
-| `stage` | String | 当前阶段标识 |
+| `stage` | String | 当前阶段标识（初始为空字符串） |
 | `progress` | f64 | 0.0 - 100.0 百分比 |
 | `total` | Option<u64> | 总数（如总页数） |
 | `current` | Option<u64> | 当前完成数 |
@@ -32,7 +32,8 @@ ProgressPayload::new(task_type, task_id)
     .with_progress(stage, progress)  // 设置阶段和进度
     .with_count(stage, current, total)  // 设置计数并自动计算进度
     .with_message(message)            // 状态消息
-    .with_player_info(name, avatar)   // 玩家信息（前端先行显示）
+    .with_player_name(name)           // 玩家昵称
+    .with_player_avatar_url(avatar)   // 玩家头像（前端先行显示）
 ```
 
 ## 事件发射

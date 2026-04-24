@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Playlist } from '../types';
 
 interface PlaylistSelectProps {
@@ -9,9 +9,14 @@ interface PlaylistSelectProps {
 
 export default function PlaylistSelect({ playlists, selectedId, onSelect }: PlaylistSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const selectedPlaylist = playlists.find(p => p.playlist_id === selectedId);
+
+  // 所有选项（包含"请选择歌单"选项）
+  const allOptions = [{ id: null as number | null, label: '请选择歌单' }, ...playlists.map(p => ({ id: p.playlist_id, label: `${p.name} (${p.total_maps || 0} 首)` }))];
 
   // 点击外部关闭
   useEffect(() => {
@@ -24,11 +29,70 @@ export default function PlaylistSelect({ playlists, selectedId, onSelect }: Play
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // 打开时重置 activeIndex
+  useEffect(() => {
+    if (isOpen) {
+      const currentIndex = allOptions.findIndex(o => o.id === selectedId);
+      setActiveIndex(currentIndex >= 0 ? currentIndex : 0);
+    }
+  }, [isOpen]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!isOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        setIsOpen(true);
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setActiveIndex(prev => Math.min(prev + 1, allOptions.length - 1));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setActiveIndex(prev => Math.max(prev - 1, 0));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (activeIndex >= 0 && activeIndex < allOptions.length) {
+          onSelect(allOptions[activeIndex].id);
+          setIsOpen(false);
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setIsOpen(false);
+        break;
+    }
+  }, [isOpen, activeIndex, allOptions, onSelect]);
+
+  // 滚动活跃项到可视区域
+  useEffect(() => {
+    if (isOpen && activeIndex >= 0 && listRef.current) {
+      const item = listRef.current.children[activeIndex] as HTMLElement;
+      if (item) {
+        item.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [activeIndex, isOpen]);
+
   return (
-    <div ref={containerRef} className="relative">
+    <div
+      ref={containerRef}
+      className="relative"
+      onKeyDown={handleKeyDown}
+    >
       {/* 触发按钮 */}
       <button
         onClick={() => setIsOpen(!isOpen)}
+        role="combobox"
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-controls="playlist-listbox"
+        aria-label="选择歌单"
         className="w-full px-4 py-3 pr-10 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary text-left hover:border-bs-border-hover transition-all"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`,
@@ -44,30 +108,33 @@ export default function PlaylistSelect({ playlists, selectedId, onSelect }: Play
 
       {/* 下拉菜单 */}
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-bs-bg-tertiary border border-bs-border rounded-lg shadow-lg overflow-hidden z-50">
-          <div
-            onClick={() => {
-              onSelect(null);
-              setIsOpen(false);
-            }}
-            className={`px-4 py-3 cursor-pointer hover:bg-bs-border transition-colors ${
-              selectedId === null ? 'bg-bs-accent-primary/20 text-bs-accent-primary' : 'text-bs-text-primary'
-            }`}
-          >
-            请选择歌单
-          </div>
-          {playlists.map(playlist => (
+        <div
+          ref={listRef}
+          id="playlist-listbox"
+          role="listbox"
+          aria-label="歌单列表"
+          className="absolute top-full left-0 right-0 mt-1 bg-bs-bg-tertiary border border-bs-border rounded-lg shadow-lg overflow-hidden z-50 max-h-60 overflow-y-auto"
+        >
+          {allOptions.map((option, index) => (
             <div
-              key={playlist.playlist_id}
+              key={option.id ?? 'none'}
+              role="option"
+              aria-selected={selectedId === option.id}
+              tabIndex={-1}
               onClick={() => {
-                onSelect(playlist.playlist_id);
+                onSelect(option.id);
                 setIsOpen(false);
               }}
-              className={`px-4 py-3 cursor-pointer hover:bg-bs-border transition-colors ${
-                selectedId === playlist.playlist_id ? 'bg-bs-accent-primary/20 text-bs-accent-primary' : 'text-bs-text-primary'
+              onMouseEnter={() => setActiveIndex(index)}
+              className={`px-4 py-3 cursor-pointer transition-colors ${
+                selectedId === option.id
+                  ? 'bg-bs-accent-primary/20 text-bs-accent-primary'
+                  : index === activeIndex
+                    ? 'bg-bs-border text-bs-text-primary'
+                    : 'text-bs-text-primary'
               }`}
             >
-              {playlist.name} ({playlist.total_maps || 0} 首)
+              {option.label}
             </div>
           ))}
         </div>
