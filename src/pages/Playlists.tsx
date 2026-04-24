@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { Playlist, PlaylistMap } from '../types';
 import PlaylistCard from '../components/PlaylistCard';
 import MapCard from '../components/MapCard';
@@ -16,6 +16,7 @@ export default function Playlists() {
   const [showMapsModal, setShowMapsModal] = useState<number | null>(null);
   const [playlistMaps, setPlaylistMaps] = useState<PlaylistMap[]>([]);
   const [addId, setAddId] = useState('');
+  const unlistenRef = useRef<UnlistenFn | null>(null);
 
   async function loadPlaylists() {
     setLoading(true);
@@ -29,8 +30,73 @@ export default function Playlists() {
     }
   }
 
+  // 恢复进行中的任务状态
+  const restoreActiveTasks = useCallback(async () => {
+    try {
+      const tasks = await invoke<[string, { task_type: string; target_id: string; progress: number; message: string }][]>('get_active_tasks');
+      const playlistTasks = tasks.filter(([, s]) => s.task_type === 'add_playlist');
+      if (playlistTasks.length === 0) return;
+
+      setPlaylists(prev => {
+        const updated = [...prev];
+        for (const [, status] of playlistTasks) {
+          const targetId = parseInt(status.target_id);
+          const idx = updated.findIndex(p => p.playlist_id === targetId);
+          if (idx !== -1) {
+            updated[idx] = {
+              ...updated[idx],
+              loading: true,
+              progress: status.progress,
+              status_message: status.message || '处理中...'
+            };
+          }
+        }
+        return updated;
+      });
+    } catch (e) {
+      console.error('恢复任务状态失败:', e);
+    }
+  }, []);
+
   useEffect(() => {
-    loadPlaylists();
+    loadPlaylists().then(() => restoreActiveTasks());
+  }, [restoreActiveTasks]);
+
+  // 进度事件监听器 — 在 useEffect 中管理，确保卸载时清理
+  useEffect(() => {
+    let cancelled = false;
+    listen('progress-update', (event) => {
+      if (cancelled) return;
+      const progressData = event.payload as {
+        task_type: string;
+        task_id: string;
+        stage: string;
+        progress: number;
+        message?: string;
+      };
+
+      // 只处理 add_playlist 类型的进度
+      if (progressData.task_type === 'add_playlist') {
+        setPlaylists(prev => prev.map(p => {
+          if ((p as any).currentTaskId && (p as any).currentTaskId === progressData.task_id) {
+            return {
+              ...p,
+              progress: progressData.progress,
+              status_message: progressData.message || `阶段: ${progressData.stage}`
+            };
+          }
+          return p;
+        }));
+      }
+    }).then(unlisten => {
+      unlistenRef.current = unlisten;
+    });
+
+    return () => {
+      cancelled = true;
+      unlistenRef.current?.();
+      unlistenRef.current = null;
+    };
   }, []);
 
   async function handleAddPlaylist() {
@@ -49,9 +115,12 @@ export default function Playlists() {
       return;
     }
 
+    // 前端生成 task_id，确保进度事件能正确匹配
+    const taskId = crypto.randomUUID();
+
     try {
       // 如果已存在，更新现有条目状态；否则添加临时条目
-      const tempPlaylist: Playlist & { loading?: boolean; progress?: number; status_message?: string } = {
+      const tempPlaylist: Playlist & { loading?: boolean; progress?: number; status_message?: string; currentTaskId?: string } = {
         ...(isExisting ? playlists[existingIdx] : {
           playlist_id: playlistId,
           name: '加载中...',
@@ -66,74 +135,39 @@ export default function Playlists() {
         }),
         loading: true,
         progress: 0,
-        status_message: isExisting ? '正在更新...' : '准备添加...'
+        status_message: isExisting ? '正在更新...' : '准备添加...',
+        currentTaskId: taskId  // 设置 task_id 以便进度监听器匹配
       };
 
       if (isExisting) {
-        setPlaylists(prev => prev.map((p, i) => i === existingIdx ? tempPlaylist : p));
+        setPlaylists(prev => prev.map((p, i) => i === existingIdx ? { ...p, ...tempPlaylist } : p));
       } else {
         setPlaylists(prev => [...prev, tempPlaylist]);
       }
       setShowAddModal(false);
       setAddId('');
 
-      // 监听进度事件
-      const unlisten = await listen('progress-update', (event) => {
-        const progressData = event.payload as {
-          task_type: string;
-          task_id: string;
-          stage: string;
-          progress: number;
-          total?: number;
-          current?: number;
-          message?: string;
-        };
-
-        // 只处理当前任务的进度
-        if (progressData.task_type === 'add_playlist') {
-          setPlaylists(prev => prev.map(p =>
-            p.playlist_id === playlistId
-              ? {
-                  ...p,
-                  progress: progressData.progress,
-                  status_message: progressData.message || `阶段: ${progressData.stage}`
-                }
-              : p
-          ));
-        }
+      // 执行长时间操作，将前端生成的 task_id 传给后端
+      await invoke<{ task_id: string; playlist: Playlist }>('add_playlist', {
+        playlistId,
+        taskId  // 传递前端生成的 task_id
       });
 
-      // 执行长时间操作
-      try {
-        await invoke('add_playlist', { playlistId });
-
-        // 操作成功，重新加载列表
-        loadPlaylists();
-      } catch (e) {
-        // 操作失败，恢复原有状态或移除临时条目
-        if (isExisting) {
-          setPlaylists(prev => prev.map((p, i) => i === existingIdx ? { ...p, loading: false, progress: undefined, status_message: undefined } : p));
-        } else {
-          setPlaylists(prev => prev.filter(p => p.playlist_id !== playlistId));
-        }
-        alert(`${isExisting ? '更新' : '添加'}失败: ${e}`);
-      } finally {
-        // 清理事件监听器
-        unlisten();
-      }
+      // 操作成功，重新加载列表
+      await loadPlaylists();
+      await restoreActiveTasks();
     } catch (e) {
-      alert(`操作失败: ${e}`);
+      // 操作失败，恢复原有状态或移除临时条目
+      if (isExisting) {
+        setPlaylists(prev => prev.map((p, i) => i === existingIdx ? { ...p, loading: false, progress: undefined, status_message: undefined, currentTaskId: undefined } : p));
+      } else {
+        setPlaylists(prev => prev.filter(p => p.playlist_id !== playlistId));
+      }
+      alert(`${isExisting ? '更新' : '添加'}失败: ${e}`);
     }
   }
 
   async function handleDeletePlaylist(id: number) {
-    // 检查是否正在添加中，不允许删除
-    const playlist = playlists.find(p => p.playlist_id === id);
-    if (playlist && playlist.loading) {
-      alert('无法删除正在添加的歌单');
-      return;
-    }
-
     try {
       await invoke('delete_playlist', { playlistId: id });
       setShowDeleteModal(null);
@@ -145,6 +179,8 @@ export default function Playlists() {
 
   async function handleViewMaps(playlistId: number) {
     try {
+      // 切换歌单时先清空旧数据
+      setPlaylistMaps([]);
       const maps = await invoke<PlaylistMap[]>('get_playlist_maps', { playlistId });
       setPlaylistMaps(maps);
       setShowMapsModal(playlistId);
@@ -240,7 +276,7 @@ export default function Playlists() {
 
       <Modal
         isOpen={showMapsModal !== null}
-        onClose={() => setShowMapsModal(null)}
+        onClose={() => { setShowMapsModal(null); setPlaylistMaps([]); }}
         title="歌单谱面列表"
       >
         <div className="max-h-[60vh] overflow-auto space-y-3 pr-2">

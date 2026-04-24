@@ -149,7 +149,77 @@
 
 ## 09-02 — 前端稳定性修复
 
-_（待完成）_
+**状态：已完成**
+
+### 操作罗列
+
+1. **进度事件 task_id 过滤（P0）**
+   - `progress.rs`：`task_type` 从 `String` 改为 `enum TaskType { AddPlayer, AddPlaylist }`，实现 `Serialize` + `Display`
+   - `player.rs`：`add_player` 返回值改为 `Result<AddPlayerResult, String>`，包含 `task_id` + `player`
+   - `playlist.rs`：`add_playlist` 同样改为 `Result<AddPlaylistResult, String>`
+   - 命令层所有 `ProgressPayload::new()` 调用从字符串改为枚举
+   - `Players.tsx`：invoke 后获取 `task_id`，通过 `currentTaskId` 字段匹配进度事件
+   - `Playlists.tsx`：同样处理
+
+2. **页面刷新后 loading 状态恢复（P0）**
+   - 新建 `task_state.rs`：`TaskState` struct，内部 `HashMap<String, TaskStatus>` 管理活跃任务
+   - `lib.rs`：`TaskState` 注册为 Tauri managed state，`get_active_tasks` 注册为命令
+   - `add_player` / `add_playlist`：任务开始时 `register`，结束时 `remove`，中间 `update` 进度
+   - `Players.tsx` / `Playlists.tsx`：`loadPlayers` / `loadPlaylists` 完成后调用 `get_active_tasks` 恢复 loading 状态
+   - `delete_player` / `delete_playlist`：增加 `has_active_for_target` 后端校验，拒绝删除处理中的目标
+
+3. **Error Boundary（P1）**
+   - 新建 `src/components/ErrorBoundary.tsx`：class component，捕获未处理 React 错误
+   - `App.tsx`：用 ErrorBoundary 包裹整个应用
+   - 降级 UI：错误信息 + 重新加载按钮
+
+4. **Audio 实例泄漏修复（P1）**
+   - `AudioContext.tsx`：扩展为管理全局单例 `Audio` 对象，提供 `playPreview` / `stopPreview` 方法
+   - 播放新音频时自动停止当前播放并切换 `src`，复用同一 Audio 实例
+   - 使用 `localStorage` 持久化音量设置
+   - `CoverWithAudio.tsx`：改为使用 AudioContext 的 `playPreview` / `stopPreview`，移除内部 Audio 对象创建
+
+5. **进度事件监听器生命周期修复（P1）**
+   - `Players.tsx` / `Playlists.tsx`：进度事件监听器从 `handleAddPlayer` / `handleAddPlaylist` 内部移至 `useEffect` 中管理
+   - 组件卸载时通过 `unlistenRef` 确保 `unlisten` 被调用
+
+6. **formatRating 修复（P1）**
+   - `format.ts`：`if (!rating)` 改为 `if (rating == null)`，不排除 0 值
+
+7. **歌单切换时 playlistMaps 清空（P1）**
+   - `Playlists.tsx`：`handleViewMaps` 中在打开新歌单前先 `setPlaylistMaps([])`
+   - Modal 关闭时也清空 `playlistMaps`
+
+### 涉及文件变更
+- `src-tauri/src/progress.rs`：TaskType 枚举化、ProgressPayload 类型对齐
+- `src-tauri/src/task_state.rs`：新建，任务状态管理
+- `src-tauri/src/lib.rs`：TaskState 管理、get_active_tasks 命令注册
+- `src-tauri/src/commands/player.rs`：AddPlayerResult、TaskState 注入、delete_player 后端校验
+- `src-tauri/src/commands/playlist.rs`：AddPlaylistResult、TaskState 注入、delete_playlist 后端校验
+- `src/pages/Players.tsx`：task_id 过滤、任务状态恢复、监听器生命周期修复
+- `src/pages/Playlists.tsx`：同上 + playlistMaps 清空
+- `src/components/ErrorBoundary.tsx`：新建
+- `src/App.tsx`：ErrorBoundary 包裹
+- `src/contexts/AudioContext.tsx`：全局 Audio 管理器、音量持久化
+- `src/components/CoverWithAudio.tsx`：使用全局 Audio 管理器
+- `src/utils/format.ts`：formatRating null 检查修复
+
+### 验证结果
+- `cargo check`：编译通过，零警告
+- `cargo build`：编译通过
+- `npm run build`：编译通过（tsc + vite）
+- `npm run tauri dev`：应用正常启动，数据库初始化成功，无 panic、无报错
+
+### 后续修复（批次验证后）
+
+**问题1**：打谱查询单谱面模式下，添加玩家后成绩不自动刷新
+- 修复：`ScoreTable.tsx` 中 `handleAddPlayer` 后自动触发 `searchMap` / `searchPlaylist`
+
+**问题2**：玩家/歌单添加时进度条不显示
+- 原因：时序问题 — 后端在 invoke 返回前就开始发送进度事件，前端 `currentTaskId` 在 invoke 返回后才设置
+- 修复：
+  - `player.rs` / `playlist.rs`：`add_player` / `add_playlist` 接受前端传入的 `task_id` 参数
+  - `Players.tsx` / `Playlists.tsx`：前端用 `crypto.randomUUID()` 生成 task_id，invoke 前设置到条目上
 
 ## 09-03 — 前后端类型对齐
 

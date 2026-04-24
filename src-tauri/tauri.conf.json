@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "npx vite --port 1420",
     "beforeBuildCommand": "npm run build"
   },
   "app": {

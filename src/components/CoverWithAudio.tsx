@@ -12,25 +12,37 @@ interface CoverWithAudioProps {
 export default function CoverWithAudio({ map }: CoverWithAudioProps) {
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const { volume } = useAudio();
+  const { playPreview, stopPreview, audioRef } = useAudio();
+  const isOwnRef = useRef(false);
 
   useEffect(() => {
-    if (!map.preview_url) return;
+    return () => {
+      // Stop playback when this component unmounts or preview_url changes
+      if (isOwnRef.current) {
+        stopPreview();
+        setPlaying(false);
+        setProgress(0);
+        isOwnRef.current = false;
+      }
+    };
+  }, [map.preview_url, stopPreview]);
 
-    const audio = new Audio(map.preview_url);
-    audio.volume = volume;
-    audioRef.current = audio;
+  // Track progress on the global audio element
+  useEffect(() => {
+    if (!playing) return;
+
+    const audio = audioRef.current;
+    if (!audio) return;
 
     const handleTimeUpdate = () => {
       if (audio.duration) {
         setProgress(audio.currentTime / audio.duration);
       }
     };
-
     const handleEnded = () => {
       setPlaying(false);
       setProgress(0);
+      isOwnRef.current = false;
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
@@ -39,31 +51,22 @@ export default function CoverWithAudio({ map }: CoverWithAudioProps) {
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
-      audio.pause();
-      audio.src = '';
     };
-  }, [map.preview_url]);
-
-  // Sync volume changes
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = volume;
-    }
-  }, [volume]);
+  }, [playing, audioRef]);
 
   function handleClick() {
     if (!map.preview_url) return;
-    const audio = audioRef.current;
-    if (!audio) return;
-
     if (playing) {
-      audio.pause();
+      stopPreview();
       setPlaying(false);
       setProgress(0);
+      isOwnRef.current = false;
     } else {
-      audio.currentTime = 0;
-      audio.play();
+      // Stop any other component's playback first
+      stopPreview();
+      playPreview(map.preview_url);
       setPlaying(true);
+      isOwnRef.current = true;
     }
   }
 

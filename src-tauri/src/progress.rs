@@ -1,21 +1,39 @@
 use tauri::{AppHandle, Emitter};
 use serde::Serialize;
+use std::fmt;
+
+/// Task type enum for progress events
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskType {
+    AddPlayer,
+    AddPlaylist,
+}
+
+impl fmt::Display for TaskType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TaskType::AddPlayer => write!(f, "add_player"),
+            TaskType::AddPlaylist => write!(f, "add_playlist"),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ProgressPayload {
-    pub task_type: String,       // "add_player", "add_playlist"
-    pub task_id: String,         // 唯一的任务ID
-    pub stage: String,           // 当前阶段描述
-    pub progress: f64,           // 进度百分比 (0.0 - 100.0)
-    pub total: Option<u64>,      // 总数（如果有）
-    pub current: Option<u64>,    // 当前完成数（如果有）
-    pub message: Option<String>, // 状态消息
-    pub player_name: Option<String>,     // 玩家昵称（add_player 时使用）
-    pub player_avatar_url: Option<String>, // 玩家头像（add_player 时使用）
+    pub task_type: TaskType,
+    pub task_id: String,
+    pub stage: String,
+    pub progress: f64,
+    pub total: Option<u64>,
+    pub current: Option<u64>,
+    pub message: Option<String>,
+    pub player_name: Option<String>,
+    pub player_avatar_url: Option<String>,
 }
 
 impl ProgressPayload {
-    pub fn new(task_type: String, task_id: String) -> Self {
+    pub fn new(task_type: TaskType, task_id: String) -> Self {
         Self {
             task_type,
             task_id,

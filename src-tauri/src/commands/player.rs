@@ -1,22 +1,36 @@
 use tauri::AppHandle;
 use tauri::Manager;
+use tauri::State;
 use crate::api::BeatLeaderApi;
 use crate::database::operations::{PlayerInfo};
 use crate::database::operations as db;
 use std::sync::Mutex;
 use uuid::Uuid;
-use crate::progress::{ProgressPayload, emit_progress_event};
+use crate::progress::{ProgressPayload, TaskType, emit_progress_event};
+use crate::task_state::TaskState;
+use serde::Serialize;
+
+/// Response from add_player/add_playlist commands
+#[derive(Serialize)]
+pub struct AddPlayerResult {
+    pub task_id: String,
+    pub player: PlayerInfo,
+}
 
 /// 添加玩家（含全量拉取成绩）或增量更新（如已存在）- 支持进度反馈
 #[tauri::command]
 pub async fn add_player(
     app: AppHandle,
+    task_state: State<'_, TaskState>,
     id: String,
     live_url: Option<String>,
     alias: Option<String>,
-) -> Result<PlayerInfo, String> {
-    let task_id = Uuid::new_v4().to_string();
+    task_id: Option<String>,
+) -> Result<AddPlayerResult, String> {
+    let task_id = task_id.unwrap_or_else(|| Uuid::new_v4().to_string());
     let api = BeatLeaderApi::new().map_err(|e| e.to_string())?;
+
+    task_state.register(&task_id, "add_player", &id);
 
     // 检查是否已存在
     let existing = {
@@ -26,18 +40,22 @@ pub async fn add_player(
         db::get_player_by_id(&guard, &id).map_err(|e| e.to_string())?
     };
 
-    if existing.is_some() {
-        // 已存在 -> 增量更新
-        update_existing_player(app, id, task_id, live_url, alias, api).await
+    let result = if existing.is_some() {
+        update_existing_player(&app, &task_state, id, task_id.clone(), live_url, alias, api).await
     } else {
-        // 不存在 -> 全量添加
-        add_new_player(app, id, task_id, live_url, alias, api).await
-    }
+        add_new_player(&app, &task_state, id, task_id.clone(), live_url, alias, api).await
+    };
+
+    // 无论成功失败都移除任务记录
+    task_state.remove(&task_id);
+
+    result.map(|player| AddPlayerResult { task_id, player })
 }
 
 /// 全量添加新玩家
 async fn add_new_player(
-    app: AppHandle,
+    app: &AppHandle,
+    task_state: &TaskState,
     id: String,
     task_id: String,
     live_url: Option<String>,
@@ -45,10 +63,11 @@ async fn add_new_player(
     api: BeatLeaderApi,
 ) -> Result<PlayerInfo, String> {
     // Step 1: 发送初始进度
-    let payload = ProgressPayload::new("add_player".to_string(), task_id.clone())
-        .with_progress("fetching_player_info".to_string(), 10.0)
+    let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
+        .with_progress("fetching_player_info".to_string(), 2.0)
         .with_message("正在获取玩家信息...".to_string());
-    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    task_state.update(&task_id, 2.0, "正在获取玩家信息...");
 
     // Step 2: 调用 API 获取玩家信息
     let player_response = api.get_player(&id)
@@ -65,11 +84,13 @@ async fn add_new_player(
     };
 
     // 发送第二阶段进度（含玩家信息，前端可先行显示）
-    let payload = ProgressPayload::new("add_player".to_string(), task_id.clone())
-        .with_progress("saving_player_info".to_string(), 20.0)
-        .with_message(format!("已获取玩家: {}", player_response.name))
+    let msg = format!("已获取玩家: {}", player_response.name);
+    let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
+        .with_progress("saving_player_info".to_string(), 5.0)
+        .with_message(msg.clone())
         .with_player_info(player_response.name.clone(), player_response.avatar.clone());
-    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    task_state.update(&task_id, 5.0, &msg);
 
     // Step 3: 存入数据库
     {
@@ -80,10 +101,11 @@ async fn add_new_player(
     }
 
     // Step 4: 发送开始拉取成绩进度
-    let payload = ProgressPayload::new("add_player".to_string(), task_id.clone())
-        .with_progress("fetching_scores".to_string(), 30.0)
+    let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
+        .with_progress("fetching_scores".to_string(), 8.0)
         .with_message("开始拉取成绩...".to_string());
-    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    task_state.update(&task_id, 8.0, "开始拉取成绩...");
 
     // Step 5: 全量拉取成绩
     let page_size = 100;
@@ -134,17 +156,19 @@ async fn add_new_player(
         let total_pages = (response.metadata.total + response.metadata.items_per_page - 1)
             / response.metadata.items_per_page;
 
-        // 更新进度（30%-100%区间映射）
+        // 更新进度（8%-100%区间映射，成绩拉取占92%）
         total_scores += scores_to_insert.len();
         let page_progress = if total_pages > 1 {
-            30.0 + ((page as f64 / total_pages as f64) * 70.0)
+            8.0 + ((page as f64 / total_pages as f64) * 92.0)
         } else {
             100.0
         };
-        let payload = ProgressPayload::new("add_player".to_string(), task_id.clone())
+        let msg = format!("正在拉取第 {} 页成绩 (共约 {} 页)，已累计 {} 条成绩...", page, total_pages, total_scores);
+        let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
             .with_progress("fetching_scores".to_string(), page_progress)
-            .with_message(format!("正在拉取第 {} 页成绩 (共约 {} 页)，已累计 {} 条成绩...", page, total_pages, total_scores));
-        emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+            .with_message(msg.clone());
+        emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+        task_state.update(&task_id, page_progress, &msg);
 
         // 检查是否还有更多页
         if page >= total_pages {
@@ -154,17 +178,20 @@ async fn add_new_player(
     }
 
     // 发送完成进度
-    let payload = ProgressPayload::new("add_player".to_string(), task_id.clone())
+    let msg = format!("完成！共拉取 {} 条成绩", total_scores);
+    let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
         .with_progress("completed".to_string(), 100.0)
-        .with_message(format!("完成！共拉取 {} 条成绩", total_scores));
-    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+        .with_message(msg.clone());
+    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    task_state.update(&task_id, 100.0, &msg);
 
     Ok(player_info)
 }
 
 /// 增量更新已存在的玩家
 async fn update_existing_player(
-    app: AppHandle,
+    app: &AppHandle,
+    task_state: &TaskState,
     id: String,
     task_id: String,
     live_url: Option<String>,
@@ -172,10 +199,11 @@ async fn update_existing_player(
     api: BeatLeaderApi,
 ) -> Result<PlayerInfo, String> {
     // Step 1: 发送初始进度
-    let payload = ProgressPayload::new("add_player".to_string(), task_id.clone())
-        .with_progress("fetching_player_info".to_string(), 10.0)
+    let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
+        .with_progress("fetching_player_info".to_string(), 2.0)
         .with_message("正在获取玩家信息...".to_string());
-    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    task_state.update(&task_id, 2.0, "正在获取玩家信息...");
 
     // Step 2: 调用 API 获取最新玩家信息
     let player_response = api.get_player(&id)
@@ -192,11 +220,13 @@ async fn update_existing_player(
     };
 
     // 发送进度（含玩家信息）
-    let payload = ProgressPayload::new("add_player".to_string(), task_id.clone())
-        .with_progress("saving_player_info".to_string(), 20.0)
-        .with_message(format!("已获取玩家: {}", player_response.name))
+    let msg = format!("已获取玩家: {}", player_response.name);
+    let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
+        .with_progress("saving_player_info".to_string(), 5.0)
+        .with_message(msg.clone())
         .with_player_info(player_response.name.clone(), player_response.avatar.clone());
-    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    task_state.update(&task_id, 5.0, &msg);
 
     // Step 3: 更新数据库中的玩家信息
     {
@@ -215,10 +245,11 @@ async fn update_existing_player(
     };
 
     // Step 5: 发送开始更新成绩进度
-    let payload = ProgressPayload::new("add_player".to_string(), task_id.clone())
-        .with_progress("fetching_scores".to_string(), 30.0)
+    let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
+        .with_progress("fetching_scores".to_string(), 8.0)
         .with_message("正在拉取新成绩...".to_string());
-    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    task_state.update(&task_id, 8.0, "正在拉取新成绩...");
 
     // Step 6: 增量拉取成绩（从最新的一条开始）
     let page_size = 100;
@@ -278,16 +309,18 @@ async fn update_existing_player(
         let total_pages = (response.metadata.total + response.metadata.items_per_page - 1)
             / response.metadata.items_per_page;
 
-        // 更新进度（30%-100%区间映射）
+        // 更新进度（8%-100%区间映射，成绩拉取占92%）
         let page_progress = if total_pages > 1 {
-            30.0 + ((page as f64 / total_pages as f64) * 70.0)
+            8.0 + ((page as f64 / total_pages as f64) * 92.0)
         } else {
             100.0
         };
-        let payload = ProgressPayload::new("add_player".to_string(), task_id.clone())
+        let msg = format!("正在拉取第 {} 页成绩 (共约 {} 页)，已新增 {} 条...", page, total_pages, total_new_scores);
+        let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
             .with_progress("fetching_scores".to_string(), page_progress)
-            .with_message(format!("正在拉取第 {} 页成绩 (共约 {} 页)，已新增 {} 条...", page, total_pages, total_new_scores));
-        emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+            .with_message(msg.clone());
+        emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+        task_state.update(&task_id, page_progress, &msg);
 
         // 检查是否还有更多页
         if page >= total_pages {
@@ -297,10 +330,12 @@ async fn update_existing_player(
     }
 
     // 发送完成进度
-    let payload = ProgressPayload::new("add_player".to_string(), task_id.clone())
+    let msg = format!("更新完成！新增 {} 条成绩", total_new_scores);
+    let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
         .with_progress("completed".to_string(), 100.0)
-        .with_message(format!("更新完成！新增 {} 条成绩", total_new_scores));
-    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+        .with_message(msg.clone());
+    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    task_state.update(&task_id, 100.0, &msg);
 
     Ok(player_info)
 }
@@ -325,7 +360,11 @@ pub fn get_player(app: AppHandle, id: String) -> Result<Option<PlayerInfo>, Stri
 
 /// 删除玩家
 #[tauri::command]
-pub fn delete_player(app: AppHandle, id: String) -> Result<(), String> {
+pub fn delete_player(app: AppHandle, task_state: State<'_, TaskState>, id: String) -> Result<(), String> {
+    // 检查是否有正在进行的添加任务
+    if task_state.has_active_for_target(&id) {
+        return Err("无法删除正在处理中的玩家".to_string());
+    }
     let state = app.try_state::<Mutex<rusqlite::Connection>>()
         .ok_or("Database not initialized")?;
     let guard = state.lock().map_err(|e| e.to_string())?;

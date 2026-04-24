@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { PlayerInfo, PlayerWithScoreCount } from '../types';
 import PlayerCard from '../components/PlayerCard';
 import Modal from '../components/Modal';
@@ -14,6 +14,7 @@ export default function Players() {
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
   const [addForm, setAddForm] = useState({ id: '', liveUrl: '', alias: '' });
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const unlistenRef = useRef<UnlistenFn | null>(null);
 
   async function loadPlayers() {
     setLoading(true);
@@ -33,8 +34,77 @@ export default function Players() {
     }
   }
 
+  // 恢复进行中的任务状态
+  const restoreActiveTasks = useCallback(async () => {
+    try {
+      const tasks = await invoke<[string, { task_type: string; target_id: string; progress: number; message: string }][]>('get_active_tasks');
+      const playerTasks = tasks.filter(([, s]) => s.task_type === 'add_player');
+      if (playerTasks.length === 0) return;
+
+      setPlayers(prev => {
+        const updated = [...prev];
+        for (const [, status] of playerTasks) {
+          const idx = updated.findIndex(p => p.id === status.target_id);
+          if (idx !== -1) {
+            updated[idx] = {
+              ...updated[idx],
+              loading: true,
+              progress: status.progress,
+              status_message: status.message || '处理中...'
+            };
+          }
+        }
+        return updated;
+      });
+    } catch (e) {
+      console.error('恢复任务状态失败:', e);
+    }
+  }, []);
+
   useEffect(() => {
-    loadPlayers();
+    loadPlayers().then(() => restoreActiveTasks());
+  }, [restoreActiveTasks]);
+
+  // 进度事件监听器 — 在 useEffect 中管理，确保卸载时清理
+  useEffect(() => {
+    let cancelled = false;
+    listen('progress-update', (event) => {
+      if (cancelled) return;
+      const progressData = event.payload as {
+        task_type: string;
+        task_id: string;
+        stage: string;
+        progress: number;
+        message?: string;
+        player_name?: string;
+        player_avatar_url?: string;
+      };
+
+      // 只处理 add_player 类型的进度
+      if (progressData.task_type === 'add_player') {
+        setPlayers(prev => prev.map(p => {
+          // 通过后端返回的 task_id 和前端存储的 currentTaskId 匹配
+          if ((p as any).currentTaskId && (p as any).currentTaskId === progressData.task_id) {
+            return {
+              ...p,
+              name: progressData.player_name || p.name,
+              avatar_url: progressData.player_avatar_url || p.avatar_url,
+              progress: progressData.progress,
+              status_message: progressData.message || `阶段: ${progressData.stage}`
+            };
+          }
+          return p;
+        }));
+      }
+    }).then(unlisten => {
+      unlistenRef.current = unlisten;
+    });
+
+    return () => {
+      cancelled = true;
+      unlistenRef.current?.();
+      unlistenRef.current = null;
+    };
   }, []);
 
   async function handleAddPlayer() {
@@ -52,9 +122,12 @@ export default function Players() {
       return;
     }
 
+    // 前端生成 task_id，确保进度事件能正确匹配
+    const taskId = crypto.randomUUID();
+
     try {
       // 如果已存在，更新现有条目状态；否则添加临时条目
-      const tempPlayer: PlayerWithScoreCount & { loading?: boolean; progress?: number; status_message?: string } = {
+      const tempPlayer: PlayerWithScoreCount & { loading?: boolean; progress?: number; status_message?: string; currentTaskId?: string } = {
         ...(isExisting ? players[existingIdx] : {
           id: addForm.id,
           name: '加载中...',
@@ -65,82 +138,41 @@ export default function Players() {
         }),
         loading: true,
         progress: 0,
-        status_message: isExisting ? '正在更新...' : '准备添加...'
+        status_message: isExisting ? '正在更新...' : '准备添加...',
+        currentTaskId: taskId  // 设置 task_id 以便进度监听器匹配
       };
 
       if (isExisting) {
-        setPlayers(prev => prev.map((p, i) => i === existingIdx ? tempPlayer : p));
+        setPlayers(prev => prev.map((p, i) => i === existingIdx ? { ...p, ...tempPlayer } : p));
       } else {
         setPlayers(prev => [...prev, tempPlayer]);
       }
       setShowAddModal(false);
       setAddForm({ id: '', liveUrl: '', alias: '' });
 
-      // 监听进度事件
-      const unlisten = await listen('progress-update', (event) => {
-        const progressData = event.payload as {
-          task_type: string;
-          task_id: string;
-          stage: string;
-          progress: number;
-          total?: number;
-          current?: number;
-          message?: string;
-          player_name?: string;
-          player_avatar_url?: string;
-        };
-
-        // 只处理当前任务的进度
-        if (progressData.task_type === 'add_player') {
-          setPlayers(prev => prev.map(p =>
-            p.id === addForm.id
-              ? {
-                  ...p,
-                  name: progressData.player_name || p.name,
-                  avatar_url: progressData.player_avatar_url || p.avatar_url,
-                  progress: progressData.progress,
-                  status_message: progressData.message || `阶段: ${progressData.stage}`
-                }
-              : p
-          ));
-        }
+      // 执行长时间操作，将前端生成的 task_id 传给后端
+      await invoke<{ task_id: string; player: PlayerInfo }>('add_player', {
+        id: addForm.id,
+        liveUrl: addForm.liveUrl || null,
+        alias: addForm.alias || null,
+        taskId  // 传递前端生成的 task_id
       });
 
-      // 执行长时间操作
-      try {
-        await invoke('add_player', {
-          id: addForm.id,
-          liveUrl: addForm.liveUrl || null,
-          alias: addForm.alias || null
-        });
-
-        // 操作成功，重新加载列表
-        loadPlayers();
-      } catch (e) {
-        // 操作失败，从列表中移除临时玩家或恢复原有状态
-        if (isExisting) {
-          setPlayers(prev => prev.map((p, i) => i === existingIdx ? { ...p, loading: false, progress: undefined, status_message: undefined } : p));
-        } else {
-          setPlayers(prev => prev.filter(p => p.id !== addForm.id));
-        }
-        alert(`${isExisting ? '更新' : '添加'}失败: ${e}`);
-      } finally {
-        // 清理事件监听器
-        unlisten();
-      }
+      // 操作成功，重新加载列表
+      await loadPlayers();
+      await restoreActiveTasks();
     } catch (e) {
-      alert(`操作失败: ${e}`);
+      // 操作失败，恢复原有状态或移除临时条目
+      if (isExisting) {
+        setPlayers(prev => prev.map((p, i) => i === existingIdx ? { ...p, loading: false, progress: undefined, status_message: undefined, currentTaskId: undefined } : p));
+      } else {
+        setPlayers(prev => prev.filter(p => p.id !== addForm.id));
+      }
+      alert(`${isExisting ? '更新' : '添加'}失败: ${e}`);
     }
   }
 
   async function handleDeletePlayer(id: string) {
-    // 检查是否正在添加中，不允许删除
-    const player = players.find(p => p.id === id);
-    if (player && player.loading) {
-      alert('无法删除正在添加的玩家');
-      return;
-    }
-
     try {
       await invoke('delete_player', { id });
       setShowDeleteModal(null);

@@ -1,17 +1,34 @@
 use tauri::AppHandle;
 use tauri::Manager;
+use tauri::State;
 use crate::api::BeatSaverApi;
 use crate::database::operations::{Playlist, PlaylistMap, Map, MapDiff};
 use crate::database::operations as db;
 use std::sync::Mutex;
 use uuid::Uuid;
-use crate::progress::{ProgressPayload, emit_progress_event};
+use crate::progress::{ProgressPayload, TaskType, emit_progress_event};
+use crate::task_state::TaskState;
+use serde::Serialize;
+
+/// Response from add_playlist command
+#[derive(Serialize)]
+pub struct AddPlaylistResult {
+    pub task_id: String,
+    pub playlist: Playlist,
+}
 
 /// 添加歌单或增量更新（如已存在）- 支持进度反馈
 #[tauri::command]
-pub async fn add_playlist(app: AppHandle, playlist_id: i32) -> Result<Playlist, String> {
-    let task_id = Uuid::new_v4().to_string();
+pub async fn add_playlist(
+    app: AppHandle,
+    task_state: State<'_, TaskState>,
+    playlist_id: i32,
+    task_id: Option<String>,
+) -> Result<AddPlaylistResult, String> {
+    let task_id = task_id.unwrap_or_else(|| Uuid::new_v4().to_string());
     let api = BeatSaverApi::new().map_err(|e| e.to_string())?;
+
+    task_state.register(&task_id, "add_playlist", &playlist_id.to_string());
 
     // 检查是否已存在
     let existing = {
@@ -21,29 +38,34 @@ pub async fn add_playlist(app: AppHandle, playlist_id: i32) -> Result<Playlist, 
         db::get_playlist_by_id(&guard, playlist_id as i64).map_err(|e| e.to_string())?
     };
 
-    if existing.is_some() {
-        // 已存在 -> 增量更新
-        update_existing_playlist(app, playlist_id, task_id, api).await
+    let result = if existing.is_some() {
+        update_existing_playlist(&app, &task_state, playlist_id, task_id.clone(), api).await
     } else {
-        // 不存在 -> 全量添加
-        add_new_playlist(app, playlist_id, task_id, api).await
-    }
+        add_new_playlist(&app, &task_state, playlist_id, task_id.clone(), api).await
+    };
+
+    // 无论成功失败都移除任务记录
+    task_state.remove(&task_id);
+
+    result.map(|playlist| AddPlaylistResult { task_id, playlist })
 }
 
 const PLAYLIST_PAGE_SIZE: i32 = 500;
 
 /// 全量添加新歌单
 async fn add_new_playlist(
-    app: AppHandle,
+    app: &AppHandle,
+    task_state: &TaskState,
     playlist_id: i32,
     task_id: String,
     api: BeatSaverApi,
 ) -> Result<Playlist, String> {
     // 发送初始进度
-    let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
-        .with_progress("fetching_playlist".to_string(), 5.0)
+    let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.clone())
+        .with_progress("fetching_playlist".to_string(), 2.0)
         .with_message("正在获取歌单信息...".to_string());
-    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    task_state.update(&task_id, 2.0, "正在获取歌单信息...");
 
     // 拉取第一页
     let first_page = api.get_playlist(playlist_id, 0)
@@ -62,10 +84,12 @@ async fn add_new_playlist(
     let playlist = convert_playlist_response(&first_page);
 
     // 发送进度 - 开始保存歌单信息
-    let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
-        .with_progress("saving_playlist_info".to_string(), 10.0)
-        .with_message(format!("已获取歌单: {}", playlist.name));
-    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+    let msg = format!("已获取歌单: {}", playlist.name);
+    let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.clone())
+        .with_progress("saving_playlist_info".to_string(), 5.0)
+        .with_message(msg.clone());
+    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    task_state.update(&task_id, 5.0, &msg);
 
     // 存入歌单
     {
@@ -77,7 +101,7 @@ async fn add_new_playlist(
 
     // 处理第一页的谱面
     let mut total_actual_count = first_page.maps.len();
-    save_playlist_maps_with_progress(&app, playlist_id, &first_page, &task_id, 1, 1)?;
+    save_playlist_maps_with_progress(app, task_state, &task_id, playlist_id, &first_page, 1, 1)?;
 
     // 根据实际返回数量判断是否需要继续拉取
     let mut current_page = 0;
@@ -98,7 +122,7 @@ async fn add_new_playlist(
         }
 
         total_actual_count += current_page_count;
-        save_playlist_maps_with_progress(&app, playlist_id, &page_response, &task_id, current_page as u64 + 1, current_page as u64 + 1)?;
+        save_playlist_maps_with_progress(app, task_state, &task_id, playlist_id, &page_response, current_page as u64 + 1, current_page as u64 + 1)?;
     }
 
     println!("[Playlist] Total fetched: {} maps, is_search: {}", total_actual_count, is_search_type);
@@ -115,10 +139,12 @@ async fn add_new_playlist(
 
     // 发送完成进度
     let final_total = if is_search_type { total_actual_count as i32 } else { playlist.total_maps.unwrap_or(0) };
-    let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
+    let msg = format!("完成！共处理 {} 首歌曲", final_total);
+    let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.clone())
         .with_progress("completed".to_string(), 100.0)
-        .with_message(format!("完成！共处理 {} 首歌曲", final_total));
-    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+        .with_message(msg.clone());
+    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    task_state.update(&task_id, 100.0, &msg);
 
     // 返回最终歌单信息
     let final_playlist = {
@@ -135,7 +161,8 @@ async fn add_new_playlist(
 
 /// 增量更新已存在的歌单
 async fn update_existing_playlist(
-    app: AppHandle,
+    app: &AppHandle,
+    task_state: &TaskState,
     playlist_id: i32,
     task_id: String,
     api: BeatSaverApi,
@@ -143,10 +170,11 @@ async fn update_existing_playlist(
     println!("[Playlist] Updating existing playlist {}", playlist_id);
 
     // 发送初始进度
-    let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
-        .with_progress("fetching_playlist".to_string(), 5.0)
+    let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.clone())
+        .with_progress("fetching_playlist".to_string(), 2.0)
         .with_message("正在获取最新歌单信息...".to_string());
-    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    task_state.update(&task_id, 2.0, "正在获取最新歌单信息...");
 
     // 拉取第一页
     let first_page = api.get_playlist(playlist_id, 0)
@@ -164,10 +192,12 @@ async fn update_existing_playlist(
     let playlist = convert_playlist_response(&first_page);
 
     // 发送进度
-    let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
-        .with_progress("saving_playlist_info".to_string(), 10.0)
-        .with_message(format!("已获取歌单: {}", playlist.name));
-    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+    let msg = format!("已获取歌单: {}", playlist.name);
+    let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.clone())
+        .with_progress("saving_playlist_info".to_string(), 5.0)
+        .with_message(msg.clone());
+    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    task_state.update(&task_id, 5.0, &msg);
 
     // 更新歌单信息
     {
@@ -187,7 +217,7 @@ async fn update_existing_playlist(
 
     // 处理第一页的谱面
     let mut total_actual_count = first_page.maps.len();
-    save_playlist_maps_with_progress(&app, playlist_id, &first_page, &task_id, 1, 1)?;
+    save_playlist_maps_with_progress(app, task_state, &task_id, playlist_id, &first_page, 1, 1)?;
 
     // 根据实际返回数量判断是否需要继续拉取
     let mut current_page = 0;
@@ -208,7 +238,7 @@ async fn update_existing_playlist(
         }
 
         total_actual_count += current_page_count;
-        save_playlist_maps_with_progress(&app, playlist_id, &page_response, &task_id, current_page as u64 + 1, current_page as u64 + 1)?;
+        save_playlist_maps_with_progress(app, task_state, &task_id, playlist_id, &page_response, current_page as u64 + 1, current_page as u64 + 1)?;
     }
 
     println!("[Playlist] Total fetched: {} maps, is_search: {}", total_actual_count, is_search_type);
@@ -225,10 +255,12 @@ async fn update_existing_playlist(
 
     // 发送完成进度
     let final_total = if is_search_type { total_actual_count as i32 } else { playlist.total_maps.unwrap_or(0) };
-    let payload = ProgressPayload::new("add_playlist".to_string(), task_id.clone())
+    let msg = format!("更新完成！共处理 {} 首歌曲", final_total);
+    let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.clone())
         .with_progress("completed".to_string(), 100.0)
-        .with_message(format!("更新完成！共处理 {} 首歌曲", final_total));
-    emit_progress_event(&app, &payload).map_err(|e| e.to_string())?;
+        .with_message(msg.clone());
+    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    task_state.update(&task_id, 100.0, &msg);
 
     // 返回最终歌单信息
     let final_playlist = {
@@ -246,14 +278,15 @@ async fn update_existing_playlist(
 /// 带进度的保存歌单谱面
 fn save_playlist_maps_with_progress(
     app: &AppHandle,
+    task_state: &TaskState,
+    task_id: &str,
     playlist_id: i32,
     page: &crate::api::PlaylistPage,
-    task_id: &str,
     current_page: u64,
     total_pages: u64
 ) -> Result<(), String> {
-    // 发送当前页进度
-    let payload = ProgressPayload::new("add_playlist".to_string(), task_id.to_string())
+    // 发送当前页进度（从8%开始）
+    let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.to_string())
         .with_count("processing_page".to_string(), current_page, total_pages)
         .with_message(format!("正在处理第 {} 页谱面...", current_page));
     emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
@@ -283,15 +316,21 @@ fn save_playlist_maps_with_progress(
         ).map_err(|e| e.to_string())?;
 
         // 每处理完几个谱面更新一次进度（避免频繁更新）
+        // 进度区间：8%-100%（谱面处理占92%）
         if idx % 10 == 0 || idx == page.maps.len() - 1 {
             let maps_in_current_page = page.maps.len();
-            let current_progress = (current_page as f64 - 1.0) / total_pages as f64 * 100.0 +
-                                   (idx as f64 + 1.0) / maps_in_current_page as f64 * (100.0 / total_pages as f64);
+            let base_progress = 8.0;
+            let progress_range = 92.0;
+            let current_progress = base_progress +
+                (current_page as f64 - 1.0) / total_pages as f64 * progress_range +
+                (idx as f64 + 1.0) / maps_in_current_page as f64 * (progress_range / total_pages as f64);
+            let progress = current_progress.min(100.0);
 
-            let payload = ProgressPayload::new("add_playlist".to_string(), task_id.to_string())
-                .with_progress("processing_maps".to_string(), current_progress.min(100.0))
+            let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.to_string())
+                .with_progress("processing_maps".to_string(), progress)
                 .with_message(format!("第 {} 页：正在处理第 {} 个谱面 (共 {} 个)...", current_page, idx + 1, maps_in_current_page));
             emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+            task_state.update(task_id, progress, &format!("第 {} 页：第 {} 个谱面", current_page, idx + 1));
         }
     }
     Ok(())
@@ -317,7 +356,11 @@ pub fn get_playlist(app: AppHandle, playlist_id: i64) -> Result<Option<Playlist>
 
 /// 删除歌单
 #[tauri::command]
-pub fn delete_playlist(app: AppHandle, playlist_id: i64) -> Result<(), String> {
+pub fn delete_playlist(app: AppHandle, task_state: State<'_, TaskState>, playlist_id: i64) -> Result<(), String> {
+    // 检查是否有正在进行的添加任务
+    if task_state.has_active_for_target(&playlist_id.to_string()) {
+        return Err("无法删除正在处理中的歌单".to_string());
+    }
     let state = app.try_state::<Mutex<rusqlite::Connection>>()
         .ok_or("Database not initialized")?;
     let guard = state.lock().map_err(|e| e.to_string())?;

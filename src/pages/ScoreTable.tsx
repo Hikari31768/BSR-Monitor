@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import {
   PlayerInfo,
@@ -44,6 +44,9 @@ export default function ScoreTable() {
   const [, setLoadingPlaylists] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
 
+  // 用于追踪玩家数量变化
+  const prevPlayerCountRef = useRef(0);
+
   // 初始化加载
   useEffect(() => {
     loadPlayers();
@@ -57,6 +60,8 @@ export default function ScoreTable() {
       // 默认选择第一个玩家
       if (list.length > 0 && selectedPlayers.length === 0) {
         setSelectedPlayers([{ ...list[0], order: 0 }]);
+        // 同步更新 ref，避免初始加载触发刷新
+        prevPlayerCountRef.current = 1;
       }
     } catch (e) {
       console.error('加载玩家失败:', e);
@@ -151,6 +156,60 @@ export default function ScoreTable() {
     }
   }, [currentPage, viewMode, selectedPlaylistId, searchPlaylist]);
 
+  // 玩家数量变化时自动刷新成绩（已有数据时）
+  useEffect(() => {
+    const currentCount = selectedPlayers.length;
+    if (currentCount !== prevPlayerCountRef.current) {
+      // 玩家数量变化了（增加或减少）
+      prevPlayerCountRef.current = currentCount;
+      // 如果已有查询数据，自动刷新
+      if (viewMode === 'single' && currentMapData && !loadingData && mapInput.trim()) {
+        // 内联查询逻辑，使用最新的 selectedPlayers
+        const doSearch = async () => {
+          setLoadingData(true);
+          try {
+            let key = mapInput.trim();
+            if (key.length === 40) {
+              const map = await invoke<Map>('get_map_by_hash', { hash: key });
+              key = map.key;
+            }
+            const playerIds = selectedPlayers.map(p => p.id);
+            const result = await invoke<MapScoresResponse>('get_map_scores', {
+              key,
+              playerIds,
+            });
+            setCurrentMapData(result);
+          } catch (e) {
+            console.error('刷新成绩失败:', e);
+          } finally {
+            setLoadingData(false);
+          }
+        };
+        doSearch();
+      } else if (viewMode === 'playlist' && playlistData && !loadingData && selectedPlaylistId) {
+        // 内联歌单查询逻辑，使用最新的 selectedPlayers
+        const doSearch = async () => {
+          setLoadingData(true);
+          try {
+            const playerIds = selectedPlayers.map(p => p.id);
+            const result = await invoke<PlaylistScoresResponse>('get_playlist_scores', {
+              playlistId: selectedPlaylistId,
+              page: currentPage,
+              playerIds,
+              reverse: mapSort === 'desc',
+            });
+            setPlaylistData(result);
+          } catch (e) {
+            console.error('刷新成绩失败:', e);
+          } finally {
+            setLoadingData(false);
+          }
+        };
+        doSearch();
+      }
+    }
+  }, [selectedPlayers, viewMode, currentMapData, playlistData, loadingData, mapInput, selectedPlaylistId, currentPage, mapSort]);
+
   // 添加玩家
   function handleAddPlayer(player: PlayerInfo) {
     const maxOrder = selectedPlayers.length > 0
@@ -161,7 +220,10 @@ export default function ScoreTable() {
 
   // 移除玩家
   function handleRemovePlayer(playerId: string) {
-    setSelectedPlayers(selectedPlayers.filter(p => p.id !== playerId));
+    const newPlayers = selectedPlayers.filter(p => p.id !== playerId);
+    setSelectedPlayers(newPlayers);
+    // 同步更新 ref，避免后续添加玩家时判断失效
+    prevPlayerCountRef.current = newPlayers.length;
   }
 
   // 拖拽排序
