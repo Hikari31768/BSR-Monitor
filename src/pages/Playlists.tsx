@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { Playlist, PlaylistMap } from '../types';
+import { Playlist, PlaylistMap, PlaylistUIState } from '../types';
 import PlaylistCard from '../components/PlaylistCard';
 import MapCard from '../components/MapCard';
 import Modal from '../components/Modal';
@@ -9,7 +9,9 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 
 export default function Playlists() {
-  const [playlists, setPlaylists] = useState<(Playlist & { loading?: boolean; progress?: number; status_message?: string })[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [playlistUIStates, setPlaylistUIStates] = useState<Record<number, PlaylistUIState>>({});
+  const [playlistTaskIds, setPlaylistTaskIds] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<number | null>(null);
@@ -37,19 +39,15 @@ export default function Playlists() {
       const playlistTasks = tasks.filter(([, s]) => s.task_type === 'add_playlist');
       if (playlistTasks.length === 0) return;
 
-      setPlaylists(prev => {
-        const updated = [...prev];
+      setPlaylistUIStates(prev => {
+        const updated = { ...prev };
         for (const [, status] of playlistTasks) {
           const targetId = parseInt(status.target_id);
-          const idx = updated.findIndex(p => p.playlist_id === targetId);
-          if (idx !== -1) {
-            updated[idx] = {
-              ...updated[idx],
-              loading: true,
-              progress: status.progress,
-              status_message: status.message || '处理中...'
-            };
-          }
+          updated[targetId] = {
+            loading: true,
+            progress: status.progress,
+            statusMessage: status.message || '处理中...'
+          };
         }
         return updated;
       });
@@ -61,6 +59,12 @@ export default function Playlists() {
   useEffect(() => {
     loadPlaylists().then(() => restoreActiveTasks());
   }, [restoreActiveTasks]);
+
+  // 使用 ref 存储 taskId 映射，避免频繁重新订阅事件
+  const playlistTaskIdsRef = useRef<Record<number, string>>({});
+  useEffect(() => {
+    playlistTaskIdsRef.current = playlistTaskIds;
+  }, [playlistTaskIds]);
 
   // 进度事件监听器 — 在 useEffect 中管理，确保卸载时清理
   useEffect(() => {
@@ -77,15 +81,22 @@ export default function Playlists() {
 
       // 只处理 add_playlist 类型的进度
       if (progressData.task_type === 'add_playlist') {
-        setPlaylists(prev => prev.map(p => {
-          if ((p as any).currentTaskId && (p as any).currentTaskId === progressData.task_id) {
-            return {
-              ...p,
-              progress: progressData.progress,
-              status_message: progressData.message || `阶段: ${progressData.stage}`
-            };
+        // 查找对应此 task_id 的 playlistId
+        const playlistId = Object.keys(playlistTaskIdsRef.current).find(
+          key => playlistTaskIdsRef.current[parseInt(key)] === progressData.task_id
+        );
+        if (!playlistId) return;
+
+        const playlistIdNum = parseInt(playlistId);
+
+        // 更新 UI 状态
+        setPlaylistUIStates(prev => ({
+          ...prev,
+          [playlistIdNum]: {
+            loading: true,
+            progress: progressData.progress,
+            statusMessage: progressData.message || `阶段: ${progressData.stage}`
           }
-          return p;
         }));
       }
     }).then(unlisten => {
@@ -106,9 +117,8 @@ export default function Playlists() {
     const playlistId = parseInt(addId);
     const existingIdx = playlists.findIndex(p => p.playlist_id === playlistId);
     const isExisting = existingIdx !== -1;
-    const isProcessing = isExisting
-      ? playlists[existingIdx].loading
-      : false;
+    const uiState = playlistUIStates[playlistId];
+    const isProcessing = isExisting && uiState?.loading;
 
     if (isProcessing) {
       alert('该歌单正在处理中，请稍候...');
@@ -119,9 +129,22 @@ export default function Playlists() {
     const taskId = crypto.randomUUID();
 
     try {
+      // 更新 taskId 映射
+      setPlaylistTaskIds(prev => ({ ...prev, [playlistId]: taskId }));
+
+      // 设置 UI 状态
+      setPlaylistUIStates(prev => ({
+        ...prev,
+        [playlistId]: {
+          loading: true,
+          progress: 0,
+          statusMessage: isExisting ? '正在更新...' : '准备添加...'
+        }
+      }));
+
       // 如果已存在，更新现有条目状态；否则添加临时条目
-      const tempPlaylist: Playlist & { loading?: boolean; progress?: number; status_message?: string; currentTaskId?: string } = {
-        ...(isExisting ? playlists[existingIdx] : {
+      if (!isExisting) {
+        const tempPlaylist: Playlist = {
           playlist_id: playlistId,
           name: '加载中...',
           description: undefined,
@@ -132,18 +155,12 @@ export default function Playlists() {
           created_at: undefined,
           songs_changed_at: undefined,
           download_url: undefined,
-        }),
-        loading: true,
-        progress: 0,
-        status_message: isExisting ? '正在更新...' : '准备添加...',
-        currentTaskId: taskId  // 设置 task_id 以便进度监听器匹配
-      };
-
-      if (isExisting) {
-        setPlaylists(prev => prev.map((p, i) => i === existingIdx ? { ...p, ...tempPlaylist } : p));
-      } else {
+        };
         setPlaylists(prev => [...prev, tempPlaylist]);
+      } else {
+        setPlaylists(prev => prev.map((p, i) => i === existingIdx ? { ...p, name: '加载中...' } : p));
       }
+
       setShowAddModal(false);
       setAddId('');
 
@@ -157,11 +174,23 @@ export default function Playlists() {
       await loadPlaylists();
       await restoreActiveTasks();
     } catch (e) {
-      // 操作失败，恢复原有状态或移除临时条目
-      if (isExisting) {
-        setPlaylists(prev => prev.map((p, i) => i === existingIdx ? { ...p, loading: false, progress: undefined, status_message: undefined, currentTaskId: undefined } : p));
-      } else {
+      // 操作失败，恢复 UI 状态
+      setPlaylistUIStates(prev => {
+        const updated = { ...prev };
+        delete updated[playlistId];
+        return updated;
+      });
+      setPlaylistTaskIds(prev => {
+        const updated = { ...prev };
+        delete updated[playlistId];
+        return updated;
+      });
+
+      if (!isExisting) {
         setPlaylists(prev => prev.filter(p => p.playlist_id !== playlistId));
+      } else {
+        // 恢复原来的名称
+        setPlaylists(prev => prev.map((p, i) => i === existingIdx ? { ...p, name: playlists[existingIdx].name } : p));
       }
       alert(`${isExisting ? '更新' : '添加'}失败: ${e}`);
     }
@@ -212,6 +241,7 @@ export default function Playlists() {
             <PlaylistCard
               key={playlist.playlist_id}
               playlist={playlist}
+              uiState={playlistUIStates[playlist.playlist_id]}
               onDelete={() => setShowDeleteModal(playlist.playlist_id)}
               onViewMaps={() => handleViewMaps(playlist.playlist_id)}
             />

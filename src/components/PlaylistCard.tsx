@@ -1,15 +1,18 @@
-import { Playlist } from '../types';
+import { Playlist, PlaylistUIState } from '../types';
 
 interface PlaylistCardProps {
   playlist: Playlist;
+  uiState?: PlaylistUIState;
   onDelete: () => void;
   onViewMaps: () => void;
 }
 
-export default function PlaylistCard({ playlist, onDelete, onViewMaps }: PlaylistCardProps) {
+export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps }: PlaylistCardProps) {
+  const isLoading = uiState?.loading ?? false;
+
   return (
     <div className={`bg-[#15151c] rounded-xl p-5 border transition-all duration-300 ${
-      playlist.loading
+      isLoading
         ? 'border-[#f59e0b]/50 shadow-xl shadow-[#f59e0b]/20'
         : 'border-[#2a2a3a] shadow-lg hover:border-[#4ecdc4]/50 hover:shadow-xl hover:shadow-[#4ecdc4]/5 group'
     }`}>
@@ -20,14 +23,14 @@ export default function PlaylistCard({ playlist, onDelete, onViewMaps }: Playlis
             src={playlist.playlist_image}
             alt={playlist.name}
             className={`w-14 h-14 rounded-xl object-cover ${
-              playlist.loading
+              isLoading
                 ? 'ring-2 ring-[#f59e0b]/50'
                 : 'ring-2 ring-[#2a2a3a] group-hover:ring-[#4ecdc4]/50'
             } transition-all`}
           />
         ) : (
           <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl ${
-            playlist.loading
+            isLoading
               ? 'bg-[#f59e0b]/10 ring-2 ring-[#f59e0b]/50'
               : 'bg-[#1e1e28] ring-2 ring-[#2a2a3a] group-hover:ring-[#4ecdc4]/50'
           } transition-all`}>
@@ -38,32 +41,32 @@ export default function PlaylistCard({ playlist, onDelete, onViewMaps }: Playlis
         {/* 信息 */}
         <div className="flex-1 min-w-0">
           <h3 className={`font-semibold text-lg truncate ${
-            playlist.loading ? 'text-[#fbbf24]' : 'text-[#f0f0f5]'
+            isLoading ? 'text-[#fbbf24]' : 'text-[#f0f0f5]'
           }`}>{playlist.name}</h3>
-          {playlist.owner_name && !playlist.loading && (
+          {playlist.owner_name && !isLoading && (
             <p className="text-[#a0a0b0] text-sm truncate">by {playlist.owner_name}</p>
           )}
           <div className="flex items-center gap-2 mt-2">
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-              playlist.loading
+              isLoading
                 ? 'bg-[#f59e0b]/15 text-[#fbbf24] border border-[#f59e0b]/30'
                 : 'bg-[#3b82f6]/15 text-[#60a5fa] border border-[#3b82f6]/30'
             }`}>
-              {playlist.loading ? '处理中...' : `${playlist.total_maps || 0} 谱面`}
+              {isLoading ? '处理中...' : `${playlist.total_maps || 0} 谱面`}
             </span>
           </div>
 
           {/* 进度条和状态消息 */}
-          {playlist.loading && (
+          {isLoading && (
             <div className="mt-3">
               <div className="w-full bg-[#2a2a3a] rounded-full h-2">
                 <div
                   className="bg-[#f59e0b] h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${playlist.progress || 0}%` }}
+                  style={{ width: `${uiState?.progress || 0}%` }}
                 ></div>
               </div>
               <p className="text-[#fbbf24] text-xs mt-1 truncate">
-                {playlist.status_message || '正在添加歌单...'}
+                {uiState?.statusMessage || '正在添加歌单...'}
               </p>
             </div>
           )}
@@ -71,7 +74,7 @@ export default function PlaylistCard({ playlist, onDelete, onViewMaps }: Playlis
 
         {/* 操作按钮 */}
         <div className="flex flex-col gap-2">
-          {!playlist.loading ? (
+          {!isLoading ? (
             <>
               <button
                 onClick={onViewMaps}

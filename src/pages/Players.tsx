@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { PlayerInfo, PlayerWithScoreCount } from '../types';
+import { PlayerInfo, PlayerWithScoreCount, PlayerUIState } from '../types';
 import PlayerCard from '../components/PlayerCard';
 import Modal from '../components/Modal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 
 export default function Players() {
-  const [players, setPlayers] = useState<(PlayerWithScoreCount & { loading?: boolean; progress?: number; status_message?: string })[]>([]);
+  const [players, setPlayers] = useState<PlayerWithScoreCount[]>([]);
+  const [playerUIStates, setPlayerUIStates] = useState<Record<string, PlayerUIState>>({});
+  const [playerTaskIds, setPlayerTaskIds] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
@@ -41,18 +43,14 @@ export default function Players() {
       const playerTasks = tasks.filter(([, s]) => s.task_type === 'add_player');
       if (playerTasks.length === 0) return;
 
-      setPlayers(prev => {
-        const updated = [...prev];
+      setPlayerUIStates(prev => {
+        const updated = { ...prev };
         for (const [, status] of playerTasks) {
-          const idx = updated.findIndex(p => p.id === status.target_id);
-          if (idx !== -1) {
-            updated[idx] = {
-              ...updated[idx],
-              loading: true,
-              progress: status.progress,
-              status_message: status.message || '处理中...'
-            };
-          }
+          updated[status.target_id] = {
+            loading: true,
+            progress: status.progress,
+            statusMessage: status.message || '处理中...'
+          };
         }
         return updated;
       });
@@ -64,6 +62,12 @@ export default function Players() {
   useEffect(() => {
     loadPlayers().then(() => restoreActiveTasks());
   }, [restoreActiveTasks]);
+
+  // 使用 ref 存储 taskId 映射，避免频繁重新订阅事件
+  const playerTaskIdsRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    playerTaskIdsRef.current = playerTaskIds;
+  }, [playerTaskIds]);
 
   // 进度事件监听器 — 在 useEffect 中管理，确保卸载时清理
   useEffect(() => {
@@ -82,18 +86,32 @@ export default function Players() {
 
       // 只处理 add_player 类型的进度
       if (progressData.task_type === 'add_player') {
+        // 查找对应此 task_id 的 playerId
+        const playerId = Object.keys(playerTaskIdsRef.current).find(
+          id => playerTaskIdsRef.current[id] === progressData.task_id
+        );
+        if (!playerId) return;
+
+        // 更新玩家基本信息（名称、头像）
         setPlayers(prev => prev.map(p => {
-          // 通过后端返回的 task_id 和前端存储的 currentTaskId 匹配
-          if ((p as any).currentTaskId && (p as any).currentTaskId === progressData.task_id) {
+          if (p.id === playerId) {
             return {
               ...p,
               name: progressData.player_name || p.name,
               avatar_url: progressData.player_avatar_url || p.avatar_url,
-              progress: progressData.progress,
-              status_message: progressData.message || `阶段: ${progressData.stage}`
             };
           }
           return p;
+        }));
+
+        // 更新 UI 状态
+        setPlayerUIStates(prev => ({
+          ...prev,
+          [playerId]: {
+            loading: true,
+            progress: progressData.progress,
+            statusMessage: progressData.message || `阶段: ${progressData.stage}`
+          }
         }));
       }
     }).then(unlisten => {
@@ -113,9 +131,8 @@ export default function Players() {
     // 检查是否已存在
     const existingIdx = players.findIndex(p => p.id === addForm.id);
     const isExisting = existingIdx !== -1;
-    const isProcessing = isExisting
-      ? players[existingIdx].loading
-      : false;
+    const uiState = playerUIStates[addForm.id];
+    const isProcessing = isExisting && uiState?.loading;
 
     if (isProcessing) {
       alert('该玩家正在处理中，请稍候...');
@@ -126,27 +143,35 @@ export default function Players() {
     const taskId = crypto.randomUUID();
 
     try {
+      // 更新 taskId 映射
+      setPlayerTaskIds(prev => ({ ...prev, [addForm.id]: taskId }));
+
+      // 设置 UI 状态
+      setPlayerUIStates(prev => ({
+        ...prev,
+        [addForm.id]: {
+          loading: true,
+          progress: 0,
+          statusMessage: isExisting ? '正在更新...' : '准备添加...'
+        }
+      }));
+
       // 如果已存在，更新现有条目状态；否则添加临时条目
-      const tempPlayer: PlayerWithScoreCount & { loading?: boolean; progress?: number; status_message?: string; currentTaskId?: string } = {
-        ...(isExisting ? players[existingIdx] : {
+      if (!isExisting) {
+        const tempPlayer: PlayerWithScoreCount = {
           id: addForm.id,
           name: '加载中...',
           avatar_url: undefined,
           live_url: addForm.liveUrl || undefined,
           alias: addForm.alias || undefined,
           score_count: 0,
-        }),
-        loading: true,
-        progress: 0,
-        status_message: isExisting ? '正在更新...' : '准备添加...',
-        currentTaskId: taskId  // 设置 task_id 以便进度监听器匹配
-      };
-
-      if (isExisting) {
-        setPlayers(prev => prev.map((p, i) => i === existingIdx ? { ...p, ...tempPlayer } : p));
-      } else {
+        };
         setPlayers(prev => [...prev, tempPlayer]);
+      } else {
+        // 更新现有玩家名称显示
+        setPlayers(prev => prev.map((p, i) => i === existingIdx ? { ...p, name: '加载中...' } : p));
       }
+
       setShowAddModal(false);
       setAddForm({ id: '', liveUrl: '', alias: '' });
 
@@ -162,10 +187,19 @@ export default function Players() {
       await loadPlayers();
       await restoreActiveTasks();
     } catch (e) {
-      // 操作失败，恢复原有状态或移除临时条目
-      if (isExisting) {
-        setPlayers(prev => prev.map((p, i) => i === existingIdx ? { ...p, loading: false, progress: undefined, status_message: undefined, currentTaskId: undefined } : p));
-      } else {
+      // 操作失败，恢复 UI 状态
+      setPlayerUIStates(prev => {
+        const updated = { ...prev };
+        delete updated[addForm.id];
+        return updated;
+      });
+      setPlayerTaskIds(prev => {
+        const updated = { ...prev };
+        delete updated[addForm.id];
+        return updated;
+      });
+
+      if (!isExisting) {
         setPlayers(prev => prev.filter(p => p.id !== addForm.id));
       }
       alert(`${isExisting ? '更新' : '添加'}失败: ${e}`);
@@ -220,6 +254,7 @@ export default function Players() {
             <PlayerCard
               key={player.id}
               player={player}
+              uiState={playerUIStates[player.id]}
               scoreCount={player.score_count}
               onUpdateScores={() => handleUpdateScores(player.id)}
               onDelete={() => setShowDeleteModal(player.id)}

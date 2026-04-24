@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Map, ScoreRow, NoScoreDiffGroup, PlayerInfo } from '../types';
+import { Map, ScoreRowData, NoScoreDiffGroup, PlayerInfo } from '../types';
 import DiffBadge from './DiffBadge';
 import ModeIcon from './ModeIcon';
 import CoverWithAudio from './CoverWithAudio';
@@ -37,7 +37,7 @@ function CopyKeyButton({ mapKey }: { mapKey: string }) {
 
 interface MapScoreGroupProps {
   map: Map;
-  scores: ScoreRow[];
+  scores: ScoreRowData[];
   noScoreDiffs: NoScoreDiffGroup[];
   players: PlayerInfo[];
   showMapDivider?: boolean;
@@ -99,7 +99,7 @@ export default function MapScoreGroup({
   const gridColumns = `18rem 6rem ${players.map(() => '7rem').join(' ')} 7rem`;
 
   // 查找每个玩家的成绩
-  function getPlayerScore(scoreRow: ScoreRow, playerId: string) {
+  function getPlayerScore(scoreRow: ScoreRowData, playerId: string) {
     return scoreRow.scores.find(s => s.player_id === playerId);
   }
 

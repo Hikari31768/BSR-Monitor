@@ -4,9 +4,18 @@ export interface PlayerInfo {
   avatar_url?: string;
   live_url?: string;
   alias?: string;
-  loading?: boolean;
-  progress?: number;
-  status_message?: string;
+}
+
+export interface PlayerUIState {
+  loading: boolean;
+  progress: number;
+  statusMessage: string;
+}
+
+export interface PlaylistUIState {
+  loading: boolean;
+  progress: number;
+  statusMessage: string;
 }
 
 export interface PlayerScore {
@@ -50,9 +59,6 @@ export interface Playlist {
   created_at?: string;
   songs_changed_at?: string;
   download_url?: string;
-  loading?: boolean;
-  progress?: number;
-  status_message?: string;
 }
 
 export interface PlaylistMap {
@@ -60,33 +66,6 @@ export interface PlaylistMap {
   map_key: string;
   map_order: number;
   map?: Map;
-}
-
-export interface LeaderboardResponse {
-  leaderboard: {
-    id: string;
-    song: {
-      name: string;
-      author: string;
-      coverImage: string;
-    };
-    difficulty: {
-      name: string;
-      value: number;
-    };
-    mode: number;
-    modeName: string;
-  };
-  scores: Array<{
-    id: number;
-    accuracy: number;
-    epochTime: number;
-    player: {
-      id: string;
-      name: string;
-      avatar: string;
-    };
-  }>;
 }
 
 export interface PlayerWithScoreCount extends PlayerInfo {
@@ -100,7 +79,7 @@ export interface NoScoreDiffGroup {
   difficulties: string[];
 }
 
-export interface ScoreRow {
+export interface ScoreRowData {
   mode: string;
   difficulty: string;
   is_current_version: boolean;
@@ -115,7 +94,7 @@ export interface PlayerScoreCell {
 export interface MapScoresResponse {
   map: Map;
   current_diffs: CurrentDiffInfo[];
-  scores: ScoreRow[];
+  scores: ScoreRowData[];
   no_score_diffs: NoScoreDiffGroup[];
 }
 
@@ -132,23 +111,7 @@ export interface PlaylistScoresResponse {
   maps: MapScoresResponse[];
 }
 
-// ============ 样式常量 ============
+// ============ 样式常量（从 constants 重新导出） ============
 
-export const difficultyColors: Record<string, string> = {
-  'Easy': 'text-green-400 bg-green-500/20',
-  'Normal': 'text-blue-400 bg-blue-500/20',
-  'Hard': 'text-yellow-400 bg-yellow-500/20',
-  'Expert': 'text-red-400 bg-red-500/20',
-  'ExpertPlus': 'text-purple-400 bg-purple-500/20',
-};
-
-export const modeNames: Record<string, string> = {
-  'Standard': '标准',
-  'OneSaber': '单剑',
-  'NoArrows': '无箭头',
-  '90Degree': '90度',
-  '360Degree': '360度',
-  'Lightshow': '光秀',
-  'Lawless': '无限制',
-  'Legacy': '旧版',
-};
+import { difficultyColors, modeNames } from '../constants';
+export { difficultyColors, modeNames };

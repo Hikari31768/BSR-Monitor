@@ -1,11 +1,10 @@
-import { Map, ScoreRow, NoScoreDiffGroup } from '../types';
+import { Map, ScoreRowData, NoScoreDiffGroup, PlayerInfo } from '../types';
 import DiffBadge from './DiffBadge';
 import ModeIcon from './ModeIcon';
-import { PlayerInfo } from '../types';
 
 interface ScoreTableRowProps {
   map: Map;
-  scoreRow: ScoreRow;
+  scoreRow: ScoreRowData;
   players: PlayerInfo[];
   rowIndex: number;
   totalRows: number;

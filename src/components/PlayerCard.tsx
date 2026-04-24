@@ -1,19 +1,21 @@
-import { PlayerInfo } from '../types';
+import { PlayerInfo, PlayerUIState } from '../types';
 
 interface PlayerCardProps {
   player: PlayerInfo;
+  uiState?: PlayerUIState;
   scoreCount: number;
   onUpdateScores: () => void;
   onDelete: () => void;
   updating?: boolean;
 }
 
-export default function PlayerCard({ player, scoreCount, onUpdateScores, onDelete, updating }: PlayerCardProps) {
+export default function PlayerCard({ player, uiState, scoreCount, onUpdateScores, onDelete, updating }: PlayerCardProps) {
   const displayName = player.alias || player.name;
+  const isLoading = uiState?.loading ?? false;
 
   return (
     <div className={`bg-[#15151c] rounded-xl p-5 border transition-all duration-300 ${
-      player.loading
+      isLoading
         ? 'border-[#f59e0b]/50 shadow-xl shadow-[#f59e0b]/20'
         : 'border-[#2a2a3a] shadow-lg hover:border-[#ff6b6b]/50 hover:shadow-xl hover:shadow-[#ff6b6b]/5 group'
     }`}>
@@ -24,14 +26,14 @@ export default function PlayerCard({ player, scoreCount, onUpdateScores, onDelet
             src={player.avatar_url}
             alt={displayName}
             className={`w-14 h-14 rounded-xl object-cover ${
-              player.loading
+              isLoading
                 ? 'ring-2 ring-[#f59e0b]/50'
                 : 'ring-2 ring-[#2a2a3a] group-hover:ring-[#ff6b6b]/50'
             } transition-all`}
           />
         ) : (
           <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl ${
-            player.loading
+            isLoading
               ? 'bg-[#f59e0b]/10 ring-2 ring-[#f59e0b]/50'
               : 'bg-[#1e1e28] ring-2 ring-[#2a2a3a] group-hover:ring-[#ff6b6b]/50'
           } transition-all`}>
@@ -42,32 +44,32 @@ export default function PlayerCard({ player, scoreCount, onUpdateScores, onDelet
         {/* 信息 */}
         <div className="flex-1 min-w-0">
           <h3 className={`font-semibold text-lg truncate ${
-            player.loading ? 'text-[#fbbf24]' : 'text-[#f0f0f5]'
+            isLoading ? 'text-[#fbbf24]' : 'text-[#f0f0f5]'
           }`}>{displayName}</h3>
-          {player.alias && !player.loading && (
+          {player.alias && !isLoading && (
             <p className="text-[#a0a0b0] text-sm truncate">{player.name}</p>
           )}
           <div className="flex items-center gap-2 mt-2">
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-              player.loading
+              isLoading
                 ? 'bg-[#f59e0b]/15 text-[#fbbf24] border border-[#f59e0b]/30'
                 : 'bg-[#22c55e]/15 text-[#4ade80] border border-[#22c55e]/30'
             }`}>
-              {player.loading ? '处理中...' : `${scoreCount} 成绩`}
+              {isLoading ? '处理中...' : `${scoreCount} 成绩`}
             </span>
           </div>
 
           {/* 进度条和状态消息 */}
-          {player.loading && (
+          {isLoading && (
             <div className="mt-3">
               <div className="w-full bg-[#2a2a3a] rounded-full h-2">
                 <div
                   className="bg-[#f59e0b] h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${player.progress || 0}%` }}
+                  style={{ width: `${uiState?.progress || 0}%` }}
                 ></div>
               </div>
               <p className="text-[#fbbf24] text-xs mt-1 truncate">
-                {player.status_message || '正在添加玩家...'}
+                {uiState?.statusMessage || '正在添加玩家...'}
               </p>
             </div>
           )}
@@ -75,7 +77,7 @@ export default function PlayerCard({ player, scoreCount, onUpdateScores, onDelet
 
         {/* 操作按钮 */}
         <div className="flex flex-col gap-2">
-          {!player.loading ? (
+          {!isLoading ? (
             <>
               <button
                 onClick={onUpdateScores}
