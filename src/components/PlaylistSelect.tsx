@@ -29,7 +29,7 @@ export default function PlaylistSelect({ playlists, selectedId, onSelect }: Play
       {/* 触发按钮 */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-3 pr-10 bg-[#1e1e28] border border-[#2a2a3a] rounded-lg text-[#f0f0f5] text-left hover:border-[#3a3a4f] transition-all"
+        className="w-full px-4 py-3 pr-10 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary text-left hover:border-bs-border-hover transition-all"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`,
           backgroundRepeat: 'no-repeat',
@@ -44,14 +44,14 @@ export default function PlaylistSelect({ playlists, selectedId, onSelect }: Play
 
       {/* 下拉菜单 */}
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-[#1e1e28] border border-[#2a2a3a] rounded-lg shadow-lg overflow-hidden z-50">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-bs-bg-tertiary border border-bs-border rounded-lg shadow-lg overflow-hidden z-50">
           <div
             onClick={() => {
               onSelect(null);
               setIsOpen(false);
             }}
-            className={`px-4 py-3 cursor-pointer hover:bg-[#2a2a3a] transition-colors ${
-              selectedId === null ? 'bg-[#ff6b6b]/20 text-[#ff6b6b]' : 'text-[#f0f0f5]'
+            className={`px-4 py-3 cursor-pointer hover:bg-bs-border transition-colors ${
+              selectedId === null ? 'bg-bs-accent-primary/20 text-bs-accent-primary' : 'text-bs-text-primary'
             }`}
           >
             请选择歌单
@@ -63,8 +63,8 @@ export default function PlaylistSelect({ playlists, selectedId, onSelect }: Play
                 onSelect(playlist.playlist_id);
                 setIsOpen(false);
               }}
-              className={`px-4 py-3 cursor-pointer hover:bg-[#2a2a3a] transition-colors ${
-                selectedId === playlist.playlist_id ? 'bg-[#ff6b6b]/20 text-[#ff6b6b]' : 'text-[#f0f0f5]'
+              className={`px-4 py-3 cursor-pointer hover:bg-bs-border transition-colors ${
+                selectedId === playlist.playlist_id ? 'bg-bs-accent-primary/20 text-bs-accent-primary' : 'text-bs-text-primary'
               }`}
             >
               {playlist.name} ({playlist.total_maps || 0} 首)

@@ -6,6 +6,7 @@ import PlayerCard from '../components/PlayerCard';
 import Modal from '../components/Modal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
+import { Plus } from 'lucide-react';
 
 export default function Players() {
   const [players, setPlayers] = useState<PlayerWithScoreCount[]>([]);
@@ -226,23 +227,25 @@ export default function Players() {
 
   if (loading) return <LoadingSpinner />;
 
+
   return (
     <div className="animate-fade-in">
       {/* 页面标题 */}
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold text-[#f0f0f5] tracking-tight">👤 玩家管理</h1>
+        <h1 className="text-2xl font-bold text-bs-text-primary tracking-tight">玩家管理</h1>
         <button
           onClick={() => setShowAddModal(true)}
-          className="px-4 py-2.5 rounded-lg font-medium text-sm bg-[#ff6b6b] text-white hover:bg-[#ff5252] transition-all shadow-lg hover:shadow-[#ff6b6b]/30 disabled:opacity-50"
+          className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-accent-primary text-white hover:bg-red-500 transition-all shadow-lg hover:shadow-bs-accent-primary/30 disabled:opacity-50 flex items-center gap-2"
           disabled={loading}
         >
-          ➕ 添加玩家
+          <Plus size={18} />
+          添加玩家
         </button>
       </div>
 
       {/* 玩家列表 */}
       {players.length === 0 ? (
-        <EmptyState message="暂无玩家，点击上方按钮添加" icon="👤" />
+        <EmptyState message="暂无玩家，点击上方按钮添加" />
       ) : (
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))' }}>
           {players.map(player => (
@@ -267,45 +270,45 @@ export default function Players() {
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-[#a0a0b0] mb-2">玩家 ID</label>
+            <label className="block text-sm text-bs-text-secondary mb-2">玩家 ID</label>
             <input
               type="text"
               value={addForm.id}
               onChange={(e) => setAddForm({ ...addForm, id: e.target.value })}
               placeholder="如: 76561198035353849"
-              className="w-full px-4 py-3 bg-[#1e1e28] border border-[#2a2a3a] rounded-lg text-[#f0f0f5] placeholder-[#6b7280] focus:border-[#ff6b6b] focus:ring-2 focus:ring-[#ff6b6b]/20 focus:outline-none transition-all"
+              className="w-full px-4 py-3 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary placeholder-bs-text-muted focus:border-bs-accent-primary focus:ring-2 focus:ring-bs-accent-primary/20 focus:outline-none transition-all"
             />
           </div>
           <div>
-            <label className="block text-sm text-[#a0a0b0] mb-2">直播间地址 (可选)</label>
+            <label className="block text-sm text-bs-text-secondary mb-2">直播间地址 (可选)</label>
             <input
               type="text"
               value={addForm.liveUrl}
               onChange={(e) => setAddForm({ ...addForm, liveUrl: e.target.value })}
               placeholder="https://..."
-              className="w-full px-4 py-3 bg-[#1e1e28] border border-[#2a2a3a] rounded-lg text-[#f0f0f5] placeholder-[#6b7280] focus:border-[#ff6b6b] focus:ring-2 focus:ring-[#ff6b6b]/20 focus:outline-none transition-all"
+              className="w-full px-4 py-3 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary placeholder-bs-text-muted focus:border-bs-accent-primary focus:ring-2 focus:ring-bs-accent-primary/20 focus:outline-none transition-all"
             />
           </div>
           <div>
-            <label className="block text-sm text-[#a0a0b0] mb-2">备注名 (可选)</label>
+            <label className="block text-sm text-bs-text-secondary mb-2">备注名 (可选)</label>
             <input
               type="text"
               value={addForm.alias}
               onChange={(e) => setAddForm({ ...addForm, alias: e.target.value })}
               placeholder="自定义名称"
-              className="w-full px-4 py-3 bg-[#1e1e28] border border-[#2a2a3a] rounded-lg text-[#f0f0f5] placeholder-[#6b7280] focus:border-[#ff6b6b] focus:ring-2 focus:ring-[#ff6b6b]/20 focus:outline-none transition-all"
+              className="w-full px-4 py-3 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary placeholder-bs-text-muted focus:border-bs-accent-primary focus:ring-2 focus:ring-bs-accent-primary/20 focus:outline-none transition-all"
             />
           </div>
           <div className="flex gap-3 justify-end pt-4">
             <button
               onClick={() => setShowAddModal(false)}
-              className="px-4 py-2.5 rounded-lg font-medium text-sm bg-[#1e1e28] text-[#a0a0b0] hover:bg-[#252533] hover:text-[#f0f0f5] transition-all"
+              className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all"
             >
               取消
             </button>
             <button
               onClick={handleAddPlayer}
-              className="px-4 py-2.5 rounded-lg font-medium text-sm bg-[#ff6b6b] text-white hover:bg-[#ff5252] transition-all"
+              className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-accent-primary text-white hover:bg-red-500 transition-all"
             >
               添加
             </button>
@@ -319,11 +322,11 @@ export default function Players() {
         onClose={() => setShowDeleteModal(null)}
         title="确认删除"
       >
-        <p className="text-[#a0a0b0] mb-6">确定要删除该玩家吗？所有成绩记录将一并删除。</p>
+        <p className="text-bs-text-secondary mb-6">确定要删除该玩家吗？所有成绩记录将一并删除。</p>
         <div className="flex gap-3 justify-end">
           <button
             onClick={() => setShowDeleteModal(null)}
-            className="px-4 py-2.5 rounded-lg font-medium text-sm bg-[#1e1e28] text-[#a0a0b0] hover:bg-[#252533] hover:text-[#f0f0f5] transition-all"
+            className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all"
           >
             取消
           </button>

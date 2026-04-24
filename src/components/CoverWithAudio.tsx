@@ -101,7 +101,8 @@ export default function CoverWithAudio({ map }: CoverWithAudioProps) {
           <circle
             cx="32" cy="32" r={RADIUS}
             fill="none"
-            stroke="#7c3aed"
+            stroke="currentColor"
+            className="text-bs-accent-purple"
             strokeWidth="3"
             strokeDasharray={CIRCUMFERENCE}
             strokeDashoffset={dashOffset}

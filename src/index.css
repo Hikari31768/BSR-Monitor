@@ -6,6 +6,7 @@
   line-height: 1.5;
   font-weight: 400;
 
+  /* 颜色变量 - 与 tailwind.config.js 保持一致 */
   --color-bg-primary: #0d0d12;
   --color-bg-secondary: #15151c;
   --color-bg-tertiary: #1e1e28;
@@ -30,7 +31,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
   overflow-x: hidden;
-  overflow-y: auto;
 }
 
 /* 滚动条样式 */
@@ -52,27 +52,10 @@ body {
   background-color: var(--color-border-hover);
 }
 
-/* 选中文本样式 */
+/* 选中文本样式 - 使用 color-mix 配合 CSS 变量 */
 ::selection {
-  background-color: rgba(255, 107, 107, 0.3);
+  background-color: color-mix(in srgb, var(--color-accent-primary) 30%, transparent);
   color: var(--color-text-primary);
 }
 
-/* 动画 */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-out;
-}
-
-.animate-slide-up {
-  animation: slideUp 0.3s ease-out;
-}
+/* 动画 - 已由 Tailwind 配置提供 */

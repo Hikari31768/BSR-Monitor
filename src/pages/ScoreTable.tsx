@@ -13,6 +13,7 @@ import PlayerSelectModal from '../components/PlayerSelectModal';
 import PlaylistSelect from '../components/PlaylistSelect';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
+import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
 
 type ViewMode = 'single' | 'playlist';
 
@@ -240,18 +241,19 @@ export default function ScoreTable() {
     return <LoadingSpinner />;
   }
 
+
   return (
     <div className="animate-fade-in h-full flex flex-col">
       {/* 标题和模式切换同一行 */}
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-[#f0f0f5] tracking-tight">🎯 打谱查询</h1>
+        <h1 className="text-2xl font-bold text-bs-text-primary tracking-tight">打谱查询</h1>
         <div className="flex gap-2">
           <button
             onClick={() => setViewMode('single')}
             className={`px-4 py-2 rounded-lg font-medium transition-all ${
               viewMode === 'single'
-                ? 'bg-[#ff6b6b] text-white'
-                : 'bg-[#1e1e28] text-[#a0a0b0] hover:bg-[#2a2a3a]'
+                ? 'bg-bs-accent-primary text-white'
+                : 'bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-border'
             }`}
           >
             单谱面
@@ -260,8 +262,8 @@ export default function ScoreTable() {
             onClick={() => setViewMode('playlist')}
             className={`px-4 py-2 rounded-lg font-medium transition-all ${
               viewMode === 'playlist'
-                ? 'bg-[#ff6b6b] text-white'
-                : 'bg-[#1e1e28] text-[#a0a0b0] hover:bg-[#2a2a3a]'
+                ? 'bg-bs-accent-primary text-white'
+                : 'bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-border'
             }`}
           >
             歌单
@@ -277,15 +279,16 @@ export default function ScoreTable() {
             value={mapInput}
             onChange={(e) => setMapInput(e.target.value)}
             placeholder="输入谱面 Key 或 Hash..."
-            className="flex-1 px-4 py-3 bg-[#1e1e28] border border-[#2a2a3a] rounded-lg text-[#f0f0f5] placeholder-[#6b7280] focus:border-[#ff6b6b] focus:ring-2 focus:ring-[#ff6b6b]/20 focus:outline-none transition-all"
+            className="flex-1 px-4 py-3 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary placeholder-bs-text-muted focus:border-bs-accent-primary focus:ring-2 focus:ring-bs-accent-primary/20 focus:outline-none transition-all"
             onKeyDown={(e) => e.key === 'Enter' && searchMap()}
           />
           <button
             onClick={searchMap}
             disabled={loadingData || !mapInput.trim()}
-            className="px-6 py-3 rounded-lg font-medium text-sm bg-[#ff6b6b] text-white hover:bg-[#ff5252] transition-all shadow-lg hover:shadow-[#ff6b6b]/30 disabled:opacity-50"
+            className="px-6 py-3 rounded-lg font-medium text-sm bg-bs-accent-primary text-white hover:bg-red-500 transition-all shadow-lg hover:shadow-bs-accent-primary/30 disabled:opacity-50 flex items-center gap-2"
           >
-            {loadingData ? '⏳' : '🔍 查询'}
+            {loadingData ? <span className="animate-spin">⟳</span> : <Search size={18} />}
+            查询
           </button>
         </div>
       )}
@@ -305,19 +308,21 @@ export default function ScoreTable() {
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage <= 1 || loadingData}
-                className="px-4 py-2 rounded-lg bg-[#1e1e28] text-[#f0f0f5] hover:bg-[#2a2a3a] disabled:opacity-50 transition-all"
+                className="px-4 py-2 rounded-lg bg-bs-bg-tertiary text-bs-text-primary hover:bg-bs-border disabled:opacity-50 transition-all flex items-center gap-1"
               >
-                ← 上一页
+                <ChevronLeft size={16} />
+                上一页
               </button>
-              <span className="text-[#a0a0b0]">
+              <span className="text-bs-text-secondary">
                 第 {currentPage} / {playlistData.total_pages} 页
               </span>
               <button
                 onClick={() => setCurrentPage(p => Math.min(playlistData.total_pages, p + 1))}
                 disabled={currentPage >= playlistData.total_pages || loadingData}
-                className="px-4 py-2 rounded-lg bg-[#1e1e28] text-[#f0f0f5] hover:bg-[#2a2a3a] disabled:opacity-50 transition-all"
+                className="px-4 py-2 rounded-lg bg-bs-bg-tertiary text-bs-text-primary hover:bg-bs-border disabled:opacity-50 transition-all flex items-center gap-1"
               >
-                下一页 →
+                下一页
+                <ChevronRight size={16} />
               </button>
             </div>
           )}
@@ -326,7 +331,7 @@ export default function ScoreTable() {
 
       {/* 成绩表格 - 占据剩余高度，独立滚动 */}
       {(displayData.length > 0 || loadingData) && (
-        <div className="bg-[#15151c] rounded-xl border border-[#2a2a3a] shadow-lg overflow-hidden flex-1 flex flex-col min-h-0">
+        <div className="bg-bs-bg-secondary rounded-xl border border-bs-border shadow-lg overflow-hidden flex-1 flex flex-col min-h-0">
           {/* 表头 */}
           <ScoreTableHeader
             players={sortedPlayers}
@@ -345,10 +350,10 @@ export default function ScoreTable() {
             </div>
           ) : displayData.length === 0 ? (
             <div className="p-8 flex-1">
-              <EmptyState message="暂无数据" icon="📊" />
+              <EmptyState message="暂无数据" />
             </div>
           ) : (
-            <div className="divide-y divide-[#2a2a3a] overflow-auto flex-1">
+            <div className="divide-y divide-bs-border overflow-auto flex-1">
               {displayData.map((mapData, mapIndex) => (
                 <MapScoreGroup
                   key={mapData.map.key}
@@ -370,12 +375,10 @@ export default function ScoreTable() {
           {viewMode === 'single' ? (
             <EmptyState
               message={mapInput ? '该谱面无玩家成绩数据' : '请输入谱面 Key 或 Hash 开始查询'}
-              icon="🎵"
             />
           ) : (
             <EmptyState
               message={selectedPlaylistId ? '该歌单暂无玩家成绩数据' : '请选择歌单开始查询'}
-              icon="📋"
             />
           )}
         </div>

@@ -1,4 +1,5 @@
 import { Playlist, PlaylistUIState } from '../types';
+import { Clock, Eye, Trash2, List } from 'lucide-react';
 
 interface PlaylistCardProps {
   playlist: Playlist;
@@ -11,10 +12,10 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps }
   const isLoading = uiState?.loading ?? false;
 
   return (
-    <div className={`bg-[#15151c] rounded-xl p-5 border transition-all duration-300 ${
+    <div className={`bg-bs-bg-secondary rounded-xl p-5 border transition-all duration-300 ${
       isLoading
-        ? 'border-[#f59e0b]/50 shadow-xl shadow-[#f59e0b]/20'
-        : 'border-[#2a2a3a] shadow-lg hover:border-[#4ecdc4]/50 hover:shadow-xl hover:shadow-[#4ecdc4]/5 group'
+        ? 'border-bs-status-warning/50 shadow-xl shadow-bs-status-warning/20'
+        : 'border-bs-border shadow-lg hover:border-bs-accent-secondary/50 hover:shadow-xl hover:shadow-bs-accent-secondary/5 group'
     }`}>
       <div className="flex items-start gap-4">
         {/* 封面 */}
@@ -24,33 +25,33 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps }
             alt={playlist.name}
             className={`w-14 h-14 rounded-xl object-cover ${
               isLoading
-                ? 'ring-2 ring-[#f59e0b]/50'
-                : 'ring-2 ring-[#2a2a3a] group-hover:ring-[#4ecdc4]/50'
+                ? 'ring-2 ring-bs-status-warning/50'
+                : 'ring-2 ring-bs-border group-hover:ring-bs-accent-secondary/50'
             } transition-all`}
           />
         ) : (
           <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl ${
             isLoading
-              ? 'bg-[#f59e0b]/10 ring-2 ring-[#f59e0b]/50'
-              : 'bg-[#1e1e28] ring-2 ring-[#2a2a3a] group-hover:ring-[#4ecdc4]/50'
+              ? 'bg-bs-status-warning/10 ring-2 ring-bs-status-warning/50'
+              : 'bg-bs-bg-tertiary ring-2 ring-bs-border group-hover:ring-bs-accent-secondary/50'
           } transition-all`}>
-            📋
+            <List size={28} className="text-bs-text-muted" />
           </div>
         )}
 
         {/* 信息 */}
         <div className="flex-1 min-w-0">
           <h3 className={`font-semibold text-lg truncate ${
-            isLoading ? 'text-[#fbbf24]' : 'text-[#f0f0f5]'
+            isLoading ? 'text-bs-status-warning' : 'text-bs-text-primary'
           }`}>{playlist.name}</h3>
           {playlist.owner_name && !isLoading && (
-            <p className="text-[#a0a0b0] text-sm truncate">by {playlist.owner_name}</p>
+            <p className="text-bs-text-secondary text-sm truncate">by {playlist.owner_name}</p>
           )}
           <div className="flex items-center gap-2 mt-2">
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
               isLoading
-                ? 'bg-[#f59e0b]/15 text-[#fbbf24] border border-[#f59e0b]/30'
-                : 'bg-[#3b82f6]/15 text-[#60a5fa] border border-[#3b82f6]/30'
+                ? 'bg-bs-status-warning/15 text-bs-status-warning border border-bs-status-warning/30'
+                : 'bg-bs-status-info/15 text-bs-status-info border border-bs-status-info/30'
             }`}>
               {isLoading ? '处理中...' : `${playlist.total_maps || 0} 谱面`}
             </span>
@@ -59,13 +60,13 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps }
           {/* 进度条和状态消息 */}
           {isLoading && (
             <div className="mt-3">
-              <div className="w-full bg-[#2a2a3a] rounded-full h-2">
+              <div className="w-full bg-bs-border rounded-full h-2">
                 <div
-                  className="bg-[#f59e0b] h-2 rounded-full transition-all duration-300"
+                  className="bg-bs-status-warning h-2 rounded-full transition-all duration-300"
                   style={{ width: `${uiState?.progress || 0}%` }}
                 ></div>
               </div>
-              <p className="text-[#fbbf24] text-xs mt-1 truncate">
+              <p className="text-bs-status-warning text-xs mt-1 truncate">
                 {uiState?.statusMessage || '正在添加歌单...'}
               </p>
             </div>
@@ -78,23 +79,26 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps }
             <>
               <button
                 onClick={onViewMaps}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#1e1e28] text-[#a0a0b0] hover:bg-[#252533] hover:text-[#f0f0f5] transition-all"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all flex items-center gap-1"
               >
-                👁️ 查看
+                <Eye size={14} />
+                查看
               </button>
               <button
                 onClick={onDelete}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all flex items-center gap-1"
               >
-                🗑️ 删除
+                <Trash2 size={14} />
+                删除
               </button>
             </>
           ) : (
             <button
-              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#f59e0b]/20 text-[#fbbf24] border border-[#f59e0b]/30 cursor-not-allowed"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-status-warning/20 text-bs-status-warning border border-bs-status-warning/30 cursor-not-allowed flex items-center gap-1"
               disabled
             >
-              ⏳ 处理中
+              <Clock size={14} />
+              处理中
             </button>
           )}
         </div>

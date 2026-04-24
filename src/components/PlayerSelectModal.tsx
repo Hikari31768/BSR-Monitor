@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { PlayerInfo } from '../types';
 import Modal from './Modal';
+import { User } from 'lucide-react';
 
 interface PlayerSelectModalProps {
   isOpen: boolean;
@@ -39,11 +40,11 @@ export default function PlayerSelectModal({ isOpen, onClose, onSelect, excludeId
       <div className="w-96 max-h-96 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center py-8">
-            <div className="w-6 h-6 border-2 border-[#ff6b6b] border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-6 h-6 border-2 border-bs-accent-primary border-t-transparent rounded-full animate-spin"></div>
           </div>
         ) : availablePlayers.length === 0 ? (
-          <div className="text-center py-8 text-[#6b7280]">
-            <p className="text-2xl mb-2">👤</p>
+          <div className="text-center py-8 text-bs-text-muted">
+            <div className="mb-2"><User size={24} /></div>
             <p>没有更多可选玩家</p>
           </div>
         ) : (
@@ -55,7 +56,7 @@ export default function PlayerSelectModal({ isOpen, onClose, onSelect, excludeId
                   onSelect(player);
                   onClose();
                 }}
-                className="w-full flex items-center gap-3 p-3 rounded-lg bg-[#1e1e28] hover:bg-[#2a2a3a] transition-colors text-left"
+                className="w-full flex items-center gap-3 p-3 rounded-lg bg-bs-bg-tertiary hover:bg-bs-border transition-colors text-left"
               >
                 {player.avatar_url ? (
                   <img
@@ -64,13 +65,13 @@ export default function PlayerSelectModal({ isOpen, onClose, onSelect, excludeId
                     className="w-10 h-10 rounded-full object-cover"
                   />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-[#2a2a3a] flex items-center justify-center text-lg">
-                    👤
+                  <div className="w-10 h-10 rounded-full bg-bs-border flex items-center justify-center">
+                    <User size={20} className="text-bs-text-muted" />
                   </div>
                 )}
                 <div>
-                  <p className="font-medium text-[#f0f0f5]">{player.alias || player.name}</p>
-                  <p className="text-xs text-[#6b7280]">{player.name}</p>
+                  <p className="font-medium text-bs-text-primary">{player.alias || player.name}</p>
+                  <p className="text-xs text-bs-text-muted">{player.name}</p>
                 </div>
               </button>
             ))}

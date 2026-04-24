@@ -80,26 +80,26 @@ export default function MapScoreGroup({
     // 无成绩的情况
     return (
       <div
-        className={`grid border-b border-[#2a2a3a] hover:bg-[#1e1e28]/50 transition-colors ${
-          showMapDivider ? 'border-t-2 border-[#ff6b6b]/30' : ''
+        className={`grid border-b border-bs-border hover:bg-bs-bg-tertiary/50 transition-colors ${
+          showMapDivider ? 'border-t-2 border-bs-accent-primary/30' : ''
         }`}
         style={{ gridTemplateColumns: gridColumns }}
       >
         {/* 谱面信息 */}
-        <div className="group p-4 border-r border-[#2a2a3a]">
+        <div className="group p-4 border-r border-bs-border">
           <div className="flex gap-3">
             <CoverWithAudio map={map} />
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-[#f0f0f5] truncate">{map.song_name}</p>
-              <p className="text-xs text-[#6b7280] truncate">{map.level_author_name}</p>
+              <p className="font-medium text-bs-text-primary truncate">{map.song_name}</p>
+              <p className="text-xs text-bs-text-muted truncate">{map.level_author_name}</p>
               <div className="flex items-center gap-1 mt-1">
-                <p className="text-xs text-[#a0a0b0]">{map.key}</p>
+                <p className="text-xs text-bs-text-secondary">{map.key}</p>
                 <CopyKeyButton mapKey={map.key} />
               </div>
             </div>
           </div>
           {allNoScoreDiffs.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-[#2a2a3a]/50 space-y-1">
+            <div className="mt-3 pt-3 border-t border-bs-border/50 space-y-1">
               {allNoScoreDiffs.map(group => (
                 <div key={group.mode} className="flex items-center justify-center gap-2">
                   <ModeIcon mode={group.mode} size={14} />
@@ -115,14 +115,14 @@ export default function MapScoreGroup({
         </div>
 
         {/* 难度列 - 显示无成绩 */}
-        <div className="p-4 border-r border-[#2a2a3a] flex items-center justify-center">
-          <span className="text-xs text-[#6b7280]">无成绩</span>
+        <div className="p-4 border-r border-bs-border flex items-center justify-center">
+          <span className="text-xs text-bs-text-muted">无成绩</span>
         </div>
 
         {/* 玩家列 - 空 */}
         {players.map(player => (
-          <div key={player.id} className="p-4 border-r border-[#2a2a3a] flex items-center justify-center">
-            <span className="text-[#2a2a3a]">-</span>
+          <div key={player.id} className="p-4 border-r border-bs-border flex items-center justify-center">
+            <span className="text-bs-border">-</span>
           </div>
         ))}
 
@@ -135,8 +135,8 @@ export default function MapScoreGroup({
   // 有成绩的情况
   return (
     <div
-      className={`grid border-b border-[#2a2a3a] hover:bg-[#1e1e28]/50 transition-colors ${
-        showMapDivider ? 'border-t-2 border-[#ff6b6b]/30' : ''
+      className={`grid border-b border-bs-border hover:bg-bs-bg-tertiary/50 transition-colors ${
+        showMapDivider ? 'border-t-2 border-bs-accent-primary/30' : ''
       }`}
       style={{
         gridTemplateColumns: gridColumns,
@@ -144,21 +144,21 @@ export default function MapScoreGroup({
       }}
     >
       {/* 谱面信息列 - 跨所有行 */}
-      <div className="group p-4 border-r border-[#2a2a3a] row-span-full">
+      <div className="group p-4 border-r border-bs-border row-span-full">
         <div className="flex gap-3">
           <CoverWithAudio map={map} />
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-[#f0f0f5] truncate">{map.song_name}</p>
-            <p className="text-xs text-[#6b7280] truncate">{map.level_author_name}</p>
+            <p className="font-medium text-bs-text-primary truncate">{map.song_name}</p>
+            <p className="text-xs text-bs-text-muted truncate">{map.level_author_name}</p>
             <div className="flex items-center gap-1 mt-1">
-              <p className="text-xs text-[#a0a0b0]">{map.key}</p>
+              <p className="text-xs text-bs-text-secondary">{map.key}</p>
               <CopyKeyButton mapKey={map.key} />
             </div>
           </div>
         </div>
         {/* 无成绩难度列表 */}
         {allNoScoreDiffs.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-[#2a2a3a]/50 space-y-1">
+          <div className="mt-3 pt-3 border-t border-bs-border/50 space-y-1">
             {allNoScoreDiffs.map(group => (
               <div key={group.mode} className="flex items-center justify-center gap-2">
                 <ModeIcon mode={group.mode} size={14} />
@@ -179,14 +179,14 @@ export default function MapScoreGroup({
           {/* 难度信息 */}
           <div
             key={`diff-${index}`}
-            className={`p-4 border-r border-[#2a2a3a] flex items-center gap-2 ${
-              index > 0 ? 'border-t border-[#2a2a3a]/50' : ''
+            className={`p-4 border-r border-bs-border flex items-center gap-2 ${
+              index > 0 ? 'border-t border-bs-border/50' : ''
             }`}
           >
             <ModeIcon mode={scoreRow.mode} size={18} />
             <DiffBadge difficulty={scoreRow.difficulty} />
             {!scoreRow.is_current_version && (
-              <span title="非当前版本难度" className="text-xs text-[#6b7280]">🕒</span>
+              <span title="非当前版本难度" className="text-xs text-bs-text-muted">🕒</span>
             )}
           </div>
 
@@ -196,16 +196,16 @@ export default function MapScoreGroup({
             return (
               <div
                 key={`score-${index}-${player.id}`}
-                className={`p-4 border-r border-[#2a2a3a] flex items-center justify-center ${
-                  index > 0 ? 'border-t border-[#2a2a3a]/50' : ''
+                className={`p-4 border-r border-bs-border flex items-center justify-center ${
+                  index > 0 ? 'border-t border-bs-border/50' : ''
                 }`}
               >
                 {score ? (
-                  <span className="font-mono font-medium text-[#4ade80]">
+                  <span className="font-mono font-medium text-bs-status-success">
                     {formatAccuracy(score.accuracy)}
                   </span>
                 ) : (
-                  <span className="text-[#2a2a3a]">-</span>
+                  <span className="text-bs-border">-</span>
                 )}
               </div>
             );
@@ -214,7 +214,7 @@ export default function MapScoreGroup({
           {/* 空白列 */}
           <div
             key={`empty-${index}`}
-            className={`p-4 ${index > 0 ? 'border-t border-[#2a2a3a]/50' : ''}`}
+            className={`p-4 ${index > 0 ? 'border-t border-bs-border/50' : ''}`}
           ></div>
         </>
       ))}

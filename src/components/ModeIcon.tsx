@@ -44,7 +44,7 @@ export default function ModeIcon({ mode, size = 20 }: ModeIconProps) {
           }}
         />
       ) : (
-        <span className="text-xs text-[#a0a0b0]">{mode.slice(0, 2)}</span>
+        <span className="text-xs text-bs-text-secondary">{mode.slice(0, 2)}</span>
       )}
     </div>
   );

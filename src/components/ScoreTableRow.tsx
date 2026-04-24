@@ -36,13 +36,13 @@ export default function ScoreTableRow({
   return (
     <div
       className={`contents ${
-        showMapDivider && isFirstRow ? 'border-t-2 border-[#ff6b6b]/30' : ''
+        showMapDivider && isFirstRow ? 'border-t-2 border-bs-accent-primary/30' : ''
       }`}
     >
       {/* 谱面信息列 - 只在第一行显示，使用 grid-row 跨多行 */}
       {isFirstRow ? (
         <div
-          className="w-72 p-4 border-r border-[#2a2a3a] bg-[#15151c]"
+          className="w-72 p-4 border-r border-bs-border bg-bs-bg-secondary"
           style={{ gridRow: `span ${totalRows}` }}
         >
           <div className="flex gap-3">
@@ -54,18 +54,18 @@ export default function ScoreTableRow({
               />
             )}
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-[#f0f0f5] truncate" title={map.song_name}>
+              <p className="font-medium text-bs-text-primary truncate" title={map.song_name}>
                 {map.song_name}
               </p>
-              <p className="text-xs text-[#6b7280] truncate" title={map.level_author_name}>
+              <p className="text-xs text-bs-text-muted truncate" title={map.level_author_name}>
                 {map.level_author_name}
               </p>
-              <p className="text-xs text-[#a0a0b0] mt-1">{map.key}</p>
+              <p className="text-xs text-bs-text-secondary mt-1">{map.key}</p>
             </div>
           </div>
           {/* 无成绩难度列表 */}
           {noScoreDiffs.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-[#2a2a3a]/50 space-y-1">
+            <div className="mt-3 pt-3 border-t border-bs-border/50 space-y-1">
               {noScoreDiffs.map(group => (
                 <div key={group.mode} className="flex items-center gap-2">
                   <ModeIcon mode={group.mode} size={14} />
@@ -82,11 +82,11 @@ export default function ScoreTableRow({
       ) : null}
 
       {/* 难度信息列 */}
-      <div className="w-24 p-4 border-r border-[#2a2a3a] flex items-center gap-2">
+      <div className="w-24 p-4 border-r border-bs-border flex items-center gap-2">
         <ModeIcon mode={scoreRow.mode} size={18} />
         <DiffBadge difficulty={scoreRow.difficulty} />
         {!scoreRow.is_current_version && (
-          <span title="非当前版本难度" className="text-xs text-[#6b7280]">🕒</span>
+          <span title="非当前版本难度" className="text-xs text-bs-text-muted">🕒</span>
         )}
       </div>
 
@@ -96,14 +96,14 @@ export default function ScoreTableRow({
         return (
           <div
             key={player.id}
-            className="w-28 p-4 border-r border-[#2a2a3a] flex items-center justify-center"
+            className="w-28 p-4 border-r border-bs-border flex items-center justify-center"
           >
             {score ? (
-              <span className="font-mono font-medium text-[#4ade80]">
+              <span className="font-mono font-medium text-bs-status-success">
                 {formatAccuracy(score.accuracy)}
               </span>
             ) : (
-              <span className="text-[#2a2a3a]">-</span>
+              <span className="text-bs-border">-</span>
             )}
           </div>
         );
