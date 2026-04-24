@@ -258,6 +258,30 @@ pub fn get_all_players(conn: &Connection) -> Result<Vec<PlayerInfo>, rusqlite::E
     Ok(players)
 }
 
+/// 批量获取所有玩家及其成绩数量
+pub fn get_players_with_score_counts(conn: &Connection) -> Result<Vec<(PlayerInfo, i64)>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT p.id, p.name, p.avatarURL, p.liveURL, p.alias, COUNT(ps.playerId) as score_count
+         FROM PlayerInfo p
+         LEFT JOIN PlayerScore ps ON p.id = ps.playerId
+         GROUP BY p.id"
+    )?;
+
+    let players = stmt.query_map([], |row| {
+        let player = PlayerInfo {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            avatar_url: row.get(2)?,
+            live_url: row.get(3)?,
+            alias: row.get(4)?,
+        };
+        let score_count: i64 = row.get(5)?;
+        Ok((player, score_count))
+    })?.collect::<Result<Vec<_>, _>>()?;
+
+    Ok(players)
+}
+
 pub fn delete_player(conn: &Connection, id: &str) -> Result<(), String> {
     conn.execute("BEGIN", []).map_err(|e| e.to_string())?;
     if let Err(e) = conn.execute(

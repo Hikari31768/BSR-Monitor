@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import {
   PlayerInfo,
@@ -47,6 +47,12 @@ export default function ScoreTable() {
   // 用于追踪玩家数量变化
   const prevPlayerCountRef = useRef(0);
 
+  // 用于存储最新的 selectedPlayers，供 callback 使用
+  const selectedPlayersRef = useRef(selectedPlayers);
+  useEffect(() => {
+    selectedPlayersRef.current = selectedPlayers;
+  }, [selectedPlayers]);
+
   // 初始化加载
   useEffect(() => {
     loadPlayers();
@@ -82,9 +88,11 @@ export default function ScoreTable() {
     }
   }
 
-  // 查询单谱面
+  // 查询单谱面 - 使用 ref 获取最新 players，避免依赖数组变化导致重新创建
   const searchMap = useCallback(async () => {
-    if (!mapInput.trim() || selectedPlayers.length === 0) return;
+    if (!mapInput.trim()) return;
+    const players = selectedPlayersRef.current;
+    if (players.length === 0) return;
 
     setLoadingData(true);
     setCurrentMapData(null);
@@ -102,7 +110,7 @@ export default function ScoreTable() {
       }
 
       // 查询成绩
-      const playerIds = selectedPlayers.map(p => p.id);
+      const playerIds = players.map(p => p.id);
       const result = await invoke<MapScoresResponse>('get_map_scores', {
         key,
         playerIds,
@@ -115,17 +123,19 @@ export default function ScoreTable() {
     } finally {
       setLoadingData(false);
     }
-  }, [mapInput, selectedPlayers]);
+  }, [mapInput]); // 移除 selectedPlayers 依赖
 
   // 查询歌单
   const searchPlaylist = useCallback(async () => {
-    if (!selectedPlaylistId || selectedPlayers.length === 0) return;
+    if (!selectedPlaylistId) return;
+    const players = selectedPlayersRef.current;
+    if (players.length === 0) return;
 
     setLoadingData(true);
     setPlaylistData(null);
 
     try {
-      const playerIds = selectedPlayers.map(p => p.id);
+      const playerIds = players.map(p => p.id);
       const result = await invoke<PlaylistScoresResponse>('get_playlist_scores', {
         playlistId: selectedPlaylistId,
         page: currentPage,
@@ -140,21 +150,33 @@ export default function ScoreTable() {
     } finally {
       setLoadingData(false);
     }
-  }, [selectedPlaylistId, currentPage, selectedPlayers, mapSort]);
+  }, [selectedPlaylistId, currentPage, mapSort]); // 移除 selectedPlayers 依赖
 
-  // 切换歌单时重置页码和排序
+  // 切换歌单时重置页码和排序（不触发查询）
   useEffect(() => {
     setCurrentPage(1);
     setPlaylistData(null);
     setMapSort('asc');
   }, [selectedPlaylistId]);
 
-  // 页码变化时自动查询
+  // 查询条件变化时重置并查询（歌单切换、排序变化、玩家变化）
+  useEffect(() => {
+    if (viewMode === 'playlist' && selectedPlaylistId) {
+      // 如果页码已经是 1，直接查询；否则 setCurrentPage(1) 会触发下面的 effect
+      if (currentPage === 1) {
+        searchPlaylist();
+      } else {
+        setCurrentPage(1);
+      }
+    }
+  }, [viewMode, selectedPlaylistId, mapSort, selectedPlayers]); // 监听查询条件变化
+
+  // 页码变化时查询（页码变化是用户主动操作）
   useEffect(() => {
     if (viewMode === 'playlist' && selectedPlaylistId) {
       searchPlaylist();
     }
-  }, [currentPage, viewMode, selectedPlaylistId, searchPlaylist]);
+  }, [currentPage]); // 仅监听页码变化
 
   // 玩家数量变化时自动刷新成绩（已有数据时）
   useEffect(() => {
@@ -164,51 +186,12 @@ export default function ScoreTable() {
       prevPlayerCountRef.current = currentCount;
       // 如果已有查询数据，自动刷新
       if (viewMode === 'single' && currentMapData && !loadingData && mapInput.trim()) {
-        // 内联查询逻辑，使用最新的 selectedPlayers
-        const doSearch = async () => {
-          setLoadingData(true);
-          try {
-            let key = mapInput.trim();
-            if (key.length === 40) {
-              const map = await invoke<Map>('get_map_by_hash', { hash: key });
-              key = map.key;
-            }
-            const playerIds = selectedPlayers.map(p => p.id);
-            const result = await invoke<MapScoresResponse>('get_map_scores', {
-              key,
-              playerIds,
-            });
-            setCurrentMapData(result);
-          } catch (e) {
-            console.error('刷新成绩失败:', e);
-          } finally {
-            setLoadingData(false);
-          }
-        };
-        doSearch();
+        searchMap();
       } else if (viewMode === 'playlist' && playlistData && !loadingData && selectedPlaylistId) {
-        // 内联歌单查询逻辑，使用最新的 selectedPlayers
-        const doSearch = async () => {
-          setLoadingData(true);
-          try {
-            const playerIds = selectedPlayers.map(p => p.id);
-            const result = await invoke<PlaylistScoresResponse>('get_playlist_scores', {
-              playlistId: selectedPlaylistId,
-              page: currentPage,
-              playerIds,
-              reverse: mapSort === 'desc',
-            });
-            setPlaylistData(result);
-          } catch (e) {
-            console.error('刷新成绩失败:', e);
-          } finally {
-            setLoadingData(false);
-          }
-        };
-        doSearch();
+        // 查询条件变化 effect 会处理
       }
     }
-  }, [selectedPlayers, viewMode, currentMapData, playlistData, loadingData, mapInput, selectedPlaylistId, currentPage, mapSort]);
+  }, [selectedPlayers, viewMode, currentMapData, playlistData, loadingData, mapInput, selectedPlaylistId]);
 
   // 添加玩家
   function handleAddPlayer(player: PlayerInfo) {
@@ -241,13 +224,17 @@ export default function ScoreTable() {
     setSelectedPlayers(newPlayers.map((p, i) => ({ ...p, order: i })));
   }
 
-  // 获取当前显示的数据
-  const displayData = viewMode === 'single'
-    ? (currentMapData ? [currentMapData] : [])
-    : (playlistData?.maps || []);
+  // 获取当前显示的数据 - 使用 useMemo 缓存
+  const displayData = useMemo(() => {
+    return viewMode === 'single'
+      ? (currentMapData ? [currentMapData] : [])
+      : (playlistData?.maps || []);
+  }, [viewMode, currentMapData, playlistData]);
 
-  // 构建表头数据
-  const sortedPlayers = [...selectedPlayers].sort((a, b) => a.order - b.order);
+  // 构建表头数据 - 使用 useMemo 缓存
+  const sortedPlayers = useMemo(() => {
+    return [...selectedPlayers].sort((a, b) => a.order - b.order);
+  }, [selectedPlayers]);
 
   if (loadingPlayers) {
     return <LoadingSpinner />;

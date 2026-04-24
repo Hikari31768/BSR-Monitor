@@ -21,13 +21,8 @@ export default function Players() {
   async function loadPlayers() {
     setLoading(true);
     try {
-      const playerList = await invoke<PlayerInfo[]>('get_player_list');
-      const playersWithCounts = await Promise.all(
-        playerList.map(async (player) => {
-          const count = await invoke<number>('get_player_score_count', { playerId: player.id });
-          return { ...player, score_count: count };
-        })
-      );
+      // 后端返回扁平结构（#[serde(flatten)]），直接使用
+      const playersWithCounts = await invoke<PlayerWithScoreCount[]>('get_players_with_score_counts');
       setPlayers(playersWithCounts);
     } catch (e) {
       console.error('加载玩家失败:', e);

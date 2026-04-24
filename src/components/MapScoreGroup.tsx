@@ -1,39 +1,10 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
 import { Map, ScoreRowData, NoScoreDiffGroup, PlayerInfo } from '../types';
 import DiffBadge from './DiffBadge';
 import ModeIcon from './ModeIcon';
 import CoverWithAudio from './CoverWithAudio';
-
-function CopyKeyButton({ mapKey }: { mapKey: string }) {
-  const [copied, setCopied] = useState(false);
-
-  function handleClick() {
-    navigator.clipboard.writeText(`!bsr ${mapKey}`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
-  }
-
-  return (
-    <>
-      <button
-        onClick={handleClick}
-        className="inline-flex items-center justify-center rounded w-5 h-5 text-xs font-semibold leading-none text-[#a78bfa] bg-[#7c3aed]/20 hover:bg-[#7c3aed]/40 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity duration-100"
-        style={{ border: '1px solid rgba(124, 58, 237, 0.4)' }}
-        title="复制 !bsr 命令"
-      >
-        !
-      </button>
-      <span
-        className={`inline-flex items-center justify-center rounded h-5 px-2 text-xs font-semibold leading-none text-[#a78bfa] bg-[#7c3aed]/20 transition-opacity duration-100 ${
-          copied ? 'opacity-100' : 'opacity-0'
-        }`}
-        style={{ border: '1px solid rgba(124, 58, 237, 0.4)' }}
-      >
-        !bsr 已复制
-      </span>
-    </>
-  );
-}
+import CopyKeyButton from './CopyKeyButton';
+import { formatAccuracy } from '../utils/format';
 
 interface MapScoreGroupProps {
   map: Map;
@@ -96,16 +67,13 @@ export default function MapScoreGroup({
   });
 
   // 计算网格列数：谱面信息(1) + 难度(1) + 玩家列数 + 空白列(1)
-  const gridColumns = `18rem 6rem ${players.map(() => '7rem').join(' ')} 7rem`;
+  const gridColumns = useMemo(() => {
+    return `18rem 6rem ${players.map(() => '7rem').join(' ')} 7rem`;
+  }, [players.length]);
 
   // 查找每个玩家的成绩
   function getPlayerScore(scoreRow: ScoreRowData, playerId: string) {
     return scoreRow.scores.find(s => s.player_id === playerId);
-  }
-
-  // 格式化 accuracy
-  function formatAccuracy(acc: number): string {
-    return `${(acc * 100).toFixed(2)}%`;
   }
 
   if (scores.length === 0) {

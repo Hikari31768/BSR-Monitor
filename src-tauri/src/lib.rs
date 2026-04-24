@@ -19,6 +19,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::player::add_player,
             commands::player::get_player_list,
+            commands::player::get_players_with_score_counts,
             commands::player::get_player,
             commands::player::delete_player,
             commands::player::update_player,

@@ -3,3 +3,4 @@ pub mod score;
 pub mod map;
 pub mod playlist;
 pub mod leaderboard;
+pub mod common;

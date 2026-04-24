@@ -2,8 +2,9 @@ use tauri::AppHandle;
 use tauri::Manager;
 use tauri::State;
 use crate::api::BeatSaverApi;
-use crate::database::operations::{Playlist, PlaylistMap, Map, MapDiff};
+use crate::database::operations::{Playlist, PlaylistMap, MapDiff};
 use crate::database::operations as db;
+use crate::commands::common::convert_map_detail;
 use std::sync::Mutex;
 use uuid::Uuid;
 use crate::progress::{ProgressPayload, TaskType, emit_progress_event};
@@ -38,11 +39,8 @@ pub async fn add_playlist(
         db::get_playlist_by_id(&guard, playlist_id as i64).map_err(|e| e.to_string())?
     };
 
-    let result = if existing.is_some() {
-        update_existing_playlist(&app, &task_state, playlist_id, task_id.clone(), api).await
-    } else {
-        add_new_playlist(&app, &task_state, playlist_id, task_id.clone(), api).await
-    };
+    let delete_first = existing.is_some();
+    let result = process_playlist(&app, &task_state, playlist_id, task_id.clone(), delete_first, api).await;
 
     // 无论成功失败都移除任务记录
     task_state.remove(&task_id);
@@ -52,20 +50,24 @@ pub async fn add_playlist(
 
 const PLAYLIST_PAGE_SIZE: i32 = 500;
 
-/// 全量添加新歌单
-async fn add_new_playlist(
+/// 统一处理歌单（添加或更新）
+async fn process_playlist(
     app: &AppHandle,
     task_state: &TaskState,
     playlist_id: i32,
     task_id: String,
+    delete_first: bool,
     api: BeatSaverApi,
 ) -> Result<Playlist, String> {
+    let message_prefix = if delete_first { "更新" } else { "" };
+    let progress_key = if delete_first { "updating" } else { "adding" };
+
     // 发送初始进度
     let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.clone())
-        .with_progress("fetching_playlist".to_string(), 2.0)
-        .with_message("正在获取歌单信息...".to_string());
+        .with_progress(format!("{}_playlist", progress_key), 2.0)
+        .with_message(format!("{}{}正在获取歌单信息...", message_prefix, if delete_first { "" } else { "正在" }));
     emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
-    task_state.update(&task_id, 2.0, "正在获取歌单信息...");
+    task_state.update(&task_id, 2.0, &format!("{}{}正在获取歌单信息...", message_prefix, if delete_first { "" } else { "正在" }));
 
     // 拉取第一页
     let first_page = api.get_playlist(playlist_id, 0)
@@ -99,116 +101,8 @@ async fn add_new_playlist(
         db::insert_playlist(&guard, &playlist).map_err(|e| e.to_string())?;
     }
 
-    // 处理第一页的谱面
-    let mut total_actual_count = first_page.maps.len();
-    save_playlist_maps_with_progress(app, task_state, &task_id, playlist_id, &first_page, 1, 1)?;
-
-    // 根据实际返回数量判断是否需要继续拉取
-    let mut current_page = 0;
-    let mut current_page_count = first_page.maps.len();
-    while current_page_count == PLAYLIST_PAGE_SIZE as usize {
-        current_page += 1;
-        println!("[Playlist] Fetching page {}...", current_page);
-
-        let page_response = api.get_playlist(playlist_id, current_page)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        current_page_count = page_response.maps.len();
-        println!("[Playlist] Page {} returned {} maps", current_page, current_page_count);
-
-        if current_page_count == 0 {
-            break;
-        }
-
-        total_actual_count += current_page_count;
-        save_playlist_maps_with_progress(app, task_state, &task_id, playlist_id, &page_response, current_page as u64 + 1, current_page as u64 + 1)?;
-    }
-
-    println!("[Playlist] Total fetched: {} maps, is_search: {}", total_actual_count, is_search_type);
-
-    // 对于 Search 类型歌单，更新 total_maps 为实际数量
-    if is_search_type {
-        println!("[Playlist] Updating total_maps to {}", total_actual_count);
-        let state = app.try_state::<Mutex<rusqlite::Connection>>()
-            .ok_or("Database not initialized")?;
-        let guard = state.lock().map_err(|e| e.to_string())?;
-        db::update_playlist_total_maps(&guard, playlist_id as i64, Some(total_actual_count as i32))
-            .map_err(|e| e.to_string())?;
-    }
-
-    // 发送完成进度
-    let final_total = if is_search_type { total_actual_count as i32 } else { playlist.total_maps.unwrap_or(0) };
-    let msg = format!("完成！共处理 {} 首歌曲", final_total);
-    let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.clone())
-        .with_progress("completed".to_string(), 100.0)
-        .with_message(msg.clone());
-    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
-    task_state.update(&task_id, 100.0, &msg);
-
-    // 返回最终歌单信息
-    let final_playlist = {
-        let state = app.try_state::<Mutex<rusqlite::Connection>>()
-            .ok_or("Database not initialized")?;
-        let guard = state.lock().map_err(|e| e.to_string())?;
-        db::get_playlist_by_id(&guard, playlist_id as i64)
-            .map_err(|e| e.to_string())?
-            .unwrap_or(playlist)
-    };
-
-    Ok(final_playlist)
-}
-
-/// 增量更新已存在的歌单
-async fn update_existing_playlist(
-    app: &AppHandle,
-    task_state: &TaskState,
-    playlist_id: i32,
-    task_id: String,
-    api: BeatSaverApi,
-) -> Result<Playlist, String> {
-    println!("[Playlist] Updating existing playlist {}", playlist_id);
-
-    // 发送初始进度
-    let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.clone())
-        .with_progress("fetching_playlist".to_string(), 2.0)
-        .with_message("正在获取最新歌单信息...".to_string());
-    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
-    task_state.update(&task_id, 2.0, "正在获取最新歌单信息...");
-
-    // 拉取第一页
-    let first_page = api.get_playlist(playlist_id, 0)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    println!("[Playlist] First page: {} maps, type: {:?}",
-        first_page.maps.len(),
-        first_page.playlist.playlist_type);
-
-    // 判断是否为 Search 类型
-    let is_search_type = first_page.playlist.playlist_type == Some(crate::api::PlaylistType::Search);
-
-    // 转换歌单元数据
-    let playlist = convert_playlist_response(&first_page);
-
-    // 发送进度
-    let msg = format!("已获取歌单: {}", playlist.name);
-    let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.clone())
-        .with_progress("saving_playlist_info".to_string(), 5.0)
-        .with_message(msg.clone());
-    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
-    task_state.update(&task_id, 5.0, &msg);
-
-    // 更新歌单信息
-    {
-        let state = app.try_state::<Mutex<rusqlite::Connection>>()
-            .ok_or("Database not initialized")?;
-        let guard = state.lock().map_err(|e| e.to_string())?;
-        db::insert_playlist(&guard, &playlist).map_err(|e| e.to_string())?;
-    }
-
-    // 删除旧谱面关联（重新拉取）
-    {
+    // 如果是更新，先删除旧谱面关联
+    if delete_first {
         let state = app.try_state::<Mutex<rusqlite::Connection>>()
             .ok_or("Database not initialized")?;
         let guard = state.lock().map_err(|e| e.to_string())?;
@@ -255,7 +149,7 @@ async fn update_existing_playlist(
 
     // 发送完成进度
     let final_total = if is_search_type { total_actual_count as i32 } else { playlist.total_maps.unwrap_or(0) };
-    let msg = format!("更新完成！共处理 {} 首歌曲", final_total);
+    let msg = format!("{}完成！共处理 {} 首歌曲", if delete_first { "更新" } else { "" }, final_total);
     let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.clone())
         .with_progress("completed".to_string(), 100.0)
         .with_message(msg.clone());
@@ -389,22 +283,5 @@ fn convert_playlist_response(page: &crate::api::PlaylistPage) -> Playlist {
         created_at: page.playlist.created_at.clone(),
         songs_changed_at: page.playlist.songs_changed_at.clone(),
         download_url: page.playlist.download_url.clone(),
-    }
-}
-
-/// 将 API 响应转换为数据库结构
-fn convert_map_detail(map_detail: &crate::api::MapDetail) -> Map {
-    let (cover_url, preview_url) = map_detail.versions.first()
-        .map(|v| (Some(v.cover_url.clone()), Some(v.preview_url.clone())))
-        .unwrap_or((None, None));
-
-    Map {
-        key: map_detail.id.clone(),
-        song_name: map_detail.metadata.song_name.clone(),
-        song_author_name: map_detail.metadata.song_author_name.clone(),
-        level_author_name: map_detail.metadata.level_author_name.clone(),
-        rating: map_detail.stats.as_ref().map(|s| s.score),
-        cover_url,
-        preview_url,
     }
 }
