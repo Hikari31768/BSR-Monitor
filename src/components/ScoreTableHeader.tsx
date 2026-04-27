@@ -42,12 +42,12 @@ export default function ScoreTableHeader({
   }
 
   // 计算网格列定义，与 MapScoreGroup 保持一致
-  const gridColumns = `18rem 6rem ${players.map(() => '7rem').join(' ')} 7rem`;
+  const gridColumns = `18rem 6rem ${players.map(() => '7rem').join(' ')} minmax(7rem, 1fr)`;
 
   return (
-    <div className="bg-bs-bg-tertiary border-b border-bs-border flex-shrink-0">
+    <div className="rounded-xl flex-shrink-0">
       <div
-        className="grid"
+        className="grid bg-bs-bg-tertiary border-b border-bs-border sticky top-0 z-10 min-w-fit"
         style={{ gridTemplateColumns: gridColumns }}
       >
         {/* 谱面信息列 */}

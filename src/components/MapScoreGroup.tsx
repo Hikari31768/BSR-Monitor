@@ -51,7 +51,7 @@ export default function MapScoreGroup({
 
   // 计算网格列数
   const gridColumns = useMemo(() => {
-    return `18rem 6rem ${players.map(() => '7rem').join(' ')} 7rem`;
+    return `18rem 6rem ${players.map(() => '7rem').join(' ')} minmax(7rem, 1fr)`;
   }, [players.length]);
 
   // 查找每个玩家的成绩
@@ -63,7 +63,7 @@ export default function MapScoreGroup({
   if (filteredScores.length === 0) {
     return (
       <div
-        className={`grid border-b border-bs-border hover:bg-bs-bg-tertiary/50 transition-colors ${
+        className={`grid border-b border-bs-border hover:bg-bs-bg-tertiary/50 transition-colors min-w-fit ${
           showMapDivider ? 'border-t-2 border-bs-accent-primary/30' : ''
         }`}
         style={{ gridTemplateColumns: gridColumns }}
@@ -118,7 +118,7 @@ export default function MapScoreGroup({
   // 有成绩的情况 — 统一渲染路径
   return (
     <div
-      className={`grid border-b border-bs-border hover:bg-bs-bg-tertiary/50 transition-colors ${
+      className={`grid border-b border-bs-border hover:bg-bs-bg-tertiary/50 transition-colors min-w-fit ${
         showMapDivider ? 'border-t-2 border-bs-accent-primary/30' : ''
       }`}
       style={{
