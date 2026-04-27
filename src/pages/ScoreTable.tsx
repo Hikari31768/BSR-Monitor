@@ -357,6 +357,7 @@ export default function ScoreTable() {
       {/* 成绩表格 - 占据剩余高度，独立滚动 */}
       {(displayData.length > 0 || loadingData) && (
         <div className="bg-bs-bg-secondary rounded-xl border border-bs-border shadow-lg overflow-hidden flex-1 flex flex-col min-h-0">
+          <div className="score-table-scroll overflow-auto flex-1 flex flex-col min-h-0">
           {/* 表头 */}
           <ScoreTableHeader
             players={sortedPlayers}
@@ -368,7 +369,7 @@ export default function ScoreTable() {
             showMapSort={viewMode === 'playlist'}
           />
 
-          {/* 表格内容 - 可滚动区域 */}
+          {/* 表格内容 */}
           {loadingData ? (
             <div className="p-8 flex-1">
               <LoadingSpinner />
@@ -378,7 +379,7 @@ export default function ScoreTable() {
               <EmptyState message="暂无数据" />
             </div>
           ) : (
-            <div className="divide-y divide-bs-border overflow-auto flex-1">
+            <div className="divide-y divide-bs-border flex-1">
               {displayData.map((mapData, mapIndex) => (
                 <MapScoreGroup
                   key={mapData.map.key}
@@ -390,6 +391,7 @@ export default function ScoreTable() {
               ))}
             </div>
           )}
+          </div>
         </div>
       )}
 
