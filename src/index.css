@@ -6,18 +6,24 @@
   line-height: 1.5;
   font-weight: 400;
 
-  /* 颜色变量 - 与 tailwind.config.js 保持一致 */
-  --color-bg-primary: #0d0d12;
-  --color-bg-secondary: #15151c;
-  --color-bg-tertiary: #1e1e28;
-  --color-bg-hover: #252533;
-  --color-text-primary: #f0f0f5;
-  --color-text-secondary: #a0a0b0;
-  --color-text-muted: #6b7280;
-  --color-accent-primary: #ff6b6b;
-  --color-accent-secondary: #4ecdc4;
-  --color-border: #2a2a3a;
-  --color-border-hover: #3a3a4f;
+  /* CSS 变量 */
+  --color-bg-primary: #1a1a1a;
+  --color-bg-secondary: #232323;
+  --color-bg-tertiary: #2d2d2d;
+  --color-bg-hover: #3a3a3a;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #b0b0b0;
+  --color-text-muted: #808080;
+  --color-accent-primary: #3ecf8e;
+  --color-accent-secondary: #2eb37a;
+  --color-accent-purple: #9b59b6;
+  --color-accent-blue: #3498db;
+  --color-border: #3a3a3a;
+  --color-border-hover: #4a4a4a;
+  --color-status-success: #3ecf8e;
+  --color-status-warning: #f59e0b;
+  --color-status-error: #e74c3c;
+  --color-status-info: #3498db;
 }
 
 * {
@@ -45,17 +51,186 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background-color: var(--color-bg-tertiary);
-  border-radius: 9999px;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background-color: var(--color-border-hover);
 }
 
-/* 选中文本样式 - 使用 color-mix 配合 CSS 变量 */
+/* 选中文本样式 */
 ::selection {
   background-color: color-mix(in srgb, var(--color-accent-primary) 30%, transparent);
   color: var(--color-text-primary);
 }
 
-/* 动画 - 已由 Tailwind 配置提供 */
+/* 工具类定义 */
+.bg-bs-bg-primary { background-color: #1a1a1a; }
+.bg-bs-bg-secondary { background-color: #232323; }
+.bg-bs-bg-tertiary { background-color: #2d2d2d; }
+.bg-bs-bg-hover { background-color: #3a3a3a; }
+
+.text-bs-text-primary { color: #ffffff; }
+.text-bs-text-secondary { color: #b0b0b0; }
+.text-bs-text-muted { color: #808080; }
+
+.bg-bs-accent-primary { background-color: #3ecf8e; }
+.bg-bs-accent-secondary { background-color: #2eb37a; }
+.bg-bs-accent-purple { background-color: #9b59b6; }
+.bg-bs-accent-blue { background-color: #3498db; }
+.text-bs-accent-primary { color: #3ecf8e; }
+.text-bs-accent-secondary { color: #2eb37a; }
+
+.border-bs-border { border-color: #3a3a3a; }
+.border-bs-border-hover { border-color: #4a4a4a; }
+
+.text-bs-status-success { color: #3ecf8e; }
+.text-bs-status-warning { color: #f59e0b; }
+.text-bs-status-error { color: #e74c3c; }
+.text-bs-status-info { color: #3498db; }
+.bg-bs-status-success { background-color: #3ecf8e; }
+.bg-bs-status-warning { background-color: #f59e0b; }
+.bg-bs-status-error { background-color: #e74c3c; }
+.bg-bs-status-info { background-color: #3498db; }
+
+.shadow-glow {
+  box-shadow: 0 0 20px rgba(62, 207, 142, 0.3);
+}
+
+.hover\:bg-bs-accent-secondary:hover {
+  background-color: #2eb37a;
+}
+
+.hover\:border-bs-accent-primary\/50:hover {
+  border-color: rgba(62, 207, 142, 0.5);
+}
+
+.hover\:shadow-bs-accent-primary\/5:hover {
+  box-shadow: 0 4px 12px rgba(62, 207, 142, 0.05);
+}
+
+.hover\:bg-bs-bg-hover:hover {
+  background-color: #3a3a3a;
+}
+
+.hover\:text-bs-text-primary:hover {
+  color: #ffffff;
+}
+
+.hover\:border-bs-border-hover:hover {
+  border-color: #4a4a4a;
+}
+
+.focus\:border-bs-accent-primary:focus {
+  border-color: #3ecf8e;
+}
+
+.focus\:ring-bs-accent-primary\/20:focus {
+  --tw-ring-color: rgba(62, 207, 142, 0.2);
+}
+
+.focus\:border-bs-status-warning:focus {
+  border-color: #f59e0b;
+}
+
+.focus\:ring-bs-status-warning\/20:focus {
+  --tw-ring-color: rgba(245, 158, 11, 0.2);
+}
+
+.ring-bs-accent-primary\/50 {
+  --tw-ring-color: rgba(62, 207, 142, 0.5);
+}
+
+.ring-bs-border {
+  --tw-ring-color: #3a3a3a;
+}
+
+.ring-bs-status-warning\/50 {
+  --tw-ring-color: rgba(245, 158, 11, 0.5);
+}
+
+/* 状态相关背景色透明度 */
+.bg-bs-status-warning\/10 { background-color: rgba(245, 158, 11, 0.1); }
+.bg-bs-status-warning\/15 { background-color: rgba(245, 158, 11, 0.15); }
+.bg-bs-status-warning\/20 { background-color: rgba(245, 158, 11, 0.2); }
+
+.text-bs-status-warning { color: #f59e0b; }
+.border-bs-status-warning\/30 { border-color: rgba(245, 158, 11, 0.3); }
+.border-bs-status-warning\/50 { border-color: rgba(245, 158, 11, 0.5); }
+
+.bg-bs-status-info\/10 { background-color: rgba(52, 152, 219, 0.1); }
+.bg-bs-status-info\/15 { background-color: rgba(52, 152, 219, 0.15); }
+.text-bs-status-info { color: #3498db; }
+.border-bs-status-info\/30 { border-color: rgba(52, 152, 219, 0.3); }
+
+.bg-bs-status-success\/15 { background-color: rgba(62, 207, 142, 0.15); }
+.text-bs-status-success { color: #3ecf8e; }
+.border-bs-status-success\/30 { border-color: rgba(62, 207, 142, 0.3); }
+
+/* 阴影 */
+.shadow-bs-status-warning\/20 {
+  box-shadow: 0 20px 25px -5px rgba(245, 158, 11, 0.2), 0 10px 10px -5px rgba(245, 158, 11, 0.1);
+}
+
+.divide-bs-border > * + * {
+  border-top-color: #3a3a3a;
+}
+
+.group:hover .group-hover\:opacity-100 {
+  opacity: 1;
+}
+
+.group:hover .group-hover\:ring-bs-accent-primary\/50 {
+  --tw-ring-color: rgba(62, 207, 142, 0.5);
+}
+
+.group:hover .group-hover\:ring-bs-accent-secondary\/50 {
+  --tw-ring-color: rgba(46, 179, 122, 0.5);
+}
+
+.hover\:shadow-bs-accent-primary\/30:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3), 0 0 20px rgba(62, 207, 142, 0.3);
+}
+
+.hover\:shadow-bs-accent-secondary\/5:hover {
+  box-shadow: 0 4px 12px rgba(46, 179, 122, 0.05);
+}
+
+.shadow-xl {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+}
+
+.hover\:shadow-xl:hover {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+}
+
+.shadow-2xl {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+}
+
+.backdrop-blur-sm {
+  backdrop-filter: blur(4px);
+}
+
+/* 动画 */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out;
+}

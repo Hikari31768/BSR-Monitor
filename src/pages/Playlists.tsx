@@ -253,7 +253,7 @@ export default function Playlists() {
         <h1 className="text-2xl font-bold text-bs-text-primary tracking-tight">歌单管理</h1>
         <button
           onClick={() => setShowAddModal(true)}
-          className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-accent-primary text-white hover:bg-red-500 transition-all shadow-lg hover:shadow-bs-accent-primary/30 disabled:opacity-50 flex items-center gap-2"
+          className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-accent-primary text-white hover:bg-bs-accent-secondary transition-all shadow-lg hover:shadow-bs-accent-primary/30 disabled:opacity-50 flex items-center gap-2"
           disabled={loading}
         >
           <Plus size={18} />
@@ -331,7 +331,7 @@ export default function Playlists() {
             <button
               onClick={handleAddPlaylist}
               disabled={!addId.trim()}
-              className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-accent-primary text-white hover:bg-red-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-accent-primary text-white hover:bg-bs-accent-secondary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               添加
             </button>

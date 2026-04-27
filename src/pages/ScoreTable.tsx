@@ -290,7 +290,7 @@ export default function ScoreTable() {
             <button
               onClick={searchMap}
               disabled={loadingData || !mapInput.trim() || selectedPlayers.length === 0}
-              className="px-6 py-3 rounded-lg font-medium text-sm bg-bs-accent-primary text-white hover:bg-red-500 transition-all shadow-lg hover:shadow-bs-accent-primary/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-3 rounded-lg font-medium text-sm bg-bs-accent-primary text-white hover:bg-bs-accent-secondary transition-all shadow-lg hover:shadow-bs-accent-primary/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {loadingData ? <span className="animate-spin">⟳</span> : <Search size={18} />}
               查询

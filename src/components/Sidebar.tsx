@@ -25,7 +25,7 @@ export default function Sidebar() {
       {/* Logo 区域 */}
       <div className="p-6 border-b border-bs-border">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-bs-accent-primary to-bs-accent-purple flex items-center justify-center text-white text-lg font-bold shadow-lg">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-bs-accent-primary to-bs-accent-secondary flex items-center justify-center text-white text-lg font-bold shadow-lg">
             BS
           </div>
           <div>
