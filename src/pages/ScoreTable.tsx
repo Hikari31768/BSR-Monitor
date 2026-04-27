@@ -256,7 +256,7 @@ export default function ScoreTable() {
             className={`px-4 py-2 rounded-lg font-medium transition-all ${
               viewMode === 'single'
                 ? 'bg-bs-accent-primary text-white'
-                : 'bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-border'
+                : 'bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary'
             }`}
           >
             单谱面
@@ -266,7 +266,7 @@ export default function ScoreTable() {
             className={`px-4 py-2 rounded-lg font-medium transition-all ${
               viewMode === 'playlist'
                 ? 'bg-bs-accent-primary text-white'
-                : 'bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-border'
+                : 'bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary'
             }`}
           >
             歌单
