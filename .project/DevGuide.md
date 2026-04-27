@@ -19,6 +19,16 @@
 | `npm run build:tauri` | 构建完整 Tauri 应用 |
 | `npm run preview` | 预览前端构建结果 |
 
+## CDP 远程调试
+
+`npm run dev` 启动时自动注入 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=9222"`，程序运行期间可随时通过 CDP 连接 9222 端口，可用于：
+- 确认 UI 设计与布局是否符合预期
+- 验证交互功能是否正常触发
+- 检查 DOM 结构与样式状态
+- 通过 `http://localhost:9222/json` 获取页面列表，通过 `http://localhost:9222/json/version` 获取浏览器信息
+
+详见 [CDP调试](dev/CDP调试.md)。
+
 ## 文档索引
 
 | 文档 | 概述 |
