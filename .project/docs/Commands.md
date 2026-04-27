@@ -64,8 +64,7 @@ src-tauri/src/commands/
 interface MapScoresResponse {
   map: Map;                    // 谱面基本信息
   current_diffs: MapDiff[];    // 当前版本所有难度
-  no_score_diffs: NoScoreDiffGroup[];  // 无分数难度（按模式分组）
-  scores: ScoreRowData[];      // 成绩数据行
+  scores: ScoreRowData[];      // 成绩数据行（每个难度一行，scores 为空表示无人打过）
 }
 
 interface ScoreRowData {
@@ -78,12 +77,6 @@ interface ScoreRowData {
 interface PlayerScoreCell {
   player_id: string;
   accuracy: number;
-  is_current_version: boolean;
-}
-
-interface NoScoreDiffGroup {
-  mode: string;
-  difficulties: string[];      // 该模式下无分数的难度列表
 }
 
 interface PlaylistScoresResponse {

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Map, ScoreRowData, NoScoreDiffGroup, PlayerInfo } from '../types';
+import { Map, ScoreRowData, PlayerInfo } from '../types';
 import DiffBadge from './DiffBadge';
 import ModeIcon from './ModeIcon';
 import CoverWithAudio from './CoverWithAudio';
@@ -9,7 +9,6 @@ import { formatAccuracy } from '../utils/format';
 interface MapScoreGroupProps {
   map: Map;
   scores: ScoreRowData[];
-  noScoreDiffs: NoScoreDiffGroup[];
   players: PlayerInfo[];
   showMapDivider?: boolean;
 }
@@ -17,56 +16,40 @@ interface MapScoreGroupProps {
 export default function MapScoreGroup({
   map,
   scores,
-  noScoreDiffs,
   players,
   showMapDivider,
 }: MapScoreGroupProps) {
-  // 过滤掉所有玩家都没有成绩的行
+  // 过滤掉所有已选玩家都没有成绩的行
   const filteredScores = scores.filter(scoreRow =>
     players.some(player =>
       scoreRow.scores.some(s => s.player_id === player.id)
     )
   );
 
-  // 计算被过滤掉的难度（原本有成绩，但当前筛选玩家都没有）
-  const filteredOutRows = scores.filter(scoreRow =>
+  // 派生"无成绩"难度（在当前选中的玩家下没有成绩）
+  const noScoreRows = scores.filter(scoreRow =>
     !players.some(player =>
       scoreRow.scores.some(s => s.player_id === player.id)
     )
   );
 
-  // 合并到 noScoreDiffs 显示：按 mode 分组
-  const extraNoScoreDiffs: NoScoreDiffGroup[] = [];
-  filteredOutRows.forEach(row => {
-    const existingGroup = extraNoScoreDiffs.find(g => g.mode === row.mode);
+  // 按 mode 分组无成绩难度
+  const noScoreDiffGroups: { mode: string; difficulties: string[] }[] = [];
+  noScoreRows.forEach(row => {
+    const existingGroup = noScoreDiffGroups.find(g => g.mode === row.mode);
     if (existingGroup) {
       if (!existingGroup.difficulties.includes(row.difficulty)) {
         existingGroup.difficulties.push(row.difficulty);
       }
     } else {
-      extraNoScoreDiffs.push({
+      noScoreDiffGroups.push({
         mode: row.mode,
         difficulties: [row.difficulty],
       });
     }
   });
 
-  // 合并原始 noScoreDiffs 和被过滤掉的难度
-  const allNoScoreDiffs: NoScoreDiffGroup[] = [...noScoreDiffs];
-  extraNoScoreDiffs.forEach(extra => {
-    const existingGroup = allNoScoreDiffs.find(g => g.mode === extra.mode);
-    if (existingGroup) {
-      extra.difficulties.forEach(diff => {
-        if (!existingGroup.difficulties.includes(diff)) {
-          existingGroup.difficulties.push(diff);
-        }
-      });
-    } else {
-      allNoScoreDiffs.push(extra);
-    }
-  });
-
-  // 计算网格列数：谱面信息(1) + 难度(1) + 玩家列数 + 空白列(1)
+  // 计算网格列数
   const gridColumns = useMemo(() => {
     return `18rem 6rem ${players.map(() => '7rem').join(' ')} 7rem`;
   }, [players.length]);
@@ -76,8 +59,8 @@ export default function MapScoreGroup({
     return scoreRow.scores.find(s => s.player_id === playerId);
   }
 
-  if (scores.length === 0) {
-    // 无成绩的情况
+  // 无成绩快捷渲染：所有难度对当前玩家都无成绩
+  if (filteredScores.length === 0) {
     return (
       <div
         className={`grid border-b border-bs-border hover:bg-bs-bg-tertiary/50 transition-colors ${
@@ -98,9 +81,9 @@ export default function MapScoreGroup({
               </div>
             </div>
           </div>
-          {allNoScoreDiffs.length > 0 && (
+          {noScoreDiffGroups.length > 0 && (
             <div className="mt-3 pt-3 border-t border-bs-border/50 space-y-1">
-              {allNoScoreDiffs.map(group => (
+              {noScoreDiffGroups.map(group => (
                 <div key={group.mode} className="flex items-center justify-center gap-2">
                   <ModeIcon mode={group.mode} size={14} />
                   <div className="flex gap-1">
@@ -114,12 +97,12 @@ export default function MapScoreGroup({
           )}
         </div>
 
-        {/* 难度列 - 显示无成绩 */}
+        {/* 难度列 */}
         <div className="p-4 border-r border-bs-border flex items-center justify-center">
           <span className="text-xs text-bs-text-muted">无成绩</span>
         </div>
 
-        {/* 玩家列 - 空 */}
+        {/* 玩家列 */}
         {players.map(player => (
           <div key={player.id} className="p-4 border-r border-bs-border flex items-center justify-center">
             <span className="text-bs-border">-</span>
@@ -132,7 +115,7 @@ export default function MapScoreGroup({
     );
   }
 
-  // 有成绩的情况
+  // 有成绩的情况 — 统一渲染路径
   return (
     <div
       className={`grid border-b border-bs-border hover:bg-bs-bg-tertiary/50 transition-colors ${
@@ -156,10 +139,10 @@ export default function MapScoreGroup({
             </div>
           </div>
         </div>
-        {/* 无成绩难度列表 */}
-        {allNoScoreDiffs.length > 0 && (
+        {/* 无成绩难度徽章 */}
+        {noScoreDiffGroups.length > 0 && (
           <div className="mt-3 pt-3 border-t border-bs-border/50 space-y-1">
-            {allNoScoreDiffs.map(group => (
+            {noScoreDiffGroups.map(group => (
               <div key={group.mode} className="flex items-center justify-center gap-2">
                 <ModeIcon mode={group.mode} size={14} />
                 <div className="flex gap-1">

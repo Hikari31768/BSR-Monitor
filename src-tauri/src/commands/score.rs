@@ -32,12 +32,6 @@ pub struct PlayerScoreCell {
     pub accuracy: f32,
 }
 
-/// 无成绩难度的分组（按模式）
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct NoScoreDiffGroup {
-    pub mode: String,
-    pub difficulties: Vec<String>,
-}
 
 /// MapScoresResponse 结构
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -45,7 +39,6 @@ pub struct MapScoresResponse {
     pub map: db::Map,
     pub current_diffs: Vec<CurrentDiffInfo>,
     pub scores: Vec<ScoreRowData>,
-    pub no_score_diffs: Vec<NoScoreDiffGroup>, // 无成绩的难度（按模式分组）
 }
 
 /// PlaylistScoresResponse 结构
@@ -165,22 +158,21 @@ fn build_map_scores_response(
         all_scores.extend(player_scores);
     }
 
-    // 4. 构建成绩行和无成绩难度分组
-    let (score_rows, no_score_diffs) = build_score_rows(&current_diffs, all_scores);
+    // 4. 构建成绩行
+    let score_rows = build_score_rows(&current_diffs, all_scores);
 
     Ok(MapScoresResponse {
         map,
         current_diffs,
         scores: score_rows,
-        no_score_diffs,
     })
 }
 
-/// 构建成绩行和无成绩难度分组
+/// 构建成绩行（每个难度一行，scores 为空表示无人打过）
 fn build_score_rows(
     current_diffs: &[CurrentDiffInfo],
     all_scores: Vec<PlayerScore>,
-) -> (Vec<ScoreRowData>, Vec<NoScoreDiffGroup>) {
+) -> Vec<ScoreRowData> {
     // 1. 构建当前版本难度集合
     let current_diff_set: std::collections::HashSet<(String, String)> = current_diffs
         .iter()
@@ -194,11 +186,9 @@ fn build_score_rows(
         scores_by_diff.entry(key).or_default().push((score.player_id.clone(), score));
     }
 
-    // 3. 构建成绩行（只包含有成绩的难度）和无成绩难度分组
+    // 3. 为每个当前版本难度创建一行
     let mut score_rows: Vec<ScoreRowData> = Vec::new();
-    let mut no_score_diffs_by_mode: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
 
-    // 3.1 首先处理所有当前版本难度
     for diff in current_diffs {
         let key = (diff.mode.clone(), diff.difficulty.clone());
         let player_scores = scores_by_diff.get(&key).cloned().unwrap_or_default();
@@ -219,24 +209,16 @@ fn build_score_rows(
             })
             .collect();
 
-        if !scores.is_empty() {
-            // 有成绩：加入成绩行
-            score_rows.push(ScoreRowData {
-                mode: diff.mode.clone(),
-                difficulty: diff.difficulty.clone(),
-                is_current_version: true,
-                scores,
-            });
-        } else {
-            // 无成绩：加入无成绩分组
-            no_score_diffs_by_mode
-                .entry(diff.mode.clone())
-                .or_default()
-                .push(diff.difficulty.clone());
-        }
+        // 无论有无成绩都创建一行
+        score_rows.push(ScoreRowData {
+            mode: diff.mode.clone(),
+            difficulty: diff.difficulty.clone(),
+            is_current_version: true,
+            scores,
+        });
     }
 
-    // 3.2 然后添加有成绩但不在当前版本的难度
+    // 4. 添加有成绩但不在当前版本的难度
     for (key, player_scores) in &scores_by_diff {
         if !current_diff_set.contains(key) {
             let mut player_best: std::collections::HashMap<String, f32> = std::collections::HashMap::new();
@@ -255,18 +237,16 @@ fn build_score_rows(
                 })
                 .collect();
 
-            if !scores.is_empty() {
-                score_rows.push(ScoreRowData {
-                    mode: key.0.clone(),
-                    difficulty: key.1.clone(),
-                    is_current_version: false,
-                    scores,
-                });
-            }
+            score_rows.push(ScoreRowData {
+                mode: key.0.clone(),
+                difficulty: key.1.clone(),
+                is_current_version: false,
+                scores,
+            });
         }
     }
 
-    // 4. 按难度排序成绩行
+    // 5. 按难度排序
     score_rows.sort_by(|a, b| {
         let mode_order = mode_sort_order(&a.mode).cmp(&mode_sort_order(&b.mode));
         if mode_order != std::cmp::Ordering::Equal {
@@ -275,21 +255,7 @@ fn build_score_rows(
         difficulty_sort_order(&a.difficulty).cmp(&difficulty_sort_order(&b.difficulty))
     });
 
-    // 5. 构建无成绩难度分组（按模式排序，每个模式内难度排序）
-    let mut no_score_diffs: Vec<NoScoreDiffGroup> = no_score_diffs_by_mode
-        .into_iter()
-        .map(|(mode, difficulties)| {
-            let mut sorted_diffs = difficulties;
-            sorted_diffs.sort_by_key(|d| difficulty_sort_order(d));
-            NoScoreDiffGroup {
-                mode,
-                difficulties: sorted_diffs,
-            }
-        })
-        .collect();
-    no_score_diffs.sort_by_key(|g| mode_sort_order(&g.mode));
-
-    (score_rows, no_score_diffs)
+    score_rows
 }
 
 /// 获取模式排序权重

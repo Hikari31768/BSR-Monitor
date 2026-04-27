@@ -120,13 +120,6 @@
 | `player_id: String` | `player_id: string` | 玩家 ID |
 | `accuracy: f32` | `accuracy: number` | 准确度 |
 
-### NoScoreDiffGroup
-
-| Rust (`commands/score.rs::NoScoreDiffGroup`) | TypeScript (`types/index.ts::NoScoreDiffGroup`) | 说明 |
-|----------------------------------------------|--------------------------------------------------|------|
-| `mode: String` | `mode: string` | 模式 |
-| `difficulties: Vec<String>` | `difficulties: string[]` | 难度列表 |
-
 ### CurrentDiffInfo
 
 | Rust (`commands/score.rs::CurrentDiffInfo`) | TypeScript (`types/index.ts::CurrentDiffInfo`) | 说明 |
@@ -142,7 +135,6 @@
 | `map: db::Map` | `map: Map` | 谱面信息 |
 | `current_diffs: Vec<CurrentDiffInfo>` | `current_diffs: CurrentDiffInfo[]` | 当前版本难度列表 |
 | `scores: Vec<ScoreRowData>` | `scores: ScoreRowData[]` | 成绩行数据列表 |
-| `no_score_diffs: Vec<NoScoreDiffGroup>` | `no_score_diffs: NoScoreDiffGroup[]` | 无成绩难度分组 |
 
 ### PlaylistScoresResponse
 

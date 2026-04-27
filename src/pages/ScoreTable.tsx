@@ -384,7 +384,6 @@ export default function ScoreTable() {
                   key={mapData.map.key}
                   map={mapData.map}
                   scores={mapData.scores}
-                  noScoreDiffs={mapData.no_score_diffs}
                   players={sortedPlayers}
                   showMapDivider={viewMode === 'playlist' && mapIndex < displayData.length - 1}
                 />
