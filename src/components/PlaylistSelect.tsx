@@ -130,8 +130,8 @@ export default function PlaylistSelect({ playlists, selectedId, onSelect }: Play
                 selectedId === option.id
                   ? 'bg-bs-accent-primary/20 text-bs-accent-primary'
                   : index === activeIndex
-                    ? 'bg-bs-border text-bs-text-primary'
-                    : 'text-bs-text-primary'
+                    ? 'bg-bs-bg-hover text-bs-text-primary'
+                    : 'text-bs-text-secondary hover:text-bs-text-primary'
               }`}
             >
               {option.label}
