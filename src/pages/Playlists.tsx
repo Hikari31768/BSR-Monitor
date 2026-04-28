@@ -235,7 +235,7 @@ export default function Playlists() {
     setUpdatingId(playlistId);
     setInlineError('');
     try {
-      await invoke('update_playlist', { playlistId });
+      await invoke('add_playlist', { playlistId });
       await loadPlaylists();
     } catch (e) {
       setInlineError(`更新失败: ${e}`);
