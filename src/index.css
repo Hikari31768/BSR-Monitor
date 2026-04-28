@@ -147,8 +147,16 @@ body {
   border-color: rgba(62, 207, 142, 0.5);
 }
 
+.hover\:border-bs-accent-secondary\/50:hover {
+  border-color: rgba(46, 179, 122, 0.5);
+}
+
 .hover\:shadow-bs-accent-primary\/5:hover {
   box-shadow: 0 4px 12px rgba(62, 207, 142, 0.05);
+}
+
+.hover\:shadow-bs-accent-secondary\/5:hover {
+  box-shadow: 0 4px 12px rgba(46, 179, 122, 0.05);
 }
 
 .hover\:bg-bs-bg-hover:hover {
