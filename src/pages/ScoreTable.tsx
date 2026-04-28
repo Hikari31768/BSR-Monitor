@@ -282,23 +282,19 @@ export default function ScoreTable() {
               type="text"
               value={mapInput}
               onChange={(e) => setMapInput(e.target.value)}
-              placeholder={selectedPlayers.length === 0 ? "请先选择玩家" : "输入谱面 Key 或 Hash..."}
-              disabled={selectedPlayers.length === 0}
-              className="flex-1 px-4 py-3 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary placeholder-bs-text-muted focus:border-bs-accent-primary focus:ring-2 focus:ring-bs-accent-primary/20 focus:outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              placeholder="输入谱面 Key 或 Hash..."
+              className="flex-1 px-4 py-3 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary placeholder-bs-text-muted focus:border-bs-accent-primary focus:ring-2 focus:ring-bs-accent-primary/20 focus:outline-none transition-all"
               onKeyDown={(e) => e.key === 'Enter' && searchMap()}
             />
             <button
               onClick={searchMap}
-              disabled={loadingData || !mapInput.trim() || selectedPlayers.length === 0}
+              disabled={loadingData || !mapInput.trim()}
               className="px-6 py-3 rounded-lg font-medium text-sm bg-bs-accent-primary text-white hover:bg-bs-accent-secondary transition-all shadow-lg hover:shadow-bs-accent-primary/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {loadingData ? <span className="animate-spin">⟳</span> : <Search size={18} />}
               查询
             </button>
           </div>
-          {selectedPlayers.length === 0 && (
-            <p className="text-xs text-bs-text-muted -mt-2 mb-4">请先选择玩家后再查询谱面</p>
-          )}
         </div>
       )}
 
@@ -310,9 +306,6 @@ export default function ScoreTable() {
             selectedId={selectedPlaylistId}
             onSelect={setSelectedPlaylistId}
           />
-          {selectedPlaylistId && selectedPlayers.length === 0 && (
-            <p className="text-xs text-bs-text-muted">请先选择玩家后再查询歌单</p>
-          )}
 
           {/* 分页控制 */}
           {playlistData && playlistData.total_pages > 1 && (
@@ -355,10 +348,9 @@ export default function ScoreTable() {
       )}
 
       {/* 成绩表格 - 占据剩余高度，独立滚动 */}
-      {(displayData.length > 0 || loadingData) && (
-        <div className="bg-bs-bg-secondary rounded-xl border border-bs-border shadow-lg overflow-hidden flex-1 flex flex-col min-h-0">
-          <div className="score-table-scroll overflow-auto flex-1 flex flex-col min-h-0">
-          {/* 表头 */}
+      <div className="bg-bs-bg-secondary rounded-xl border border-bs-border shadow-lg overflow-hidden flex-1 flex flex-col min-h-0">
+        <div className="score-table-scroll overflow-auto flex-1 flex flex-col min-h-0">
+          {/* 表头 - 始终显示，提供添加玩家的入口 */}
           <ScoreTableHeader
             players={sortedPlayers}
             onAddPlayer={() => setIsPlayerModalOpen(true)}
@@ -376,7 +368,15 @@ export default function ScoreTable() {
             </div>
           ) : displayData.length === 0 ? (
             <div className="p-8 flex-1">
-              <EmptyState message="暂无数据" />
+              <EmptyState
+                message={
+                  selectedPlayers.length === 0
+                    ? '请先选择玩家'
+                    : viewMode === 'single'
+                      ? (mapInput ? '该谱面无玩家成绩数据' : '请输入谱面 Key 或 Hash 开始查询')
+                      : (selectedPlaylistId ? '该歌单暂无玩家成绩数据' : '请选择歌单开始查询')
+                }
+              />
             </div>
           ) : (
             <div className="divide-y divide-bs-border flex-1">
@@ -391,24 +391,8 @@ export default function ScoreTable() {
               ))}
             </div>
           )}
-          </div>
         </div>
-      )}
-
-      {/* 空状态提示 */}
-      {!loadingData && displayData.length === 0 && !loadingData && (
-        <div className="mt-8">
-          {viewMode === 'single' ? (
-            <EmptyState
-              message={mapInput ? '该谱面无玩家成绩数据' : '请输入谱面 Key 或 Hash 开始查询'}
-            />
-          ) : (
-            <EmptyState
-              message={selectedPlaylistId ? '该歌单暂无玩家成绩数据' : '请选择歌单开始查询'}
-            />
-          )}
-        </div>
-      )}
+      </div>
 
       {/* 玩家选择弹窗 */}
       <PlayerSelectModal
