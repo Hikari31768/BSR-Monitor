@@ -102,15 +102,24 @@ export default function Players() {
           return p;
         }));
 
+        const isCompleted = progressData.stage === 'completed';
+
         // 更新 UI 状态
-        setPlayerUIStates(prev => ({
-          ...prev,
-          [playerId]: {
-            loading: true,
-            progress: progressData.progress,
-            statusMessage: progressData.message || `阶段: ${progressData.stage}`
+        setPlayerUIStates(prev => {
+          if (isCompleted) {
+            const updated = { ...prev };
+            delete updated[playerId];
+            return updated;
           }
-        }));
+          return {
+            ...prev,
+            [playerId]: {
+              loading: true,
+              progress: progressData.progress,
+              statusMessage: progressData.message || `阶段: ${progressData.stage}`
+            }
+          };
+        });
       }
     }).then(unlisten => {
       unlistenRef.current = unlisten;
