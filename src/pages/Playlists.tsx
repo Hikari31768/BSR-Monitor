@@ -93,15 +93,24 @@ export default function Playlists() {
 
         const playlistIdNum = parseInt(playlistId);
 
+        const isCompleted = progressData.stage === 'completed';
+
         // 更新 UI 状态
-        setPlaylistUIStates(prev => ({
-          ...prev,
-          [playlistIdNum]: {
-            loading: true,
-            progress: progressData.progress,
-            statusMessage: progressData.message || `阶段: ${progressData.stage}`
+        setPlaylistUIStates(prev => {
+          if (isCompleted) {
+            const updated = { ...prev };
+            delete updated[playlistIdNum];
+            return updated;
           }
-        }));
+          return {
+            ...prev,
+            [playlistIdNum]: {
+              loading: true,
+              progress: progressData.progress,
+              statusMessage: progressData.message || `阶段: ${progressData.stage}`
+            }
+          };
+        });
       }
     }).then(unlisten => {
       unlistenRef.current = unlisten;
