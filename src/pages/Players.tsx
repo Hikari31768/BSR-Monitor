@@ -35,6 +35,18 @@ export default function Players() {
     }
   }
 
+  // 静默刷新数据，不触发 loading 状态
+  async function refreshPlayers(): Promise<PlayerWithScoreCount[]> {
+    try {
+      const playersWithCounts = await invoke<PlayerWithScoreCount[]>('get_players_with_score_counts');
+      setPlayers(playersWithCounts);
+      return playersWithCounts;
+    } catch (e) {
+      console.error('刷新玩家失败:', e);
+      return [];
+    }
+  }
+
   // 恢复进行中的任务状态
   const restoreActiveTasks = useCallback(async () => {
     try {
@@ -200,8 +212,8 @@ export default function Players() {
         taskId  // 传递前端生成的 task_id
       });
 
-      // 操作成功，重新加载列表
-      await loadPlayers();
+      // 操作成功，静默刷新列表
+      await refreshPlayers();
       await restoreActiveTasks();
     } catch (e) {
       // 操作失败，恢复 UI 状态
@@ -251,7 +263,7 @@ export default function Players() {
 
     try {
       await invoke('add_player', { id: playerId, liveUrl: null, alias: null });
-      const newList = await loadPlayers();
+      const newList = await refreshPlayers();
       await restoreActiveTasks();
 
       const newScoreCount = newList.find(p => p.id === playerId)?.score_count ?? oldScoreCount;

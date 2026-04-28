@@ -36,6 +36,16 @@ export default function Playlists() {
     }
   }
 
+  // 静默刷新数据，不触发 loading 状态
+  async function refreshPlaylists() {
+    try {
+      const list = await invoke<Playlist[]>('get_playlist_list');
+      setPlaylists(list);
+    } catch (e) {
+      console.error('刷新歌单失败:', e);
+    }
+  }
+
   // 恢复进行中的任务状态
   const restoreActiveTasks = useCallback(async () => {
     try {
@@ -192,8 +202,8 @@ export default function Playlists() {
         taskId  // 传递前端生成的 task_id
       });
 
-      // 操作成功，重新加载列表
-      await loadPlaylists();
+      // 操作成功，静默刷新列表
+      await refreshPlaylists();
       await restoreActiveTasks();
     } catch (e) {
       // 操作失败，恢复 UI 状态
@@ -258,7 +268,7 @@ export default function Playlists() {
 
     try {
       await invoke('add_playlist', { playlistId, taskId });
-      await loadPlaylists();
+      await refreshPlaylists();
       await restoreActiveTasks();
     } catch (e) {
       setPlaylistUIStates(prev => {
