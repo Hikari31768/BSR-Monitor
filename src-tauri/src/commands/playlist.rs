@@ -222,9 +222,9 @@ fn save_playlist_maps_with_progress(
 
             let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.to_string())
                 .with_progress("processing_maps".to_string(), progress)
-                .with_message(format!("第 {} 页：正在处理第 {} 个谱面 (共 {} 个)...", current_page, idx + 1, maps_in_current_page));
+                .with_message(format!("正在拉取第 {current_page} 页，处理 {} / {} 谱面...", idx + 1, maps_in_current_page));
             emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
-            task_state.update(task_id, progress, &format!("第 {} 页：第 {} 个谱面", current_page, idx + 1));
+            task_state.update(task_id, progress, &format!("正在拉取第 {current_page} 页，处理 {} / {} 谱面...", idx + 1, maps_in_current_page));
         }
     }
     Ok(())

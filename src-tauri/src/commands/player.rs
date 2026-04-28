@@ -196,9 +196,9 @@ async fn fetch_and_save_player(
             100.0
         };
         let msg = if is_incremental {
-            format!("正在拉取第 {} 页成绩 (共约 {} 页)，已新增 {} 条...", page, total_pages, total_scores)
+            format!("{}/{} 页，已新增成绩 {} 条...", page, total_pages, total_scores)
         } else {
-            format!("正在拉取第 {} 页成绩 (共约 {} 页)，已累计 {} 条成绩...", page, total_pages, total_scores)
+            format!("{}/{} 页，已拉取成绩 {} 条...", page, total_pages, total_scores)
         };
         let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
             .with_progress("fetching_scores".to_string(), page_progress)
