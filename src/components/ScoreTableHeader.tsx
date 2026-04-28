@@ -47,7 +47,7 @@ export default function ScoreTableHeader({
   return (
     <div className="rounded-xl flex-shrink-0">
       <div
-        className="grid bg-bs-bg-tertiary border-b border-bs-border sticky top-0 z-10 min-w-fit"
+        className="grid bg-bs-bg-tertiary border-b border-bs-border sticky top-0 z-10 min-w-fit min-h-[6rem]"
         style={{ gridTemplateColumns: gridColumns }}
       >
         {/* 谱面信息列 */}
@@ -95,7 +95,7 @@ export default function ScoreTableHeader({
                   className="w-10 h-10 rounded-full object-cover"
                 />
               ) : (
-                <div className="w-10 h-10 rounded-full bg-bs-border flex items-center justify-center">
+                <div className="w-10 h-10 rounded-full bg-bs-bg-hover flex items-center justify-center">
                   <User size={20} className="text-bs-text-muted" />
                 </div>
               )}
@@ -120,7 +120,7 @@ export default function ScoreTableHeader({
         <div className="p-4 flex items-center justify-center">
           <button
             onClick={onAddPlayer}
-            className="w-10 h-10 rounded-full bg-bs-border hover:bg-bs-accent-primary text-bs-text-primary hover:text-white transition-all flex items-center justify-center"
+            className="w-12 h-12 rounded-full bg-bs-bg-hover hover:bg-bs-accent-primary text-bs-text-primary hover:text-white transition-all flex items-center justify-center"
             title="添加玩家"
           >
             <Plus size={20} />
