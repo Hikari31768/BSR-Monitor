@@ -41,7 +41,7 @@ export default function ScoreTable() {
   const [mapSort, setMapSort] = useState<'asc' | 'desc'>('asc');
 
   // 加载状态
-  const [loadingPlayers, setLoadingPlayers] = useState(true);
+  const [loadingPlayers, setLoadingPlayers] = useState(false);
   const [, setLoadingPlaylists] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
   const [dataError, setDataError] = useState<string>('');
@@ -239,11 +239,6 @@ export default function ScoreTable() {
   const sortedPlayers = useMemo(() => {
     return [...selectedPlayers].sort((a, b) => a.order - b.order);
   }, [selectedPlayers]);
-
-  if (loadingPlayers) {
-    return <LoadingSpinner />;
-  }
-
 
   return (
     <div className="animate-fade-in h-full flex flex-col">

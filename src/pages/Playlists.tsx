@@ -5,7 +5,6 @@ import { Playlist, PlaylistMap, PlaylistUIState } from '../types';
 import PlaylistCard from '../components/PlaylistCard';
 import MapCard from '../components/MapCard';
 import Modal from '../components/Modal';
-import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 import { Plus } from 'lucide-react';
 
@@ -13,7 +12,7 @@ export default function Playlists() {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [playlistUIStates, setPlaylistUIStates] = useState<Record<number, PlaylistUIState>>({});
   const [playlistTaskIds, setPlaylistTaskIds] = useState<Record<number, string>>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<number | null>(null);
   const [showMapsModal, setShowMapsModal] = useState<number | null>(null);
@@ -286,9 +285,6 @@ export default function Playlists() {
       setUpdatingId(null);
     }
   }
-
-  if (loading) return <LoadingSpinner />;
-
 
   return (
     <div className="animate-fade-in">

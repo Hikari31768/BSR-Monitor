@@ -4,7 +4,6 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { PlayerInfo, PlayerWithScoreCount, PlayerUIState } from '../types';
 import PlayerCard from '../components/PlayerCard';
 import Modal from '../components/Modal';
-import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 import { Plus } from 'lucide-react';
 
@@ -12,7 +11,7 @@ export default function Players() {
   const [players, setPlayers] = useState<PlayerWithScoreCount[]>([]);
   const [playerUIStates, setPlayerUIStates] = useState<Record<string, PlayerUIState>>({});
   const [playerTaskIds, setPlayerTaskIds] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
   const [addForm, setAddForm] = useState({ id: '', liveUrl: '', alias: '' });
@@ -297,9 +296,6 @@ export default function Players() {
       setUpdatingId(null);
     }
   }
-
-  if (loading) return <LoadingSpinner />;
-
 
   return (
     <div className="animate-fade-in">

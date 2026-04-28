@@ -21,18 +21,10 @@ export default function Sidebar() {
   }, []);
 
   return (
-    <aside className="w-64 bg-bs-bg-secondary border-r border-bs-border flex flex-col shrink-0">
+    <aside className="w-52 bg-bs-bg-secondary border-r border-bs-border flex flex-col shrink-0">
       {/* Logo 区域 */}
       <div className="p-6 border-b border-bs-border">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-bs-accent-primary to-bs-accent-secondary flex items-center justify-center text-white text-lg font-bold shadow-lg">
-            BS
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-bs-text-primary tracking-tight">BSR Monitor</h1>
-            <p className="text-xs text-bs-text-muted">BeatSaber 成绩监控</p>
-          </div>
-        </div>
+        <div className="text-xl font-bold text-bs-text-primary tracking-tight text-center">!bsr 👀</div>
       </div>
 
       {/* 导航菜单 */}
@@ -42,7 +34,7 @@ export default function Sidebar() {
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+              `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 justify-center ${
                 isActive
                   ? 'bg-bs-accent-primary/10 text-bs-accent-primary border border-bs-accent-primary/20'
                   : 'text-bs-text-secondary hover:bg-bs-bg-tertiary hover:text-bs-text-primary'
