@@ -1,4 +1,4 @@
-import { difficultyColors, getDifficultyAbbreviation } from '../utils/difficulty';
+import { difficultyColors, difficultyBorderColors, getDifficultyAbbreviation } from '../utils/difficulty';
 
 interface DiffBadgeProps {
   difficulty: string;
@@ -11,11 +11,14 @@ export default function DiffBadge({ difficulty, showFull = false, size = 'normal
     ? 'px-1 py-0 text-[10px]'
     : 'px-2 py-0.5 text-xs';
 
+  const borderColor = difficultyBorderColors[difficulty];
+
   return (
     <span
       title={difficulty}
       aria-label={difficulty}
       className={`inline-flex items-center justify-center rounded font-semibold border ${sizeClasses} ${difficultyColors[difficulty] || difficultyColors['Unknown']}`}
+      style={borderColor ? { borderColor } : undefined}
     >
       {showFull ? difficulty : getDifficultyAbbreviation(difficulty)}
     </span>

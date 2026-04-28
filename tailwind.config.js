@@ -43,13 +43,13 @@ export default {
             info: '#3498db',
           },
         },
-        // 难度颜色（BeatSaver 风格）
+        // 难度颜色
         difficulty: {
-          easy: { bg: 'rgba(62, 207, 142, 0.2)', text: '#3ecf8e', border: 'rgba(62, 207, 142, 0.4)' },
-          normal: { bg: 'rgba(52, 152, 219, 0.2)', text: '#3498db', border: 'rgba(52, 152, 219, 0.4)' },
-          hard: { bg: 'rgba(230, 126, 34, 0.2)', text: '#e67e22', border: 'rgba(230, 126, 34, 0.4)' },
-          expert: { bg: 'rgba(231, 76, 60, 0.2)', text: '#e74c3c', border: 'rgba(231, 76, 60, 0.4)' },
-          expertplus: { bg: 'rgba(155, 89, 182, 0.2)', text: '#9b59b6', border: 'rgba(155, 89, 182, 0.4)' },
+          easy: { bg: 'rgba(52, 126, 85, 0.2)', text: '#347e55', border: 'rgba(52, 126, 85, 0.4)' },
+          normal: { bg: 'rgba(47, 102, 160, 0.2)', text: '#2f66a0', border: 'rgba(47, 102, 160, 0.4)' },
+          hard: { bg: 'rgba(177, 92, 17, 0.2)', text: '#b15c11', border: 'rgba(177, 92, 17, 0.4)' },
+          expert: { bg: 'rgba(168, 57, 34, 0.2)', text: '#a83922', border: 'rgba(168, 57, 34, 0.4)' },
+          expertplus: { bg: 'rgba(112, 73, 174, 0.2)', text: '#7049ae', border: 'rgba(112, 73, 174, 0.4)' },
         },
       },
       fontFamily: {

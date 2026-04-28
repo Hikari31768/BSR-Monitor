@@ -12,6 +12,17 @@ export const difficultyColors: Record<string, string> = {
 };
 
 /**
+ * 难度边框颜色（用于内联样式覆盖全局 * { border-color } 规则）
+ */
+export const difficultyBorderColors: Record<string, string> = {
+  'Easy': '#347e55',
+  'Normal': '#2f66a0',
+  'Hard': '#b15c11',
+  'Expert': '#a83922',
+  'ExpertPlus': '#7049ae',
+};
+
+/**
  * 获取难度对应的 Tailwind 类名
  * 与 tailwind.config.js 中的 difficulty 配置保持一致
  */

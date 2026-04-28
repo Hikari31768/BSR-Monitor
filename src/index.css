@@ -1,5 +1,28 @@
 @import "tailwindcss";
 
+@theme {
+  /* 难度颜色 */
+  --color-difficulty-easy-bg: rgba(52, 126, 85, 0.2);
+  --color-difficulty-easy-text: #347e55;
+  --color-difficulty-easy-border: #347e55;
+
+  --color-difficulty-normal-bg: rgba(47, 102, 160, 0.2);
+  --color-difficulty-normal-text: #2f66a0;
+  --color-difficulty-normal-border: #2f66a0;
+
+  --color-difficulty-hard-bg: rgba(177, 92, 17, 0.2);
+  --color-difficulty-hard-text: #b15c11;
+  --color-difficulty-hard-border: #b15c11;
+
+  --color-difficulty-expert-bg: rgba(168, 57, 34, 0.2);
+  --color-difficulty-expert-text: #a83922;
+  --color-difficulty-expert-border: #a83922;
+
+  --color-difficulty-expertplus-bg: rgba(112, 73, 174, 0.2);
+  --color-difficulty-expertplus-text: #7049ae;
+  --color-difficulty-expertplus-border: #7049ae;
+}
+
 :root {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-size: 16px;
