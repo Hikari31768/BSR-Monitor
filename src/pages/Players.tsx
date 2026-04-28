@@ -21,14 +21,15 @@ export default function Players() {
   const [updateError, setUpdateError] = useState<string>('');
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
-  async function loadPlayers() {
+  async function loadPlayers(): Promise<PlayerWithScoreCount[]> {
     setLoading(true);
     try {
-      // 后端返回扁平结构（#[serde(flatten)]），直接使用
       const playersWithCounts = await invoke<PlayerWithScoreCount[]>('get_players_with_score_counts');
       setPlayers(playersWithCounts);
+      return playersWithCounts;
     } catch (e) {
       console.error('加载玩家失败:', e);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -235,10 +236,50 @@ export default function Players() {
   async function handleUpdateScores(playerId: string) {
     setUpdatingId(playerId);
     setUpdateError('');
+
+    const oldScoreCount = players.find(p => p.id === playerId)?.score_count ?? 0;
+
+    setPlayerUIStates(prev => ({
+      ...prev,
+      [playerId]: {
+        loading: false,
+        progress: 0,
+        statusMessage: '',
+        updatingMessage: '更新中...'
+      }
+    }));
+
     try {
-      await invoke('update_player_scores', { playerId });
-      loadPlayers();
+      await invoke('add_player', { id: playerId, liveUrl: null, alias: null });
+      const newList = await loadPlayers();
+      await restoreActiveTasks();
+
+      const newScoreCount = newList.find(p => p.id === playerId)?.score_count ?? oldScoreCount;
+      const delta = Math.max(0, newScoreCount - oldScoreCount);
+
+      setPlayerUIStates(prev => ({
+        ...prev,
+        [playerId]: {
+          loading: false,
+          progress: 0,
+          statusMessage: '',
+          updatingMessage: `更新成绩 ${delta} 条`
+        }
+      }));
+
+      setTimeout(() => {
+        setPlayerUIStates(prev => {
+          const updated = { ...prev };
+          delete updated[playerId];
+          return updated;
+        });
+      }, 2000);
     } catch (e) {
+      setPlayerUIStates(prev => {
+        const updated = { ...prev };
+        delete updated[playerId];
+        return updated;
+      });
       setUpdateError(`更新失败: ${e}`);
     } finally {
       setUpdatingId(null);

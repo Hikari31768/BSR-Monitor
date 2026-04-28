@@ -243,10 +243,34 @@ export default function Playlists() {
   async function handleUpdatePlaylist(playlistId: number) {
     setUpdatingId(playlistId);
     setInlineError('');
+
+    const taskId = crypto.randomUUID();
+    setPlaylistTaskIds(prev => ({ ...prev, [playlistId]: taskId }));
+    setPlaylistUIStates(prev => ({
+      ...prev,
+      [playlistId]: {
+        loading: true,
+        progress: 0,
+        statusMessage: '准备更新...'
+      }
+    }));
+    setPlaylists(prev => prev.map(p => p.playlist_id === playlistId ? { ...p, name: '加载中...' } : p));
+
     try {
-      await invoke('add_playlist', { playlistId });
+      await invoke('add_playlist', { playlistId, taskId });
       await loadPlaylists();
+      await restoreActiveTasks();
     } catch (e) {
+      setPlaylistUIStates(prev => {
+        const updated = { ...prev };
+        delete updated[playlistId];
+        return updated;
+      });
+      setPlaylistTaskIds(prev => {
+        const updated = { ...prev };
+        delete updated[playlistId];
+        return updated;
+      });
       setInlineError(`更新失败: ${e}`);
     } finally {
       setUpdatingId(null);

@@ -58,6 +58,11 @@ export default function PlayerCard({ player, uiState, scoreCount, onUpdateScores
             }`}>
               {isLoading ? '处理中...' : `${scoreCount} 成绩`}
             </span>
+            {uiState?.updatingMessage && !isLoading && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-bs-status-success/15 text-bs-status-success border border-bs-status-success/30">
+                {uiState.updatingMessage}
+              </span>
+            )}
           </div>
 
           {/* 进度条和状态消息 */}

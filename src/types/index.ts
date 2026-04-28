@@ -10,6 +10,8 @@ export interface PlayerUIState {
   loading: boolean;
   progress: number;
   statusMessage: string;
+  /** 更新操作时的临时提示（覆盖在成绩数量旁），2秒后自动清除 */
+  updatingMessage?: string;
 }
 
 export interface PlaylistUIState {
