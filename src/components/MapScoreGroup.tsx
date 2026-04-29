@@ -33,18 +33,18 @@ export default function MapScoreGroup({
     )
   );
 
-  // 按 mode 分组无成绩难度
-  const noScoreDiffGroups: { mode: string; difficulties: string[] }[] = [];
+  // 按 mode 分组无成绩难度（保留星级信息）
+  const noScoreDiffGroups: { mode: string; difficulties: { difficulty: string; stars?: number }[] }[] = [];
   noScoreRows.forEach(row => {
     const existingGroup = noScoreDiffGroups.find(g => g.mode === row.mode);
     if (existingGroup) {
-      if (!existingGroup.difficulties.includes(row.difficulty)) {
-        existingGroup.difficulties.push(row.difficulty);
+      if (!existingGroup.difficulties.find(d => d.difficulty === row.difficulty)) {
+        existingGroup.difficulties.push({ difficulty: row.difficulty, stars: row.stars ?? undefined });
       }
     } else {
       noScoreDiffGroups.push({
         mode: row.mode,
-        difficulties: [row.difficulty],
+        difficulties: [{ difficulty: row.difficulty, stars: row.stars ?? undefined }],
       });
     }
   });
@@ -87,8 +87,8 @@ export default function MapScoreGroup({
                 <div key={group.mode} className="flex items-center justify-center gap-2">
                   <ModeIcon mode={group.mode} size={14} />
                   <div className="flex gap-1">
-                    {group.difficulties.map(diff => (
-                      <DiffBadge key={diff} difficulty={diff} size="sm" />
+                    {group.difficulties.map(d => (
+                      <DiffBadge key={d.difficulty} difficulty={d.difficulty} size="sm" stars={d.stars} />
                     ))}
                   </div>
                 </div>
@@ -146,8 +146,8 @@ export default function MapScoreGroup({
               <div key={group.mode} className="flex items-center justify-center gap-2">
                 <ModeIcon mode={group.mode} size={14} />
                 <div className="flex gap-1">
-                  {group.difficulties.map(diff => (
-                    <DiffBadge key={diff} difficulty={diff} size="sm" />
+                  {group.difficulties.map(d => (
+                    <DiffBadge key={d.difficulty} difficulty={d.difficulty} size="sm" stars={d.stars} />
                   ))}
                 </div>
               </div>
@@ -167,12 +167,7 @@ export default function MapScoreGroup({
             }`}
           >
             <ModeIcon mode={scoreRow.mode} size={18} />
-            <DiffBadge difficulty={scoreRow.difficulty} />
-            {scoreRow.stars !== undefined && scoreRow.stars !== null && (
-              <span className="text-xs text-bs-text-muted font-mono">
-                {scoreRow.stars.toFixed(1)}★
-              </span>
-            )}
+            <DiffBadge difficulty={scoreRow.difficulty} stars={scoreRow.stars ?? undefined} />
             {!scoreRow.is_current_version && (
               <span title="非当前版本难度" className="text-xs text-bs-text-muted">🕒</span>
             )}
