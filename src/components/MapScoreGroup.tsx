@@ -11,23 +11,44 @@ interface MapScoreGroupProps {
   scores: ScoreRowData[];
   players: PlayerInfo[];
   showMapDivider?: boolean;
+  diffSort?: 'asc' | 'desc';
 }
+
+const diffOrderValue = (d: string) => {
+  const map: Record<string, number> = { Easy: 1, Normal: 2, Hard: 3, Expert: 4, ExpertPlus: 5 };
+  return map[d] ?? 99;
+};
+
+const modeOrderValue = (m: string) => {
+  const map: Record<string, number> = { Standard: 1, OneSaber: 2, NoArrows: 3, '90Degree': 4, '360Degree': 5, Lightshow: 6, Lawless: 7, Legacy: 8 };
+  return map[m] ?? 99;
+};
 
 export default function MapScoreGroup({
   map,
   scores,
   players,
   showMapDivider,
+  diffSort = 'desc',
 }: MapScoreGroupProps) {
+  // 难度列排序（前端排序）
+  const sortedScores = useMemo(() => {
+    return [...scores].sort((a, b) => {
+      const mo = modeOrderValue(a.mode) - modeOrderValue(b.mode);
+      if (mo !== 0) return mo;
+      return diffSort === 'desc' ? diffOrderValue(b.difficulty) - diffOrderValue(a.difficulty) : diffOrderValue(a.difficulty) - diffOrderValue(b.difficulty);
+    });
+  }, [scores, diffSort]);
+
   // 过滤掉所有已选玩家都没有成绩的行
-  const filteredScores = scores.filter(scoreRow =>
+  const filteredScores = sortedScores.filter(scoreRow =>
     players.some(player =>
       scoreRow.scores.some(s => s.player_id === player.id)
     )
   );
 
   // 派生"无成绩"难度（在当前选中的玩家下没有成绩）
-  const noScoreRows = scores.filter(scoreRow =>
+  const noScoreRows = sortedScores.filter(scoreRow =>
     !players.some(player =>
       scoreRow.scores.some(s => s.player_id === player.id)
     )
@@ -48,6 +69,9 @@ export default function MapScoreGroup({
       });
     }
   });
+
+  // 折叠区难度始终正序
+  noScoreDiffGroups.forEach(g => g.difficulties.sort((a, b) => diffOrderValue(a.difficulty) - diffOrderValue(b.difficulty)));
 
   // 计算网格列数
   const gridColumns = useMemo(() => {
@@ -169,7 +193,7 @@ export default function MapScoreGroup({
             <ModeIcon mode={scoreRow.mode} size={18} />
             <DiffBadge difficulty={scoreRow.difficulty} stars={scoreRow.stars ?? undefined} />
             {!scoreRow.is_current_version && (
-              <span title="非当前版本难度" className="text-xs text-bs-text-muted">🕒</span>
+              <span title="非当前版本难度" className="text-xs text-bs-text-muted"></span>
             )}
           </div>
 

@@ -264,43 +264,7 @@ fn build_score_rows(
         }
     }
 
-    // 5. 按难度排序
-    score_rows.sort_by(|a, b| {
-        let mode_order = mode_sort_order(&a.mode).cmp(&mode_sort_order(&b.mode));
-        if mode_order != std::cmp::Ordering::Equal {
-            return mode_order;
-        }
-        difficulty_sort_order(&a.difficulty).cmp(&difficulty_sort_order(&b.difficulty))
-    });
-
     score_rows
-}
-
-/// 获取模式排序权重
-fn mode_sort_order(mode: &str) -> i32 {
-    match mode {
-        "Standard" => 1,
-        "OneSaber" => 2,
-        "NoArrows" => 3,
-        "90Degree" => 4,
-        "360Degree" => 5,
-        "Lightshow" => 6,
-        "Lawless" => 7,
-        "Legacy" => 8,
-        _ => 99,
-    }
-}
-
-/// 获取难度排序权重
-fn difficulty_sort_order(difficulty: &str) -> i32 {
-    match difficulty {
-        "Easy" => 1,
-        "Normal" => 2,
-        "Hard" => 3,
-        "Expert" => 4,
-        "ExpertPlus" => 5,
-        _ => 99,
-    }
 }
 
 /// 按需拉取并存储谱面星级（顺序调用，避免并发给 BeatLeader 造成负担）

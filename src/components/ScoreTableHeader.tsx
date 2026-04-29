@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { PlayerInfo } from '../types';
-import { User, Plus, X } from 'lucide-react';
+import { User, Plus, X, ArrowUpDown } from 'lucide-react';
 
 interface ScoreTableHeaderProps {
   players: PlayerInfo[];
@@ -10,6 +10,8 @@ interface ScoreTableHeaderProps {
   mapSort: 'asc' | 'desc';
   onToggleMapSort: () => void;
   showMapSort: boolean;
+  diffSort: 'asc' | 'desc';
+  onToggleDiffSort: () => void;
 }
 
 export default function ScoreTableHeader({
@@ -20,6 +22,8 @@ export default function ScoreTableHeader({
   mapSort,
   onToggleMapSort,
   showMapSort,
+  diffSort,
+  onToggleDiffSort,
 }: ScoreTableHeaderProps) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -69,7 +73,14 @@ export default function ScoreTableHeader({
 
         {/* 难度信息列 */}
         <div className="p-4 border-r border-bs-border flex items-center justify-center">
-          <span className="text-sm font-medium text-bs-text-secondary">难度</span>
+          <button
+            onClick={onToggleDiffSort}
+            className="inline-flex items-center gap-1 text-sm font-medium text-bs-text-secondary hover:text-bs-text-primary transition-colors"
+            title="切换难度排序"
+          >
+            难度
+            <ArrowUpDown size={14} className={diffSort === 'desc' ? 'text-bs-accent-primary' : 'text-bs-text-muted'} />
+          </button>
         </div>
 
         {/* 玩家列 */}

@@ -39,6 +39,7 @@ export default function ScoreTable() {
   const [playlistData, setPlaylistData] = useState<PlaylistScoresResponse | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [mapSort, setMapSort] = useState<'asc' | 'desc'>('asc');
+  const [diffSort, setDiffSort] = useState<'asc' | 'desc'>('desc');
 
   // 加载状态
   const [, setLoadingPlayers] = useState(false);
@@ -391,6 +392,8 @@ export default function ScoreTable() {
             mapSort={mapSort}
             onToggleMapSort={() => setMapSort(s => s === 'asc' ? 'desc' : 'asc')}
             showMapSort={viewMode === 'playlist'}
+            diffSort={diffSort}
+            onToggleDiffSort={() => setDiffSort(s => s === 'asc' ? 'desc' : 'asc')}
           />
 
           {/* 表格内容 */}
@@ -419,6 +422,7 @@ export default function ScoreTable() {
                   scores={mapData.scores}
                   players={sortedPlayers}
                   showMapDivider={viewMode === 'playlist' && mapIndex < displayData.length - 1}
+                  diffSort={diffSort}
                 />
               ))}
             </div>
