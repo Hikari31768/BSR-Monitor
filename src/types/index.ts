@@ -80,6 +80,7 @@ export interface ScoreRowData {
   mode: string;
   difficulty: string;
   is_current_version: boolean;
+  stars?: number;
   scores: PlayerScoreCell[];
 }
 

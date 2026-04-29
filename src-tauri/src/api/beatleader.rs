@@ -77,6 +77,23 @@ pub struct DifficultyResponse {
     pub mode_name: String,
     #[serde(default)]
     pub difficulty_name: String,
+    #[serde(default, rename = "customDifficultyName")]
+    pub custom_difficulty_name: Option<String>,
+    #[serde(default)]
+    pub stars: Option<f32>,
+}
+
+/// Leaderboards by hash response
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LeaderboardsByHashResponse {
+    pub leaderboards: Vec<LeaderboardEntry>,
+    pub song: SongResponse,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LeaderboardEntry {
+    pub id: String,
+    pub difficulty: DifficultyResponse,
 }
 
 pub struct BeatLeaderApi {
@@ -149,6 +166,20 @@ impl BeatLeaderApi {
 
     pub async fn get_leaderboard(&self, leaderboard_id: &str) -> Result<LeaderboardResponse, ApiError> {
         let url = self.client.bl_url(format!("/leaderboard/{leaderboard_id}").as_str());
+
+        self.client.request_with_retry(|| {
+            let url = url.clone();
+            let client = self.client.client().clone();
+            Box::pin(async move {
+                let response = client.get(&url).send().await?;
+                Self::handle_response(response).await
+            })
+        }, MAX_RETRIES).await
+    }
+
+    /// 通过 hash 获取谱面所有难度的排行榜信息（包含星级）
+    pub async fn get_leaderboards_by_hash(&self, hash: &str) -> Result<LeaderboardsByHashResponse, ApiError> {
+        let url = self.client.bl_url(format!("/leaderboards/hash/{hash}").as_str());
 
         self.client.request_with_retry(|| {
             let url = url.clone();

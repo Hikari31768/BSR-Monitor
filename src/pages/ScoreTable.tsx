@@ -41,7 +41,7 @@ export default function ScoreTable() {
   const [mapSort, setMapSort] = useState<'asc' | 'desc'>('asc');
 
   // 加载状态
-  const [loadingPlayers, setLoadingPlayers] = useState(false);
+  const [, setLoadingPlayers] = useState(false);
   const [, setLoadingPlaylists] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
   const [dataError, setDataError] = useState<string>('');

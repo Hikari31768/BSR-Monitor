@@ -45,6 +45,8 @@ pub async fn get_map_by_key(app: AppHandle, key: String) -> Result<crate::databa
             is_current: true,
             mode: diff.characteristic.clone(),
             difficulty: diff.difficulty.clone(),
+            stars_rating: diff.stars,
+            stars_fetched_at: None,
         }).collect();
 
         let state = app.try_state::<Mutex<rusqlite::Connection>>()
@@ -86,6 +88,8 @@ pub async fn get_map_by_hash(app: AppHandle, hash: String) -> Result<crate::data
             is_current: true,
             mode: diff.characteristic.clone(),
             difficulty: diff.difficulty.clone(),
+            stars_rating: diff.stars,
+            stars_fetched_at: None,
         }).collect();
 
         let state = app.try_state::<Mutex<rusqlite::Connection>>()

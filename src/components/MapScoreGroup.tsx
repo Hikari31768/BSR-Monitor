@@ -51,7 +51,7 @@ export default function MapScoreGroup({
 
   // 计算网格列数
   const gridColumns = useMemo(() => {
-    return `18rem 6rem ${players.map(() => '7rem').join(' ')} minmax(7rem, 1fr)`;
+    return `18rem 9rem ${players.map(() => '7rem').join(' ')} minmax(7rem, 1fr)`;
   }, [players.length]);
 
   // 查找每个玩家的成绩
@@ -168,6 +168,11 @@ export default function MapScoreGroup({
           >
             <ModeIcon mode={scoreRow.mode} size={18} />
             <DiffBadge difficulty={scoreRow.difficulty} />
+            {scoreRow.stars !== undefined && scoreRow.stars !== null && (
+              <span className="text-xs text-bs-text-muted font-mono">
+                {scoreRow.stars.toFixed(1)}★
+              </span>
+            )}
             {!scoreRow.is_current_version && (
               <span title="非当前版本难度" className="text-xs text-bs-text-muted">🕒</span>
             )}

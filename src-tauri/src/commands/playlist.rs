@@ -195,6 +195,8 @@ fn save_playlist_maps_with_progress(
                 is_current: true,
                 mode: diff.characteristic.clone(),
                 difficulty: diff.difficulty.clone(),
+                stars_rating: diff.stars,
+                stars_fetched_at: None,
             }).collect())
             .unwrap_or_default();
 

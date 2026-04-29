@@ -23,9 +23,21 @@ pub fn create_tables(conn: &Connection) -> Result<(), rusqlite::Error> {
             isCurrent BOOLEAN NOT NULL,
             mode VARCHAR(16) NOT NULL,
             difficulty VARCHAR(16) NOT NULL,
+            starsRating FLOAT,
+            starsFetchedAt BIGINT,
             PRIMARY KEY (key, hash, mode, difficulty),
             FOREIGN KEY (key) REFERENCES Map(key)
         )",
+        [],
+    )?;
+
+    // 兼容已有数据库：为已存在的 MapDiff 表添加星级列
+    conn.execute(
+        "ALTER TABLE MapDiff ADD COLUMN starsRating FLOAT",
+        [],
+    )?;
+    conn.execute(
+        "ALTER TABLE MapDiff ADD COLUMN starsFetchedAt BIGINT",
         [],
     )?;
 
