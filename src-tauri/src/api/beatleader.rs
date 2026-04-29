@@ -73,9 +73,9 @@ pub struct DifficultyResponse {
     pub value: i32,
     #[serde(default)]
     pub mode: i32,
-    #[serde(default)]
+    #[serde(default, rename = "modeName")]
     pub mode_name: String,
-    #[serde(default)]
+    #[serde(default, rename = "difficultyName")]
     pub difficulty_name: String,
     #[serde(default, rename = "customDifficultyName")]
     pub custom_difficulty_name: Option<String>,

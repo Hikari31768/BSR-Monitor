@@ -301,6 +301,9 @@ async fn fetch_and_store_stars(
                 for entry in &response.leaderboards {
                     let diff = &entry.difficulty;
                     if let Some(stars) = diff.stars {
+                        if stars <= 0.0 {
+                            continue;
+                        }
                         let mode_name = if diff.mode_name.is_empty() {
                             "Standard".to_string()
                         } else {
