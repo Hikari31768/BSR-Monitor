@@ -1,5 +1,25 @@
 use rusqlite::Connection;
 
+fn add_column_if_not_exists(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    col_type: &str,
+) -> Result<(), rusqlite::Error> {
+    let exists: bool = conn.query_row(
+        "SELECT COUNT(*) > 0 FROM pragma_table_info(?) WHERE name = ?",
+        [table, column],
+        |r| r.get(0),
+    )?;
+    if !exists {
+        conn.execute(
+            &format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, col_type),
+            [],
+        )?;
+    }
+    Ok(())
+}
+
 pub fn create_tables(conn: &Connection) -> Result<(), rusqlite::Error> {
     // Map 表 - 谱面基本信息
     conn.execute(
@@ -31,15 +51,9 @@ pub fn create_tables(conn: &Connection) -> Result<(), rusqlite::Error> {
         [],
     )?;
 
-    // 兼容已有数据库：为已存在的 MapDiff 表添加星级列
-    conn.execute(
-        "ALTER TABLE MapDiff ADD COLUMN starsRating FLOAT",
-        [],
-    )?;
-    conn.execute(
-        "ALTER TABLE MapDiff ADD COLUMN starsFetchedAt BIGINT",
-        [],
-    )?;
+    // 兼容已有数据库：为已存在的 MapDiff 表添加星级列（存在则跳过）
+    add_column_if_not_exists(conn, "MapDiff", "starsRating", "FLOAT")?;
+    add_column_if_not_exists(conn, "MapDiff", "starsFetchedAt", "BIGINT")?;
 
     // PlayerInfo 表 - 玩家基本信息
     conn.execute(

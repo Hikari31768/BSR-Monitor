@@ -61,38 +61,15 @@ pub async fn get_map_scores(
     key: String,
     player_ids: Vec<String>,
 ) -> Result<MapScoresResponse, String> {
-    let (map, all_diffs) = {
-        let state = app.try_state::<Mutex<rusqlite::Connection>>()
-            .ok_or("Database not initialized")?;
-        let guard = state.lock().map_err(|e| e.to_string())?;
-
-        // 1. 获取谱面基本信息
-        let map = db::get_map_by_key(&guard, &key)
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| format!("Map not found: {}", key))?;
-
-        // 2. 获取谱面所有版本的难度信息
-        let all_diffs = db::get_map_diffs_by_key(&guard, &key).map_err(|e| e.to_string())?;
-
-        (map, all_diffs)
-    }; // guard 在此处被 drop
-
-    // 3. 按需拉取星级（顺序调用，避免并发给 BeatLeader 造成负担）
-    let all_hashes: Vec<String> = all_diffs
-        .iter()
-        .map(|d| d.hash.clone())
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
-        .collect();
-    fetch_and_store_stars(&app, &all_hashes).await?;
-
-    // 4. 重新获取难度信息（包含刚存入的星级）
     let state = app.try_state::<Mutex<rusqlite::Connection>>()
         .ok_or("Database not initialized")?;
     let guard = state.lock().map_err(|e| e.to_string())?;
+
+    let map = db::get_map_by_key(&guard, &key)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Map not found: {}", key))?;
     let all_diffs = db::get_map_diffs_by_key(&guard, &key).map_err(|e| e.to_string())?;
 
-    // 5. 构建成绩响应
     build_map_scores_response(&guard, map, all_diffs, &player_ids)
 }
 
@@ -122,23 +99,7 @@ pub async fn get_playlist_scores(
         (playlist, map_keys, total_pages)
     }; // guard 在此处被 drop
 
-    // 3. 收集所有 hash，一次性按需拉取星级
-    let mut all_hashes: Vec<String> = Vec::new();
-    for key in &map_keys {
-        let state = app.try_state::<Mutex<rusqlite::Connection>>()
-            .ok_or("Database not initialized")?;
-        let guard = state.lock().map_err(|e| e.to_string())?;
-        let diffs = db::get_map_diffs_by_key(&guard, key).map_err(|e| e.to_string())?;
-        for d in &diffs {
-            if !all_hashes.contains(&d.hash) {
-                all_hashes.push(d.hash.clone());
-            }
-        }
-        drop(guard);
-    }
-    fetch_and_store_stars(&app, &all_hashes).await?;
-
-    // 4. 逐个查询每个谱面的成绩
+    // 3. 逐个查询每个谱面的成绩（直接使用已有星级）
     let state = app.try_state::<Mutex<rusqlite::Connection>>()
         .ok_or("Database not initialized")?;
     let guard = state.lock().map_err(|e| e.to_string())?;
@@ -398,6 +359,56 @@ async fn fetch_and_store_stars(
     }
 
     Ok(())
+}
+
+/// 异步拉取单谱面的星级（前端在拿到数据后静默调用）
+#[tauri::command]
+pub async fn fetch_map_stars(
+    app: AppHandle,
+    key: String,
+) -> Result<(), String> {
+    let all_hashes: Vec<String> = {
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        let diffs = db::get_map_diffs_by_key(&guard, &key).map_err(|e| e.to_string())?;
+        diffs.iter().map(|d| d.hash.clone()).collect::<std::collections::HashSet<_>>().into_iter().collect()
+    };
+    if all_hashes.is_empty() {
+        return Ok(());
+    }
+    fetch_and_store_stars(&app, &all_hashes).await
+}
+
+/// 异步拉取歌单当前页所有谱面的星级（前端在拿到数据后静默调用）
+#[tauri::command]
+pub async fn fetch_playlist_stars(
+    app: AppHandle,
+    playlist_id: i64,
+    page: i32,
+    reverse: bool,
+) -> Result<(), String> {
+    let all_hashes: Vec<String> = {
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        let (map_keys, _) = db::get_playlist_maps_paginated(&guard, playlist_id, page, 100, reverse)
+            .map_err(|e| e.to_string())?;
+        let mut hashes: Vec<String> = Vec::new();
+        for key in &map_keys {
+            let diffs = db::get_map_diffs_by_key(&guard, key).map_err(|e| e.to_string())?;
+            for d in &diffs {
+                if !hashes.contains(&d.hash) {
+                    hashes.push(d.hash.clone());
+                }
+            }
+        }
+        hashes
+    };
+    if all_hashes.is_empty() {
+        return Ok(());
+    }
+    fetch_and_store_stars(&app, &all_hashes).await
 }
 
 /// 增量更新玩家成绩

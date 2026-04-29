@@ -120,6 +120,22 @@ export default function ScoreTable() {
       });
 
       setCurrentMapData(result);
+
+      // 静默拉取星级，拉完后重新查询以显示更新后的星级
+      const fetchStars = async () => {
+        try {
+          await invoke('fetch_map_stars', { key });
+          // 星级更新后重新查询
+          const updated = await invoke<MapScoresResponse>('get_map_scores', {
+            key,
+            playerIds,
+          });
+          setCurrentMapData(updated);
+        } catch (e) {
+          console.error('拉取星级失败:', e);
+        }
+      };
+      fetchStars();
     } catch (e) {
       console.error('查询谱面失败:', e);
       setDataError(`查询失败: ${e}`);
@@ -148,6 +164,27 @@ export default function ScoreTable() {
       });
 
       setPlaylistData(result);
+
+      // 静默拉取星级，拉完后重新查询以显示更新后的星级
+      const playlistId = selectedPlaylistId;
+      const page = currentPage;
+      const reverse = mapSort === 'desc';
+      const fetchStars = async () => {
+        try {
+          await invoke('fetch_playlist_stars', { playlistId, page, reverse });
+          // 星级更新后重新查询
+          const updated = await invoke<PlaylistScoresResponse>('get_playlist_scores', {
+            playlistId,
+            page,
+            playerIds,
+            reverse,
+          });
+          setPlaylistData(updated);
+        } catch (e) {
+          console.error('拉取星级失败:', e);
+        }
+      };
+      fetchStars();
     } catch (e) {
       console.error('查询歌单失败:', e);
       setDataError(`查询失败: ${e}`);
