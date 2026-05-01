@@ -1,5 +1,5 @@
 import { PlayerInfo, PlayerUIState } from '../types';
-import { RefreshCw, Trash2, Clock, User } from 'lucide-react';
+import { RefreshCw, Trash2, Clock, User, Star } from 'lucide-react';
 
 interface PlayerCardProps {
   player: PlayerInfo;
@@ -8,9 +8,11 @@ interface PlayerCardProps {
   onUpdateScores: () => void;
   onDelete: () => void;
   updating?: boolean;
+  isStarred?: boolean;
+  onToggleStar?: () => void;
 }
 
-export default function PlayerCard({ player, uiState, scoreCount, onUpdateScores, onDelete, updating }: PlayerCardProps) {
+export default function PlayerCard({ player, uiState, scoreCount, onUpdateScores, onDelete, updating, isStarred, onToggleStar }: PlayerCardProps) {
   const displayName = player.alias || player.name;
   const isLoading = uiState?.loading ?? false;
 
@@ -22,25 +24,48 @@ export default function PlayerCard({ player, uiState, scoreCount, onUpdateScores
     }`}>
       <div className="flex items-start gap-4">
         {/* 头像 */}
-        {player.avatar_url ? (
-          <img
-            src={player.avatar_url}
-            alt={displayName}
-            className={`w-14 h-14 rounded-xl object-cover ${
-              isLoading
-                ? 'ring-2 ring-bs-status-warning/50'
-                : 'ring-2 ring-bs-border group-hover:ring-bs-accent-primary/50'
-            } transition-all`}
-          />
-        ) : (
-          <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl ${
-            isLoading
-              ? 'bg-bs-status-warning/10 ring-2 ring-bs-status-warning/50'
-              : 'bg-bs-bg-tertiary ring-2 ring-bs-border group-hover:ring-bs-accent-primary/50'
-          } transition-all`}>
-            <User size={28} className="text-bs-text-muted" />
-          </div>
-        )}
+        <div className="relative">
+          {player.avatar_url ? (
+            <img
+              src={player.avatar_url}
+              alt={displayName}
+              className={`w-14 h-14 rounded-xl object-cover cursor-pointer ${
+                isStarred
+                  ? 'ring-2 ring-yellow-400'
+                  : isLoading
+                    ? 'ring-2 ring-bs-status-warning/50'
+                    : 'ring-2 ring-bs-border group-hover:ring-bs-accent-primary/50'
+              } transition-all`}
+              onClick={onToggleStar}
+            />
+          ) : (
+            <div
+              className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl cursor-pointer ${
+                isStarred
+                  ? 'bg-bs-bg-tertiary ring-2 ring-yellow-400'
+                  : isLoading
+                    ? 'bg-bs-status-warning/10 ring-2 ring-bs-status-warning/50'
+                    : 'bg-bs-bg-tertiary ring-2 ring-bs-border group-hover:ring-bs-accent-primary/50'
+              } transition-all`}
+              onClick={onToggleStar}
+            >
+              <User size={28} className="text-bs-text-muted" />
+            </div>
+          )}
+          {/* 标星 hover 覆盖层 */}
+          {onToggleStar && (
+            <div
+              className="absolute inset-0 rounded-xl bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 cursor-pointer transition-opacity"
+              onClick={onToggleStar}
+            >
+              {isStarred ? (
+                <Star size={24} className="text-yellow-400 fill-yellow-400" />
+              ) : (
+                <Star size={24} className="text-white" />
+              )}
+            </div>
+          )}
+        </div>
 
         {/* 信息 */}
         <div className="flex-1 min-w-0">

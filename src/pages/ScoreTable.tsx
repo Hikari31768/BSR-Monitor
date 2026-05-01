@@ -66,10 +66,19 @@ export default function ScoreTable() {
     setLoadingPlayers(true);
     try {
       const list = await invoke<PlayerInfo[]>('get_player_list');
-      // 默认选择第一个玩家
-      if (list.length > 0 && selectedPlayers.length === 0) {
-        setSelectedPlayers([{ ...list[0], order: 0 }]);
-        // 同步更新 ref，避免初始加载触发刷新
+      if (list.length === 0) return;
+
+      // 优先使用标星玩家作为默认
+      const starredId = (() => {
+        try { return localStorage.getItem('starred_player_id'); } catch { return null; }
+      })();
+
+      const defaultPlayer = starredId
+        ? list.find(p => p.id === starredId)
+        : list[0];
+
+      if (defaultPlayer && selectedPlayers.length === 0) {
+        setSelectedPlayers([{ ...defaultPlayer, order: 0 }]);
         prevPlayerCountRef.current = 1;
       }
     } catch (e) {

@@ -18,7 +18,31 @@ export default function Players() {
   const [addFormError, setAddFormError] = useState<string>('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string>('');
+  const [starredPlayerId, setStarredPlayerId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('starred_player_id');
+    } catch {
+      return null;
+    }
+  });
   const unlistenRef = useRef<UnlistenFn | null>(null);
+
+  // 持久化标星玩家
+  useEffect(() => {
+    try {
+      if (starredPlayerId) {
+        localStorage.setItem('starred_player_id', starredPlayerId);
+      } else {
+        localStorage.removeItem('starred_player_id');
+      }
+    } catch {
+      // ignore
+    }
+  }, [starredPlayerId]);
+
+  function handleToggleStar(playerId: string) {
+    setStarredPlayerId(prev => prev === playerId ? null : playerId);
+  }
 
   async function loadPlayers(): Promise<PlayerWithScoreCount[]> {
     setLoading(true);
@@ -317,17 +341,25 @@ export default function Players() {
         <EmptyState message="暂无玩家，点击上方按钮添加" />
       ) : (
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))' }}>
-          {players.map(player => (
-            <PlayerCard
-              key={player.id}
-              player={player}
-              uiState={playerUIStates[player.id]}
-              scoreCount={player.score_count}
-              onUpdateScores={() => { setUpdateError(''); handleUpdateScores(player.id); }}
-              onDelete={() => setShowDeleteModal(player.id)}
-              updating={updatingId === player.id}
-            />
-          ))}
+          {[...players]
+            .sort((a, b) => {
+              if (starredPlayerId && a.id === starredPlayerId) return -1;
+              if (starredPlayerId && b.id === starredPlayerId) return 1;
+              return 0;
+            })
+            .map(player => (
+              <PlayerCard
+                key={player.id}
+                player={player}
+                uiState={playerUIStates[player.id]}
+                scoreCount={player.score_count}
+                onUpdateScores={() => { setUpdateError(''); handleUpdateScores(player.id); }}
+                onDelete={() => setShowDeleteModal(player.id)}
+                updating={updatingId === player.id}
+                isStarred={player.id === starredPlayerId}
+                onToggleStar={() => handleToggleStar(player.id)}
+              />
+            ))}
         </div>
       )}
 
