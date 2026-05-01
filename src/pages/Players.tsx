@@ -214,6 +214,11 @@ export default function Players() {
             }
           };
         });
+
+        // 任务完成后刷新成绩数量
+        if (isCompleted) {
+          refreshPlayers();
+        }
       }
     }).then(unlisten => {
       unlistenRef.current = unlisten;
