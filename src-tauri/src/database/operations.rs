@@ -272,8 +272,13 @@ pub fn update_diff_ratings(
 
 pub fn insert_player(conn: &Connection, player: &PlayerInfo) -> Result<(), rusqlite::Error> {
     conn.execute(
-        "INSERT OR REPLACE INTO PlayerInfo (id, name, avatarURL, liveURL, alias)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+        "INSERT INTO PlayerInfo (id, name, avatarURL, liveURL, alias)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(id) DO UPDATE SET
+           name = excluded.name,
+           avatarURL = excluded.avatarURL,
+           liveURL = COALESCE(excluded.liveURL, PlayerInfo.liveURL),
+           alias = COALESCE(excluded.alias, PlayerInfo.alias)",
         rusqlite::params![
             player.id,
             player.name,

@@ -312,6 +312,31 @@ pub fn update_player(app: AppHandle, player: PlayerInfo) -> Result<(), String> {
     db::update_player(&guard, &player).map_err(|e| e.to_string())
 }
 
+/// 在系统默认浏览器中打开 URL
+#[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    return std::process::Command::new("cmd")
+        .args(["/c", "start", &url])
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string());
+    #[cfg(target_os = "macos")]
+    return std::process::Command::new("open")
+        .arg(&url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string());
+    #[cfg(target_os = "linux")]
+    return std::process::Command::new("xdg-open")
+        .arg(&url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string());
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    return Err("不支持的平台".to_string());
+}
+
 /// 手动刷新单个玩家的成绩（增量更新）
 #[tauri::command]
 pub async fn refresh_player_scores(

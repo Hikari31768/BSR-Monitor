@@ -124,6 +124,7 @@ pub fn run() {
             commands::player::get_player,
             commands::player::delete_player,
             commands::player::update_player,
+            commands::player::open_url,
             commands::player::refresh_player_scores,
             commands::score::update_player_scores,
             commands::score::get_player_scores,

@@ -1,5 +1,5 @@
 import { PlayerInfo, PlayerUIState } from '../types';
-import { RefreshCw, Trash2, Clock, User, Star } from 'lucide-react';
+import { RefreshCw, Trash2, Clock, User, Star, Pencil, Video } from 'lucide-react';
 
 interface PlayerCardProps {
   player: PlayerInfo;
@@ -10,9 +10,11 @@ interface PlayerCardProps {
   updating?: boolean;
   isStarred?: boolean;
   onToggleStar?: () => void;
+  onEdit?: () => void;
+  onOpenLive?: () => void;
 }
 
-export default function PlayerCard({ player, uiState, scoreCount, onUpdateScores, onDelete, updating, isStarred, onToggleStar }: PlayerCardProps) {
+export default function PlayerCard({ player, uiState, scoreCount, onUpdateScores, onDelete, updating, isStarred, onToggleStar, onEdit, onOpenLive }: PlayerCardProps) {
   const displayName = player.alias || player.name;
   const isLoading = uiState?.loading ?? false;
 
@@ -106,36 +108,49 @@ export default function PlayerCard({ player, uiState, scoreCount, onUpdateScores
           )}
         </div>
 
-        {/* 操作按钮 */}
-        <div className="flex flex-col gap-2">
-          {!isLoading ? (
-            <>
-              <button
-                onClick={onUpdateScores}
-                disabled={updating}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all disabled:opacity-50 flex items-center gap-1"
-              >
-                {updating ? <Clock size={14} /> : <RefreshCw size={14} />}
-                {updating ? '更新中' : '更新'}
-              </button>
-              <button
-                onClick={onDelete}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all flex items-center gap-1"
-              >
-                <Trash2 size={14} />
-                删除
-              </button>
-            </>
-          ) : (
+        {/* 操作按钮 2x2 网格 */}
+        {!isLoading ? (
+          <div className="grid grid-cols-2 gap-2">
             <button
-              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-status-warning/20 text-bs-status-warning border border-bs-status-warning/30 cursor-not-allowed flex items-center gap-1"
-              disabled
+              onClick={onUpdateScores}
+              disabled={updating}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all disabled:opacity-50 flex items-center justify-center gap-1"
             >
-              <Clock size={14} />
-              处理中
+              {updating ? <Clock size={14} /> : <RefreshCw size={14} />}
+              {updating ? '更新中' : '更新'}
             </button>
-          )}
-        </div>
+            <button
+              onClick={onEdit}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all flex items-center justify-center gap-1"
+            >
+              <Pencil size={14} />
+              编辑
+            </button>
+            <button
+              onClick={onOpenLive}
+              disabled={!player.live_url}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Video size={14} />
+              直播间
+            </button>
+            <button
+              onClick={onDelete}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all flex items-center justify-center gap-1"
+            >
+              <Trash2 size={14} />
+              删除
+            </button>
+          </div>
+        ) : (
+          <button
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-status-warning/20 text-bs-status-warning border border-bs-status-warning/30 cursor-not-allowed flex items-center gap-1"
+            disabled
+          >
+            <Clock size={14} />
+            处理中
+          </button>
+        )}
       </div>
     </div>
   );

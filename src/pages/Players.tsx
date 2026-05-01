@@ -14,8 +14,11 @@ export default function Players() {
   const [loading, setLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
+  const [showEditModal, setShowEditModal] = useState<string | null>(null);
   const [addForm, setAddForm] = useState({ id: '', liveUrl: '', alias: '' });
   const [addFormError, setAddFormError] = useState<string>('');
+  const [editForm, setEditForm] = useState({ liveUrl: '', alias: '' });
+  const [editFormError, setEditFormError] = useState<string>('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string>('');
   const [starredPlayerId, setStarredPlayerId] = useState<string | null>(() => {
@@ -42,6 +45,52 @@ export default function Players() {
 
   function handleToggleStar(playerId: string) {
     setStarredPlayerId(prev => prev === playerId ? null : playerId);
+  }
+
+  function handleOpenEditModal(playerId: string) {
+    const player = players.find(p => p.id === playerId);
+    if (!player) return;
+    setEditForm({
+      liveUrl: player.live_url || '',
+      alias: player.alias || '',
+    });
+    setEditFormError('');
+    setShowEditModal(playerId);
+  }
+
+  async function handleSaveEdit() {
+    const playerId = showEditModal;
+    if (!playerId) return;
+
+    const player = players.find(p => p.id === playerId);
+    if (!player) return;
+
+    try {
+      await invoke('update_player', {
+        player: {
+          id: player.id,
+          name: player.name,
+          avatar_url: player.avatar_url || null,
+          live_url: editForm.liveUrl || null,
+          alias: editForm.alias || null,
+        },
+      });
+      setShowEditModal(null);
+      refreshPlayers();
+    } catch (e) {
+      setEditFormError(`保存失败: ${e}`);
+    }
+  }
+
+  async function handleOpenLive(playerId: string) {
+    const player = players.find(p => p.id === playerId);
+    if (player?.live_url) {
+      try {
+        await invoke('open_url', { url: player.live_url });
+      } catch (e) {
+        console.error('打开链接失败:', e);
+      }
+    }
   }
 
   async function loadPlayers(): Promise<PlayerWithScoreCount[]> {
@@ -358,6 +407,8 @@ export default function Players() {
                 updating={updatingId === player.id}
                 isStarred={player.id === starredPlayerId}
                 onToggleStar={() => handleToggleStar(player.id)}
+                onEdit={() => handleOpenEditModal(player.id)}
+                onOpenLive={() => handleOpenLive(player.id)}
               />
             ))}
         </div>
@@ -469,6 +520,55 @@ export default function Players() {
           >
             删除
           </button>
+        </div>
+      </Modal>
+
+      {/* 编辑玩家模态框 */}
+      <Modal
+        isOpen={showEditModal !== null}
+        onClose={() => { setShowEditModal(null); setEditFormError(''); }}
+        title="编辑玩家"
+      >
+        <div className="space-y-4">
+          {editFormError && (
+            <div className="p-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/30 text-sm">
+              {editFormError}
+            </div>
+          )}
+          <div>
+            <label className="block text-sm text-bs-text-secondary mb-2">直播间地址 (可选)</label>
+            <input
+              type="text"
+              value={editForm.liveUrl}
+              onChange={(e) => setEditForm({ ...editForm, liveUrl: e.target.value })}
+              placeholder="https://..."
+              className="w-full px-4 py-3 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary placeholder-bs-text-muted focus:border-bs-accent-primary focus:ring-2 focus:ring-bs-accent-primary/20 focus:outline-none transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-bs-text-secondary mb-2">备注名 (可选)</label>
+            <input
+              type="text"
+              value={editForm.alias}
+              onChange={(e) => setEditForm({ ...editForm, alias: e.target.value })}
+              placeholder="自定义名称"
+              className="w-full px-4 py-3 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary placeholder-bs-text-muted focus:border-bs-accent-primary focus:ring-2 focus:ring-bs-accent-primary/20 focus:outline-none transition-all"
+            />
+          </div>
+          <div className="flex gap-3 justify-end pt-4">
+            <button
+              onClick={() => { setShowEditModal(null); setEditFormError(''); }}
+              className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleSaveEdit}
+              className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-accent-primary text-white hover:bg-bs-accent-secondary transition-all"
+            >
+              保存
+            </button>
+          </div>
         </div>
       </Modal>
     </div>
