@@ -136,6 +136,7 @@ pub fn run() {
             commands::playlist::get_playlist,
             commands::playlist::delete_playlist,
             commands::playlist::get_playlist_maps,
+            commands::playlist::refresh_playlist_ratings,
             commands::leaderboard::get_leaderboard,
             commands::common::get_version,
             task_state::get_active_tasks,

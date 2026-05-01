@@ -4,7 +4,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { BackgroundTask } from '../types';
 import { Check } from 'lucide-react';
 
-const DISPLAY_TASKS = ['fetch_ratings', 'add_player', 'startup_refresh'];
+const DISPLAY_TASKS = ['fetch_ratings', 'add_player', 'startup_refresh', 'refresh_ratings'];
 
 export default function BackgroundTasks() {
   const [tasks, setTasks] = useState<Record<string, BackgroundTask>>({});

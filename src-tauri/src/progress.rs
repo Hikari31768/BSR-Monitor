@@ -10,6 +10,7 @@ pub enum TaskType {
     AddPlaylist,
     FetchRatings,
     StartupRefresh,
+    RefreshRatings,
 }
 
 impl fmt::Display for TaskType {
@@ -19,6 +20,7 @@ impl fmt::Display for TaskType {
             TaskType::AddPlaylist => write!(f, "add_playlist"),
             TaskType::FetchRatings => write!(f, "fetch_ratings"),
             TaskType::StartupRefresh => write!(f, "startup_refresh"),
+            TaskType::RefreshRatings => write!(f, "refresh_ratings"),
         }
     }
 }

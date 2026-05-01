@@ -6,7 +6,7 @@ import PlaylistCard from '../components/PlaylistCard';
 import MapCard from '../components/MapCard';
 import Modal from '../components/Modal';
 import EmptyState from '../components/EmptyState';
-import { Plus } from 'lucide-react';
+import { Plus, Star } from 'lucide-react';
 
 export default function Playlists() {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
@@ -16,11 +16,13 @@ export default function Playlists() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<number | null>(null);
   const [showMapsModal, setShowMapsModal] = useState<number | null>(null);
+  const [showRefreshRatingsModal, setShowRefreshRatingsModal] = useState<number | null>(null);
   const [playlistMaps, setPlaylistMaps] = useState<PlaylistMap[]>([]);
   const [addId, setAddId] = useState('');
   const [addFormError, setAddFormError] = useState('');
   const [inlineError, setInlineError] = useState<string>('');
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [refreshingRatingsId, setRefreshingRatingsId] = useState<number | null>(null);
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
   async function loadPlaylists() {
@@ -286,6 +288,20 @@ export default function Playlists() {
     }
   }
 
+  async function handleRefreshPlaylistRatings(playlistId: number) {
+    setShowRefreshRatingsModal(null);
+    setRefreshingRatingsId(playlistId);
+    setInlineError('');
+
+    try {
+      await invoke<string>('refresh_playlist_ratings', { playlistId });
+    } catch (e) {
+      setInlineError(`更新星级失败: ${e}`);
+    } finally {
+      setRefreshingRatingsId(null);
+    }
+  }
+
   return (
     <div className="animate-fade-in">
       <div className="flex items-center justify-between mb-8">
@@ -303,7 +319,7 @@ export default function Playlists() {
       {playlists.length === 0 ? (
         <EmptyState message="暂无歌单，点击上方按钮添加" />
       ) : (
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))' }}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))' }}>
           {playlists.map(playlist => (
             <PlaylistCard
               key={playlist.playlist_id}
@@ -312,7 +328,9 @@ export default function Playlists() {
               onDelete={() => setShowDeleteModal(playlist.playlist_id)}
               onViewMaps={() => handleViewMaps(playlist.playlist_id)}
               onUpdate={() => handleUpdatePlaylist(playlist.playlist_id)}
+              onRefreshRatings={() => setShowRefreshRatingsModal(playlist.playlist_id)}
               updating={updatingId === playlist.playlist_id}
+              refreshingRatings={refreshingRatingsId === playlist.playlist_id}
             />
           ))}
         </div>
@@ -422,6 +440,38 @@ export default function Playlists() {
               )
             ))
           )}
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showRefreshRatingsModal !== null}
+        onClose={() => setShowRefreshRatingsModal(null)}
+        title="确认更新星级"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+            <Star size={20} className="text-amber-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-amber-300 font-medium text-sm">此操作将全量重新拉取该歌单所有谱面的星级数据</p>
+              <p className="text-amber-400/80 text-xs mt-1">
+                即使已有星级信息也会被覆盖更新。由于需要逐个调用 API，对于谱面较多的歌单会比较耗时，请耐心等待。
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setShowRefreshRatingsModal(null)}
+              className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all"
+            >
+              取消
+            </button>
+            <button
+              onClick={() => handleRefreshPlaylistRatings(showRefreshRatingsModal!)}
+              className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-accent-primary text-white hover:bg-bs-accent-secondary transition-all"
+            >
+              确认更新
+            </button>
+          </div>
         </div>
       </Modal>
     </div>

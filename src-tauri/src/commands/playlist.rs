@@ -147,18 +147,13 @@ async fn process_playlist(
             .map_err(|e| e.to_string())?;
     }
 
-    // 后台拉取评级数据（stars, passRating, accRating, techRating）
-    println!("[Playlist] Spawning background rating fetch...");
-    let rating_task_id = format!("rating-{}", Uuid::new_v4());
-    let rating_display = format!("{} - 拉取评级", playlist.name);
-    task_state.register_with_name(&rating_task_id, "fetch_ratings", &playlist_id.to_string(), &rating_display);
-
-    // 收集需要拉取评级的 hash
-    let all_hashes: Vec<String> = {
+    // 后台拉取评级数据（仅筛选出尚未拉取过评级的谱面）
+    println!("[Playlist] Collecting hashes needing ratings...");
+    let hashes_to_fetch: Vec<String> = {
         let state = app.try_state::<Mutex<rusqlite::Connection>>()
             .ok_or("Database not initialized")?;
         let guard = state.lock().map_err(|e| e.to_string())?;
-        db::get_playlist_maps(&guard, playlist_id as i64)
+        let all_hashes: Vec<String> = db::get_playlist_maps(&guard, playlist_id as i64)
             .map_err(|e| e.to_string())?
             .into_iter()
             .filter_map(|pm| pm.map)
@@ -170,32 +165,37 @@ async fn process_playlist(
             })
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
-            .collect()
+            .collect();
+        db::get_hashes_needing_ratings(&guard, &all_hashes)
+            .map_err(|e| e.to_string())?
     };
 
-    // 在后台任务中拉取评级
-    let app_clone = app.clone();
-    let rating_task_id_clone = rating_task_id.clone();
-    tokio::spawn(async move {
-        if all_hashes.is_empty() {
-            return;
-        }
+    if hashes_to_fetch.is_empty() {
+        println!("[Playlist] All maps already have ratings, skipping.");
+    } else {
+        println!("[Playlist] Spawning rating fetch for {} hashes...", hashes_to_fetch.len());
+        let rating_task_id = format!("rating-{}", Uuid::new_v4());
+        let rating_display = format!("{} - 拉取评级", playlist.name);
+        task_state.register_with_name(&rating_task_id, "fetch_ratings", &playlist_id.to_string(), &rating_display);
 
-        // 通过 app 获取 TaskState，避免生命周期问题
-        let task_state = match app_clone.try_state::<crate::task_state::TaskState>() {
-            Some(s) => s,
-            None => return,
-        };
+        // 在后台任务中拉取评级
+        let app_clone = app.clone();
+        let rating_task_id_clone = rating_task_id.clone();
+        tokio::spawn(async move {
+            let task_state = match app_clone.try_state::<crate::task_state::TaskState>() {
+                Some(s) => s,
+                None => return,
+            };
 
-        let total = all_hashes.len() as u64;
-        task_state.update(&rating_task_id_clone, 0.0, &format!("正在拉取评级 (0/{})", total));
+            let total = hashes_to_fetch.len() as u64;
+            task_state.update(&rating_task_id_clone, 0.0, &format!("正在拉取评级 (0/{})", total));
 
-        let api = match crate::api::BeatLeaderApi::new() {
-            Ok(a) => a,
-            Err(_) => return,
-        };
+            let api = match crate::api::BeatLeaderApi::new() {
+                Ok(a) => a,
+                Err(_) => return,
+            };
 
-        for (idx, hash) in all_hashes.iter().enumerate() {
+            for (idx, hash) in hashes_to_fetch.iter().enumerate() {
             match api.get_leaderboards_by_hash(hash).await {
                 Ok(response) => {
                     let state = app_clone.try_state::<Mutex<rusqlite::Connection>>();
@@ -247,6 +247,7 @@ async fn process_playlist(
         // 清理任务状态（前端已通过 completed 事件自动隐藏，此处清理后端状态以防重启恢复）
         task_state.remove(&rating_task_id_clone);
     });
+    }
 
     // 发送完成进度
     let final_total = if is_search_type { total_actual_count as i32 } else { playlist.total_maps.unwrap_or(0) };
@@ -390,4 +391,118 @@ fn convert_playlist_response(page: &crate::api::PlaylistPage) -> Playlist {
         songs_changed_at: page.playlist.songs_changed_at.clone(),
         download_url: page.playlist.download_url.clone(),
     }
+}
+
+/// 手动刷新歌单全部谱面星级（覆盖已有数据）
+#[tauri::command]
+pub async fn refresh_playlist_ratings(
+    app: AppHandle,
+    task_state: State<'_, TaskState>,
+    playlist_id: i32,
+) -> Result<String, String> {
+    let task_id = format!("refresh-ratings-{}", Uuid::new_v4());
+    let api = crate::api::BeatLeaderApi::new().map_err(|e| e.to_string())?;
+
+    // 获取歌单名称用于显示
+    let playlist_name = {
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        let playlist = db::get_playlist_by_id(&guard, playlist_id as i64)
+            .map_err(|e| e.to_string())?;
+        playlist.map(|p| p.name).unwrap_or_else(|| format!("歌单 #{}", playlist_id))
+    };
+
+    let display_name = format!("{} - 更新星级", playlist_name);
+    task_state.register_with_name(&task_id, "refresh_ratings", &playlist_id.to_string(), &display_name);
+
+    // 收集该歌单下所有 hash
+    let all_hashes: Vec<String> = {
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        db::get_playlist_maps(&guard, playlist_id as i64)
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .filter_map(|pm| pm.map)
+            .flat_map(|m| {
+                db::get_map_diffs_by_key(&guard, &m.key)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|d| d.hash)
+            })
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect()
+    };
+
+    if all_hashes.is_empty() {
+        task_state.remove(&task_id);
+        return Err("歌单中没有谱面".to_string());
+    }
+
+    let total = all_hashes.len() as u64;
+    task_state.update(&task_id, 0.0, &format!("正在拉取星级 (0/{})", total));
+
+    for (idx, hash) in all_hashes.iter().enumerate() {
+        match api.get_leaderboards_by_hash(hash).await {
+            Ok(response) => {
+                let state = app.try_state::<Mutex<rusqlite::Connection>>();
+                if let Some(state) = state {
+                    if let Ok(guard) = state.lock() {
+                        for entry in &response.leaderboards {
+                            let diff = &entry.difficulty;
+                            let mode_name = if diff.mode_name.is_empty() {
+                                "Standard".to_string()
+                            } else {
+                                diff.mode_name.clone()
+                            };
+                            let difficulty_name = if diff.difficulty_name.is_empty() {
+                                crate::database::operations::difficulty_from_value(diff.value)
+                            } else {
+                                diff.difficulty_name.clone()
+                            };
+                            let _ = db::update_diff_ratings(
+                                &guard, hash, &mode_name, &difficulty_name,
+                                diff.stars,
+                                diff.pass_rating,
+                                diff.acc_rating,
+                                diff.tech_rating,
+                            );
+                        }
+                    }
+                }
+            }
+            Err(_) => continue,
+        }
+
+        let current = (idx + 1) as u64;
+        let progress = (current as f64 / total as f64) * 100.0;
+        task_state.update(&task_id, progress, &format!("正在拉取星级 ({}/{})", current, total));
+
+        let payload = ProgressPayload::new(TaskType::RefreshRatings, task_id.clone())
+            .with_progress("refreshing_ratings".to_string(), progress)
+            .with_message(format!("正在拉取星级 ({}/{})", current, total));
+        let _ = emit_progress_event(&app, &payload);
+    }
+
+    task_state.update(&task_id, 100.0, "星级更新完成");
+    let payload = ProgressPayload::new(TaskType::RefreshRatings, task_id.clone())
+        .with_progress("completed".to_string(), 100.0)
+        .with_message("星级更新完成".to_string());
+    let _ = emit_progress_event(&app, &payload);
+
+    // 3秒后清理任务状态
+    let task_id_clone = task_id.clone();
+    let app_clone = app.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        let ts = match app_clone.try_state::<TaskState>() {
+            Some(s) => s,
+            None => return,
+        };
+        ts.remove(&task_id_clone);
+    });
+
+    Ok(task_id)
 }

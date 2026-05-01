@@ -171,10 +171,13 @@ pub fn insert_map_diffs_batch(conn: &Connection, key: &str, diffs: &[MapDiff]) -
     )?;
 
     // 批量插入新记录（都标记为当前版本）
+    // 使用 ON CONFLICT DO UPDATE，冲突时仅更新 isCurrent，
+    // 保留已有的星级/评级字段（来自 BeatLeader），避免被 BeatSaver 的 NULL 覆盖
     for diff in diffs {
         conn.execute(
-            "INSERT OR REPLACE INTO MapDiff (key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO MapDiff (key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+             ON CONFLICT(key, hash, mode, difficulty) DO UPDATE SET isCurrent = excluded.isCurrent",
             rusqlite::params![
                 diff.key,
                 diff.hash,
@@ -214,6 +217,31 @@ pub fn get_map_diffs_by_key(conn: &Connection, key: &str) -> Result<Vec<MapDiff>
     })?.collect::<Result<Vec<_>, _>>()?;
 
     Ok(diffs)
+}
+
+/// 找出指定 hash 列表中还有难度未拉取评级的 hash（去重）
+pub fn get_hashes_needing_ratings(conn: &Connection, hashes: &[String]) -> Result<Vec<String>, rusqlite::Error> {
+    if hashes.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let placeholders = hashes.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT DISTINCT hash FROM MapDiff WHERE hash IN ({}) AND starsFetchedAt IS NULL",
+        placeholders
+    );
+
+    let mut params: Vec<&dyn rusqlite::ToSql> = Vec::new();
+    for hash in hashes {
+        params.push(hash);
+    }
+
+    let mut stmt = conn.prepare(&sql)?;
+    let result = stmt.query_map(rusqlite::params_from_iter(params), |row| {
+        row.get::<_, String>(0)
+    })?.collect::<Result<Vec<_>, _>>()?;
+
+    Ok(result)
 }
 
 /// 更新指定难度的所有评级（按 hash + mode + difficulty 定位）

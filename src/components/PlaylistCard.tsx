@@ -1,5 +1,5 @@
 import { Playlist, PlaylistUIState } from '../types';
-import { Clock, Eye, Trash2, List, RefreshCw } from 'lucide-react';
+import { Clock, Eye, Trash2, List, RefreshCw, Star } from 'lucide-react';
 
 interface PlaylistCardProps {
   playlist: Playlist;
@@ -7,10 +7,12 @@ interface PlaylistCardProps {
   onDelete: () => void;
   onViewMaps: () => void;
   onUpdate?: () => void;
+  onRefreshRatings?: () => void;
   updating?: boolean;
+  refreshingRatings?: boolean;
 }
 
-export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, onUpdate, updating }: PlaylistCardProps) {
+export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, onUpdate, onRefreshRatings, updating, refreshingRatings }: PlaylistCardProps) {
   const isLoading = uiState?.loading ?? false;
 
   return (
@@ -68,29 +70,39 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, 
         </div>
 
         {/* 操作按钮 */}
-        <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-2 gap-2 w-fit">
           {!isLoading ? (
             <>
               {onUpdate && (
                 <button
                   onClick={onUpdate}
                   disabled={updating}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all disabled:opacity-50 flex items-center gap-1"
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all disabled:opacity-50 flex items-center gap-1 justify-center"
                 >
                   {updating ? <Clock size={14} /> : <RefreshCw size={14} />}
-                  {updating ? '更新中' : '更新'}
+                  {updating ? '更新中' : '更新歌单'}
                 </button>
               )}
               <button
                 onClick={onViewMaps}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all flex items-center gap-1"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all flex items-center gap-1 justify-center"
               >
                 <Eye size={14} />
                 查看
               </button>
+              {onRefreshRatings && (
+                <button
+                  onClick={onRefreshRatings}
+                  disabled={refreshingRatings || updating}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all disabled:opacity-50 flex items-center gap-1 justify-center"
+                >
+                  {refreshingRatings ? <Clock size={14} /> : <Star size={14} />}
+                  {refreshingRatings ? '更新中' : '更新星级'}
+                </button>
+              )}
               <button
                 onClick={onDelete}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all flex items-center gap-1"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all flex items-center gap-1 justify-center"
               >
                 <Trash2 size={14} />
                 删除
@@ -98,7 +110,7 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, 
             </>
           ) : (
             <button
-              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-status-warning/20 text-bs-status-warning border border-bs-status-warning/30 cursor-not-allowed flex items-center gap-1"
+              className="col-span-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-status-warning/20 text-bs-status-warning border border-bs-status-warning/30 cursor-not-allowed flex items-center gap-1 justify-center"
               disabled
             >
               <Clock size={14} />
