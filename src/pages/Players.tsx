@@ -355,7 +355,7 @@ export default function Players() {
           loading: false,
           progress: 0,
           statusMessage: '',
-          updatingMessage: `更新成绩 ${delta} 条`
+          updatingMessage: `+ ${delta}`
         }
       }));
 
