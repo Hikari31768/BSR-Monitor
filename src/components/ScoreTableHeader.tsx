@@ -96,33 +96,31 @@ export default function ScoreTableHeader({
         style={{ gridTemplateColumns: gridColumns }}
       >
         {/* 谱面信息列 */}
-        <div className="p-4 border-r border-bs-border flex items-center justify-center">
-          {showMapSort ? (
+        <div className="p-4 border-r border-bs-border flex items-center justify-center gap-1">
+          <span className="text-sm font-medium text-bs-text-secondary">谱面信息</span>
+          {showMapSort && (
             <button
               onClick={onToggleMapSort}
-              className="inline-flex items-center gap-1 text-sm font-medium text-bs-text-secondary hover:text-bs-text-primary transition-colors cursor-pointer"
+              className="inline-flex items-center text-bs-text-secondary hover:text-bs-text-primary transition-colors cursor-pointer"
               title="切换歌单排序"
             >
-              <span>歌单</span>
               {mapSort === 'asc' ? (
                 <ArrowRight size={14} className="text-bs-status-success" />
               ) : (
                 <ArrowLeft size={14} className="text-bs-status-warning" />
               )}
             </button>
-          ) : (
-            <span className="text-sm font-medium text-bs-text-secondary">谱面信息</span>
           )}
         </div>
 
         {/* 难度信息列 */}
-        <div className="p-4 border-r border-bs-border flex items-center justify-center">
+        <div className="p-4 border-r border-bs-border flex items-center justify-center gap-1">
+          <span className="text-sm font-medium text-bs-text-secondary">难度</span>
           <button
             onClick={onToggleDiffSort}
-            className="inline-flex items-center gap-1 text-sm font-medium text-bs-text-secondary hover:text-bs-text-primary transition-colors"
+            className="inline-flex items-center text-bs-text-secondary hover:text-bs-text-primary transition-colors cursor-pointer"
             title="切换难度排序"
           >
-            难度
             {diffSort === 'desc' ? (
               <ArrowLeft size={14} className="text-bs-status-warning" />
             ) : (
