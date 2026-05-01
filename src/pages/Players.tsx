@@ -137,6 +137,15 @@ export default function Players() {
         }
         return updated;
       });
+
+      // 同时恢复 taskId 映射，否则事件监听器找不到 playerId
+      setPlayerTaskIds(prev => {
+        const updated = { ...prev };
+        for (const [taskId, status] of playerTasks) {
+          updated[status.target_id] = taskId;
+        }
+        return updated;
+      });
     } catch (e) {
       console.error('恢复任务状态失败:', e);
     }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { BackgroundTask } from '../types';
@@ -7,6 +8,8 @@ import { Check } from 'lucide-react';
 const DISPLAY_TASKS = ['fetch_ratings', 'add_player', 'startup_refresh', 'refresh_ratings', 'refresh_player_scores'];
 
 export default function BackgroundTasks() {
+  const location = useLocation();
+  const isPlayersPage = location.pathname === '/players';
   const [tasks, setTasks] = useState<Record<string, BackgroundTask>>({});
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
@@ -125,7 +128,11 @@ export default function BackgroundTasks() {
     };
   }, []);
 
-  const taskList = Object.values(tasks);
+  const taskList = Object.values(tasks).filter(task => {
+    // 在玩家管理页面时，add_player 进度已在卡片上显示，浮窗不再重复
+    if (isPlayersPage && task.task_type === 'add_player') return false;
+    return true;
+  });
   if (taskList.length === 0) return null;
 
   return (
