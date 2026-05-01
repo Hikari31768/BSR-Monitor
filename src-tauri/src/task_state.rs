@@ -9,6 +9,7 @@ pub struct TaskStatus {
     pub target_id: String,
     pub progress: f64,
     pub message: String,
+    pub display_name: String,
 }
 
 #[derive(Default)]
@@ -26,6 +27,22 @@ impl TaskState {
                 target_id: target_id.to_string(),
                 progress: 0.0,
                 message: String::new(),
+                display_name: String::new(),
+            },
+        );
+    }
+
+    /// 注册带显示名称的任务（用于后台任务）
+    pub fn register_with_name(&self, task_id: &str, task_type: &str, target_id: &str, display_name: &str) {
+        let mut tasks = self.tasks.lock().unwrap();
+        tasks.insert(
+            task_id.to_string(),
+            TaskStatus {
+                task_type: task_type.to_string(),
+                target_id: target_id.to_string(),
+                progress: 0.0,
+                message: String::new(),
+                display_name: display_name.to_string(),
             },
         );
     }

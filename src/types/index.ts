@@ -74,6 +74,17 @@ export interface PlayerWithScoreCount extends PlayerInfo {
   score_count: number;
 }
 
+// ============ 后台任务 ============
+
+export interface BackgroundTask {
+  task_id: string;
+  task_type: string;
+  target_id: string;
+  progress: number;
+  message: string;
+  display_name: string;
+}
+
 // ============ 打谱查询相关类型 ============
 
 export interface ScoreRowData {

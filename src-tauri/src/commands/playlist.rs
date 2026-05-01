@@ -147,6 +147,107 @@ async fn process_playlist(
             .map_err(|e| e.to_string())?;
     }
 
+    // 后台拉取评级数据（stars, passRating, accRating, techRating）
+    println!("[Playlist] Spawning background rating fetch...");
+    let rating_task_id = format!("rating-{}", Uuid::new_v4());
+    let rating_display = format!("{} - 拉取评级", playlist.name);
+    task_state.register_with_name(&rating_task_id, "fetch_ratings", &playlist_id.to_string(), &rating_display);
+
+    // 收集需要拉取评级的 hash
+    let all_hashes: Vec<String> = {
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        db::get_playlist_maps(&guard, playlist_id as i64)
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .filter_map(|pm| pm.map)
+            .flat_map(|m| {
+                db::get_map_diffs_by_key(&guard, &m.key)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|d| d.hash)
+            })
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect()
+    };
+
+    // 在后台任务中拉取评级
+    let app_clone = app.clone();
+    let rating_task_id_clone = rating_task_id.clone();
+    tokio::spawn(async move {
+        if all_hashes.is_empty() {
+            return;
+        }
+
+        // 通过 app 获取 TaskState，避免生命周期问题
+        let task_state = match app_clone.try_state::<crate::task_state::TaskState>() {
+            Some(s) => s,
+            None => return,
+        };
+
+        let total = all_hashes.len() as u64;
+        task_state.update(&rating_task_id_clone, 0.0, &format!("正在拉取评级 (0/{})", total));
+
+        let api = match crate::api::BeatLeaderApi::new() {
+            Ok(a) => a,
+            Err(_) => return,
+        };
+
+        for (idx, hash) in all_hashes.iter().enumerate() {
+            match api.get_leaderboards_by_hash(hash).await {
+                Ok(response) => {
+                    let state = app_clone.try_state::<Mutex<rusqlite::Connection>>();
+                    if let Some(state) = state {
+                        if let Ok(guard) = state.lock() {
+                            for entry in &response.leaderboards {
+                                let diff = &entry.difficulty;
+                                let mode_name = if diff.mode_name.is_empty() {
+                                    "Standard".to_string()
+                                } else {
+                                    diff.mode_name.clone()
+                                };
+                                let difficulty_name = if diff.difficulty_name.is_empty() {
+                                    crate::database::operations::difficulty_from_value(diff.value)
+                                } else {
+                                    diff.difficulty_name.clone()
+                                };
+                                let _ = db::update_diff_ratings(
+                                    &guard, hash, &mode_name, &difficulty_name,
+                                    diff.stars,
+                                    diff.pass_rating,
+                                    diff.acc_rating,
+                                    diff.tech_rating,
+                                );
+                            }
+                        }
+                    }
+                }
+                Err(_) => continue,
+            }
+
+            let current = (idx + 1) as u64;
+            let progress = (current as f64 / total as f64) * 100.0;
+            task_state.update(&rating_task_id_clone, progress, &format!("正在拉取评级 ({}/{})", current, total));
+
+            // 同时发射进度事件给前端
+            let payload = ProgressPayload::new(TaskType::FetchRatings, rating_task_id_clone.clone())
+                .with_progress("fetching_ratings".to_string(), progress)
+                .with_message(format!("正在拉取评级 ({}/{})", current, total));
+            let _ = emit_progress_event(&app_clone, &payload);
+        }
+
+        task_state.update(&rating_task_id_clone, 100.0, "评级拉取完成");
+        let payload = ProgressPayload::new(TaskType::FetchRatings, rating_task_id_clone.clone())
+            .with_progress("completed".to_string(), 100.0)
+            .with_message("评级拉取完成".to_string());
+        let _ = emit_progress_event(&app_clone, &payload);
+
+        // 清理任务状态（前端已通过 completed 事件自动隐藏，此处清理后端状态以防重启恢复）
+        task_state.remove(&rating_task_id_clone);
+    });
+
     // 发送完成进度
     let final_total = if is_search_type { total_actual_count as i32 } else { playlist.total_maps.unwrap_or(0) };
     let msg = format!("{}完成！共处理 {} 首歌曲", if delete_first { "更新" } else { "" }, final_total);
@@ -197,6 +298,9 @@ fn save_playlist_maps_with_progress(
                 difficulty: diff.difficulty.clone(),
                 stars_rating: diff.stars,
                 stars_fetched_at: None,
+                pass_rating: None,
+                acc_rating: None,
+                tech_rating: None,
             }).collect())
             .unwrap_or_default();
 

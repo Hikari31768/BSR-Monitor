@@ -45,15 +45,21 @@ pub fn create_tables(conn: &Connection) -> Result<(), rusqlite::Error> {
             difficulty VARCHAR(16) NOT NULL,
             starsRating FLOAT,
             starsFetchedAt BIGINT,
+            passRating FLOAT,
+            accRating FLOAT,
+            techRating FLOAT,
             PRIMARY KEY (key, hash, mode, difficulty),
             FOREIGN KEY (key) REFERENCES Map(key)
         )",
         [],
     )?;
 
-    // 兼容已有数据库：为已存在的 MapDiff 表添加星级列（存在则跳过）
+    // 兼容已有数据库：为已存在的 MapDiff 表添加评级列（存在则跳过）
     add_column_if_not_exists(conn, "MapDiff", "starsRating", "FLOAT")?;
     add_column_if_not_exists(conn, "MapDiff", "starsFetchedAt", "BIGINT")?;
+    add_column_if_not_exists(conn, "MapDiff", "passRating", "FLOAT")?;
+    add_column_if_not_exists(conn, "MapDiff", "accRating", "FLOAT")?;
+    add_column_if_not_exists(conn, "MapDiff", "techRating", "FLOAT")?;
 
     // PlayerInfo 表 - 玩家基本信息
     conn.execute(

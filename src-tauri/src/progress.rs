@@ -8,6 +8,8 @@ use std::fmt;
 pub enum TaskType {
     AddPlayer,
     AddPlaylist,
+    FetchRatings,
+    StartupRefresh,
 }
 
 impl fmt::Display for TaskType {
@@ -15,6 +17,8 @@ impl fmt::Display for TaskType {
         match self {
             TaskType::AddPlayer => write!(f, "add_player"),
             TaskType::AddPlaylist => write!(f, "add_playlist"),
+            TaskType::FetchRatings => write!(f, "fetch_ratings"),
+            TaskType::StartupRefresh => write!(f, "startup_refresh"),
         }
     }
 }

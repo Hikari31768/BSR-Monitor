@@ -49,7 +49,7 @@ pub async fn add_player(
     };
 
     let is_incremental = existing.is_some();
-    let result = fetch_and_save_player(&app, &task_state, id, task_id.clone(), live_url, alias, api, is_incremental).await;
+    let result = fetch_and_save_player(&app, &task_state, id, task_id.clone(), live_url, alias, api, is_incremental, true).await;
 
     // 无论成功失败都移除任务记录
     task_state.remove(&task_id);
@@ -57,8 +57,8 @@ pub async fn add_player(
     result.map(|player| AddPlayerResult { task_id, player })
 }
 
-/// 统一处理玩家添加/更新
-async fn fetch_and_save_player(
+/// 统一处理玩家添加/更新（公开以便 startup 调用）
+pub async fn fetch_and_save_player(
     app: &AppHandle,
     task_state: &TaskState,
     id: String,
@@ -67,15 +67,19 @@ async fn fetch_and_save_player(
     alias: Option<String>,
     api: BeatLeaderApi,
     is_incremental: bool,
+    emit_events: bool,
 ) -> Result<PlayerInfo, String> {
     let message_prefix = if is_incremental { "更新" } else { "" };
 
     // Step 1: 发送初始进度
-    let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
-        .with_progress("fetching_player_info".to_string(), 2.0)
-        .with_message(format!("{}{}正在获取玩家信息...", message_prefix, if is_incremental { "" } else { "正在" }));
-    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
-    task_state.update(&task_id, 2.0, &format!("{}{}正在获取玩家信息...", message_prefix, if is_incremental { "" } else { "正在" }));
+    let msg = format!("{}{}正在获取玩家信息...", message_prefix, if is_incremental { "" } else { "正在" });
+    if emit_events {
+        let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
+            .with_progress("fetching_player_info".to_string(), 2.0)
+            .with_message(msg.clone());
+        emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    }
+    task_state.update(&task_id, 2.0, &msg);
 
     // Step 2: 调用 API 获取玩家信息
     let player_response = api.get_player(&id)
@@ -93,12 +97,14 @@ async fn fetch_and_save_player(
 
     // 发送第二阶段进度（含玩家信息，前端可先行显示）
     let msg = format!("已获取玩家: {}", player_response.name);
-    let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
-        .with_progress("saving_player_info".to_string(), 5.0)
-        .with_message(msg.clone())
-        .with_player_name(player_response.name.clone())
-        .with_player_avatar_url(player_response.avatar.clone());
-    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    if emit_events {
+        let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
+            .with_progress("saving_player_info".to_string(), 5.0)
+            .with_message(msg.clone())
+            .with_player_name(player_response.name.clone())
+            .with_player_avatar_url(player_response.avatar.clone());
+        emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    }
     task_state.update(&task_id, 5.0, &msg);
 
     // Step 3: 存入数据库
@@ -121,10 +127,12 @@ async fn fetch_and_save_player(
 
     // Step 4: 发送开始拉取成绩进度
     let progress_msg = if is_incremental { "正在拉取新成绩..." } else { "开始拉取成绩..." };
-    let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
-        .with_progress("fetching_scores".to_string(), 8.0)
-        .with_message(progress_msg.to_string());
-    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    if emit_events {
+        let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
+            .with_progress("fetching_scores".to_string(), 8.0)
+            .with_message(progress_msg.to_string());
+        emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    }
     task_state.update(&task_id, 8.0, progress_msg);
 
     // Step 5: 拉取成绩
@@ -200,10 +208,12 @@ async fn fetch_and_save_player(
         } else {
             format!("{}/{} 页，已拉取成绩 {} 条...", page, total_pages, total_scores)
         };
-        let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
-            .with_progress("fetching_scores".to_string(), page_progress)
-            .with_message(msg.clone());
-        emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+        if emit_events {
+            let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
+                .with_progress("fetching_scores".to_string(), page_progress)
+                .with_message(msg.clone());
+            emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+        }
         task_state.update(&task_id, page_progress, &msg);
 
         // 检查是否还有更多页
@@ -218,13 +228,33 @@ async fn fetch_and_save_player(
         if is_incremental { "更新" } else { "" },
         if is_incremental { "新增" } else { "共拉取" },
         total_scores);
-    let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
-        .with_progress("completed".to_string(), 100.0)
-        .with_message(msg.clone());
-    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    if emit_events {
+        let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
+            .with_progress("completed".to_string(), 100.0)
+            .with_message(msg.clone());
+        emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    }
     task_state.update(&task_id, 100.0, &msg);
 
     Ok(player_info)
+}
+
+/// 获取所有玩家 ID 列表（启动刷新用）
+pub fn get_all_player_ids(conn: &rusqlite::Connection) -> Result<Vec<String>, rusqlite::Error> {
+    let mut stmt = conn.prepare("SELECT id FROM PlayerInfo")?;
+    let ids = stmt.query_map([], |row| row.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ids)
+}
+
+/// 获取玩家昵称（启动刷新显示用）
+pub fn get_player_name(conn: &rusqlite::Connection, id: &str) -> Result<Option<String>, rusqlite::Error> {
+    let result: Option<String> = conn.query_row(
+        "SELECT COALESCE(alias, name) FROM PlayerInfo WHERE id = ?1",
+        [id],
+        |row| row.get(0),
+    )?;
+    Ok(result)
 }
 
 /// 获取玩家列表

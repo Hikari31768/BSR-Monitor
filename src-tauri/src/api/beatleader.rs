@@ -81,6 +81,12 @@ pub struct DifficultyResponse {
     pub custom_difficulty_name: Option<String>,
     #[serde(default)]
     pub stars: Option<f32>,
+    #[serde(default, rename = "passRating")]
+    pub pass_rating: Option<f32>,
+    #[serde(default, rename = "accRating")]
+    pub acc_rating: Option<f32>,
+    #[serde(default, rename = "techRating")]
+    pub tech_rating: Option<f32>,
 }
 
 /// Leaderboards by hash response

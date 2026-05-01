@@ -23,6 +23,9 @@ pub struct MapDiff {
     pub difficulty: String,
     pub stars_rating: Option<f32>,
     pub stars_fetched_at: Option<i64>,
+    pub pass_rating: Option<f32>,
+    pub acc_rating: Option<f32>,
+    pub tech_rating: Option<f32>,
 }
 
 // PlayerInfo 表数据结构
@@ -170,8 +173,8 @@ pub fn insert_map_diffs_batch(conn: &Connection, key: &str, diffs: &[MapDiff]) -
     // 批量插入新记录（都标记为当前版本）
     for diff in diffs {
         conn.execute(
-            "INSERT OR REPLACE INTO MapDiff (key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT OR REPLACE INTO MapDiff (key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             rusqlite::params![
                 diff.key,
                 diff.hash,
@@ -180,6 +183,9 @@ pub fn insert_map_diffs_batch(conn: &Connection, key: &str, diffs: &[MapDiff]) -
                 diff.difficulty,
                 diff.stars_rating,
                 diff.stars_fetched_at,
+                diff.pass_rating,
+                diff.acc_rating,
+                diff.tech_rating,
             ],
         )?;
     }
@@ -189,7 +195,7 @@ pub fn insert_map_diffs_batch(conn: &Connection, key: &str, diffs: &[MapDiff]) -
 
 pub fn get_map_diffs_by_key(conn: &Connection, key: &str) -> Result<Vec<MapDiff>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt FROM MapDiff WHERE key = ?1"
+        "SELECT key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating FROM MapDiff WHERE key = ?1"
     )?;
 
     let diffs = stmt.query_map([key], |row| {
@@ -201,44 +207,25 @@ pub fn get_map_diffs_by_key(conn: &Connection, key: &str) -> Result<Vec<MapDiff>
             difficulty: row.get(4)?,
             stars_rating: row.get(5)?,
             stars_fetched_at: row.get(6)?,
+            pass_rating: row.get(7)?,
+            acc_rating: row.get(8)?,
+            tech_rating: row.get(9)?,
         })
     })?.collect::<Result<Vec<_>, _>>()?;
 
     Ok(diffs)
 }
 
-/// 找出已存入 MapDiff 但尚未拉取星级的 hash（去重）
-pub fn get_hashes_without_stars(conn: &Connection, hashes: &[String]) -> Result<Vec<String>, rusqlite::Error> {
-    if hashes.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let placeholders = hashes.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-    let sql = format!(
-        "SELECT DISTINCT hash FROM MapDiff WHERE hash IN ({}) AND (starsRating IS NULL OR starsFetchedAt IS NULL)",
-        placeholders
-    );
-
-    let mut params: Vec<&dyn rusqlite::ToSql> = Vec::new();
-    for hash in hashes {
-        params.push(hash);
-    }
-
-    let mut stmt = conn.prepare(&sql)?;
-    let result = stmt.query_map(rusqlite::params_from_iter(params), |row| {
-        row.get::<_, String>(0)
-    })?.collect::<Result<Vec<_>, _>>()?;
-
-    Ok(result)
-}
-
-/// 更新指定难度的星级（按 hash + mode + difficulty 定位）
-pub fn update_diff_stars(
+/// 更新指定难度的所有评级（按 hash + mode + difficulty 定位）
+pub fn update_diff_ratings(
     conn: &Connection,
     hash: &str,
     mode: &str,
     difficulty: &str,
-    stars: f32,
+    stars: Option<f32>,
+    pass_rating: Option<f32>,
+    acc_rating: Option<f32>,
+    tech_rating: Option<f32>,
 ) -> Result<(), rusqlite::Error> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -246,8 +233,8 @@ pub fn update_diff_stars(
         .as_secs() as i64;
 
     conn.execute(
-        "UPDATE MapDiff SET starsRating = ?1, starsFetchedAt = ?2 WHERE hash = ?3 AND mode = ?4 AND difficulty = ?5",
-        rusqlite::params![stars, now, hash, mode, difficulty],
+        "UPDATE MapDiff SET starsRating = ?1, starsFetchedAt = ?2, passRating = ?3, accRating = ?4, techRating = ?5 WHERE hash = ?6 AND mode = ?7 AND difficulty = ?8",
+        rusqlite::params![stars, now, pass_rating, acc_rating, tech_rating, hash, mode, difficulty],
     )?;
 
     Ok(())
