@@ -86,9 +86,9 @@ pub async fn fetch_and_save_player(
         .await
         .map_err(|e| e.to_string())?;
 
-    // 构建玩家信息
+    // 构建玩家信息 — id 使用用户输入的值，确保外键一致
     let player_info = PlayerInfo {
-        id: player_response.id.clone(),
+        id: id.clone(),
         name: player_response.name.clone(),
         avatar_url: Some(player_response.avatar.clone()),
         live_url,

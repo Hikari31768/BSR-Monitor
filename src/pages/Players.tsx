@@ -220,12 +220,6 @@ export default function Players() {
   async function handleAddPlayer() {
     if (!addForm.id.trim()) return;
 
-    // 验证玩家 ID 格式（纯数字）
-    if (!/^\d+$/.test(addForm.id.trim())) {
-      setAddFormError('玩家 ID 必须为纯数字');
-      return;
-    }
-
     setAddFormError('');
 
     // 检查是否已存在
@@ -445,17 +439,14 @@ export default function Players() {
             </label>
             <input
               type="text"
-              inputMode="numeric"
-              pattern="\d*"
               value={addForm.id}
               onChange={(e) => {
-                setAddForm({ ...addForm, id: e.target.value.replace(/[^\d]/g, '') });
+                setAddForm({ ...addForm, id: e.target.value });
                 setAddFormError('');
               }}
-              placeholder="如: 76561198035353849"
+              placeholder="如: 765611xxxxx3849"
               className="w-full px-4 py-3 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary placeholder-bs-text-muted focus:border-bs-accent-primary focus:ring-2 focus:ring-bs-accent-primary/20 focus:outline-none transition-all"
             />
-            <p className="text-xs text-bs-text-muted mt-1">请输入纯数字 Steam ID</p>
           </div>
           <div>
             <label className="block text-sm text-bs-text-secondary mb-2">直播间地址 (可选)</label>
