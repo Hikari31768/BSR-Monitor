@@ -141,6 +141,7 @@ pub fn run() {
             commands::playlist::refresh_playlist_ratings,
             commands::leaderboard::get_leaderboard,
             commands::common::get_version,
+            commands::common::open_data_dir,
             task_state::get_active_tasks,
         ])
         .run(tauri::generate_context!())

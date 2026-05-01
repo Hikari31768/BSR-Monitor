@@ -1,5 +1,6 @@
 use crate::api::MapDetail;
 use crate::database::operations::Map;
+use tauri::Manager;
 
 /// 将 API MapDetail 转换为数据库 Map 结构
 pub fn convert_map_detail(map_detail: &MapDetail) -> Map {
@@ -22,4 +23,11 @@ pub fn convert_map_detail(map_detail: &MapDetail) -> Map {
 #[tauri::command]
 pub fn get_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
+}
+
+/// 打开应用数据目录
+#[tauri::command]
+pub fn open_data_dir(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    open::that(dir).map_err(|e| e.to_string())
 }

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAudio } from '../contexts/AudioContext';
 import { invoke } from '@tauri-apps/api/core';
-import { Target, User, List } from 'lucide-react';
+import { Target, User, List, FolderOpen, Globe } from 'lucide-react';
 
 const navItems = [
   { path: '/', label: '打谱查询', icon: Target },
@@ -68,9 +68,23 @@ export default function Sidebar() {
         />
       </div>
 
-      {/* 底部版本 */}
-      <div className="px-4 pb-3">
-        <p className="text-xs text-bs-text-muted">v{version}</p>
+      {/* 底部版本 + 操作按钮 */}
+      <div className="px-4 pb-3 flex items-center gap-2">
+        <p className="text-xs text-bs-text-muted shrink-0">v{version}</p>
+        <div className="flex-1" />
+        <button
+          onClick={() => invoke('open_data_dir')}
+          className="p-1.5 rounded-lg text-bs-text-muted hover:text-bs-text-primary hover:bg-bs-bg-tertiary transition-colors"
+          title="打开数据目录"
+        >
+          <FolderOpen size={16} />
+        </button>
+        <button
+          className="p-1.5 rounded-lg text-bs-text-muted hover:text-bs-text-primary hover:bg-bs-bg-tertiary transition-colors opacity-50 cursor-not-allowed"
+          title="语言选择（开发中）"
+        >
+          <Globe size={16} />
+        </button>
       </div>
     </aside>
   );
