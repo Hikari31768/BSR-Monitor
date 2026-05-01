@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { PlayerInfo } from '../types';
-import { User, Plus, X, ArrowUpDown } from 'lucide-react';
+import { User, Plus, X, RefreshCw, ArrowRight, ArrowLeft } from 'lucide-react';
 
 interface ScoreTableHeaderProps {
   players: PlayerInfo[];
   onAddPlayer: () => void;
   onRemovePlayer: (playerId: string) => void;
+  onRefreshPlayer: (playerId: string) => void;
   onReorderPlayers: (draggedId: string, targetId: string) => void;
   mapSort: 'asc' | 'desc';
   onToggleMapSort: () => void;
@@ -18,6 +19,7 @@ export default function ScoreTableHeader({
   players,
   onAddPlayer,
   onRemovePlayer,
+  onRefreshPlayer,
   onReorderPlayers,
   mapSort,
   onToggleMapSort,
@@ -27,23 +29,61 @@ export default function ScoreTableHeader({
 }: ScoreTableHeaderProps) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const cellRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const dragStateRef = useRef<{ src: string | null; dst: string | null }>({ src: null, dst: null });
 
-  function handleDragStart(playerId: string) {
-    setDraggedId(playerId);
-  }
-
-  function handleDragOver(e: React.DragEvent, targetId: string) {
-    e.preventDefault();
-    setDropTargetId(targetId);
-    if (draggedId && draggedId !== targetId) {
-      onReorderPlayers(draggedId, targetId);
+  function findPlayerIdAtPoint(x: number, y: number): string | null {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return null;
+    for (const [id, ref] of cellRefs.current) {
+      if (ref === el || ref.contains(el)) return id;
     }
+    return null;
   }
 
-  function handleDragEnd() {
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    const src = dragStateRef.current.src;
+    if (!src) return;
+    setCursorPos({ x: e.clientX, y: e.clientY });
+    const targetId = findPlayerIdAtPoint(e.clientX, e.clientY);
+    dragStateRef.current.dst = targetId || null;
+    setDropTargetId(targetId || null);
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    const src = dragStateRef.current.src;
+    const dst = dragStateRef.current.dst;
+    if (src && dst && src !== dst) {
+      onReorderPlayers(src, dst);
+    }
     setDraggedId(null);
     setDropTargetId(null);
-  }
+    dragStateRef.current = { src: null, dst: null };
+  }, [onReorderPlayers]);
+
+  useEffect(() => {
+    if (!draggedId) return;
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [draggedId, handleMouseMove, handleMouseUp]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>, playerId: string) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('button')) return;
+
+    dragStateRef.current = { src: playerId, dst: null };
+    setCursorPos({ x: e.clientX, y: e.clientY });
+    setDraggedId(playerId);
+  }, []);
+
+  const draggedPlayer = draggedId ? players.find(p => p.id === draggedId) : null;
 
   // 计算网格列定义，与 MapScoreGroup 保持一致
   const gridColumns = `18rem 9rem ${players.map(() => '7rem').join(' ')} minmax(7rem, 1fr)`;
@@ -51,23 +91,27 @@ export default function ScoreTableHeader({
   return (
     <div className="sticky top-0 z-10 flex-shrink-0">
       <div
+        ref={containerRef}
         className="grid bg-bs-bg-tertiary border-b border-bs-border min-w-fit min-h-[6rem]"
         style={{ gridTemplateColumns: gridColumns }}
       >
         {/* 谱面信息列 */}
-        <div className="p-4 border-r border-bs-border flex flex-col items-center justify-center gap-2">
-          <span className="text-sm font-medium text-bs-text-secondary">谱面信息</span>
-          {showMapSort && (
+        <div className="p-4 border-r border-bs-border flex items-center justify-center">
+          {showMapSort ? (
             <button
               onClick={onToggleMapSort}
-              className={`inline-flex items-center justify-center rounded h-5 px-2 text-xs font-semibold leading-none cursor-pointer transition-colors border ${
-                mapSort === 'asc'
-                  ? 'text-bs-status-success bg-bs-status-success/20 hover:bg-bs-status-success/40 border-bs-status-success/40'
-                  : 'text-bs-accent-secondary bg-bs-accent-secondary/20 hover:bg-bs-accent-secondary/40 border-bs-accent-secondary/40'
-              }`}
+              className="inline-flex items-center gap-1 text-sm font-medium text-bs-text-secondary hover:text-bs-text-primary transition-colors cursor-pointer"
+              title="切换歌单排序"
             >
-              {mapSort === 'asc' ? '歌单正序' : '歌单倒序'}
+              <span>歌单</span>
+              {mapSort === 'asc' ? (
+                <ArrowRight size={14} className="text-bs-status-success" />
+              ) : (
+                <ArrowLeft size={14} className="text-bs-status-warning" />
+              )}
             </button>
+          ) : (
+            <span className="text-sm font-medium text-bs-text-secondary">谱面信息</span>
           )}
         </div>
 
@@ -79,53 +123,75 @@ export default function ScoreTableHeader({
             title="切换难度排序"
           >
             难度
-            <ArrowUpDown size={14} className={diffSort === 'desc' ? 'text-bs-accent-primary' : 'text-bs-text-muted'} />
+            {diffSort === 'desc' ? (
+              <ArrowLeft size={14} className="text-bs-status-warning" />
+            ) : (
+              <ArrowRight size={14} className="text-bs-status-success" />
+            )}
           </button>
         </div>
 
         {/* 玩家列 */}
-        {players.map((player) => (
-          <div
-            key={player.id}
-            className={`p-4 border-r border-bs-border group relative transition-colors ${
-              dropTargetId === player.id && draggedId !== player.id
-                ? 'bg-bs-accent-primary/10'
-                : ''
-            }`}
-            draggable
-            onDragStart={() => handleDragStart(player.id)}
-            onDragOver={(e) => handleDragOver(e, player.id)}
-            onDragLeave={() => setDropTargetId(null)}
-            onDragEnd={handleDragEnd}
-          >
-            <div className="flex flex-col items-center gap-2 cursor-move">
-              {player.avatar_url ? (
-                <img
-                  src={player.avatar_url}
-                  alt={player.name}
-                  className="w-10 h-10 rounded-full object-cover"
-                />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-bs-bg-hover flex items-center justify-center">
-                  <User size={20} className="text-bs-text-muted" />
-                </div>
-              )}
-              <span className="text-xs text-bs-text-primary truncate w-full text-center">
-                {player.alias || player.name}
-              </span>
-            </div>
-
-            {/* 删除按钮 */}
-            <button
-              onClick={() => onRemovePlayer(player.id)}
-              className="absolute top-1 right-1 w-5 h-5 rounded bg-red-500 text-white opacity-0 group-hover:opacity-100 touch-manipulation:opacity-100 transition-opacity flex items-center justify-center hover:bg-red-600 z-10"
-              title="移除玩家"
-              aria-label={`移除玩家 ${player.alias || player.name}`}
+        {players.map((player) => {
+          const isDragged = draggedId === player.id;
+          const isDropTarget = dropTargetId === player.id && !isDragged;
+          return (
+            <div
+              key={player.id}
+              ref={(el) => {
+                if (el) cellRefs.current.set(player.id, el);
+                else cellRefs.current.delete(player.id);
+              }}
+              className={`p-4 border-r border-bs-border group relative transition-all ${
+                isDropTarget
+                  ? 'bg-bs-accent-primary/15 ring-2 ring-bs-accent-primary/50 ring-inset scale-105'
+                  : ''
+              } ${
+                isDragged
+                  ? 'opacity-30 border-2 border-dashed border-bs-accent-primary'
+                  : ''
+              }`}
+              onMouseDown={(e) => handleMouseDown(e, player.id)}
             >
-              <X size={12} />
-            </button>
-          </div>
-        ))}
+              <div className="flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing select-none">
+                {player.avatar_url ? (
+                  <img
+                    src={player.avatar_url}
+                    alt={player.name}
+                    className="w-10 h-10 rounded-full object-cover pointer-events-none"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-bs-bg-hover flex items-center justify-center pointer-events-none">
+                    <User size={20} className="text-bs-text-muted pointer-events-none" />
+                  </div>
+                )}
+                <span className="text-xs text-bs-text-primary truncate w-full text-center pointer-events-none">
+                  {player.alias || player.name}
+                </span>
+              </div>
+
+              {/* 删除按钮 */}
+              <button
+                onClick={() => onRemovePlayer(player.id)}
+                className="absolute top-1 right-1 w-5 h-5 rounded bg-red-500 text-white opacity-0 group-hover:opacity-100 touch-manipulation:opacity-100 transition-opacity flex items-center justify-center hover:bg-red-600 z-10"
+                title="移除玩家"
+                aria-label={`移除玩家 ${player.alias || player.name}`}
+              >
+                <X size={12} />
+              </button>
+
+              {/* 刷新成绩按钮 */}
+              <button
+                onClick={() => onRefreshPlayer(player.id)}
+                className="absolute top-7 right-1 w-5 h-5 rounded bg-bs-accent-primary text-white opacity-0 group-hover:opacity-100 touch-manipulation:opacity-100 transition-opacity flex items-center justify-center hover:bg-bs-accent-secondary z-10"
+                title="刷新成绩"
+                aria-label={`刷新 ${player.alias || player.name} 的成绩`}
+              >
+                <RefreshCw size={12} />
+              </button>
+            </div>
+          );
+        })}
 
         {/* 添加玩家列 */}
         <div className="p-4 flex items-center justify-center">
@@ -138,6 +204,35 @@ export default function ScoreTableHeader({
           </button>
         </div>
       </div>
+
+      {/* 浮动拖拽预览 */}
+      {draggedId && draggedPlayer && (
+        <div
+          className="fixed z-50 pointer-events-none animate-fade-in"
+          style={{
+            left: cursorPos.x + 12,
+            top: cursorPos.y - 16,
+            transform: 'translate(-50%, -50%)',
+          }}
+        >
+          <div className="bg-bs-bg-secondary border border-bs-accent-primary/50 rounded-xl shadow-lg shadow-bs-accent-primary/30 px-3 py-2 flex items-center gap-2">
+            {draggedPlayer.avatar_url ? (
+              <img
+                src={draggedPlayer.avatar_url}
+                alt={draggedPlayer.name}
+                className="w-8 h-8 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-bs-bg-hover flex items-center justify-center">
+                <User size={16} className="text-bs-text-muted" />
+              </div>
+            )}
+            <span className="text-xs font-medium text-bs-text-primary whitespace-nowrap">
+              {draggedPlayer.alias || draggedPlayer.name}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

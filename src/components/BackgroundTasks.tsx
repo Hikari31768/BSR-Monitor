@@ -4,7 +4,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { BackgroundTask } from '../types';
 import { Check } from 'lucide-react';
 
-const DISPLAY_TASKS = ['fetch_ratings', 'add_player', 'startup_refresh', 'refresh_ratings'];
+const DISPLAY_TASKS = ['fetch_ratings', 'add_player', 'startup_refresh', 'refresh_ratings', 'refresh_player_scores'];
 
 export default function BackgroundTasks() {
   const [tasks, setTasks] = useState<Record<string, BackgroundTask>>({});
@@ -72,6 +72,12 @@ export default function BackgroundTasks() {
         }
         if (!displayName) {
           displayName = payload.task_type === 'add_player' ? '更新玩家...' : '处理中...';
+        }
+        if (!displayName && payload.task_type === 'refresh_player_scores') {
+          // 使用 display_name 或 player_name 作为显示名
+          if (payload.player_name) {
+            displayName = `刷新: ${payload.player_name}`;
+          }
         }
 
         if (isCompleted) {

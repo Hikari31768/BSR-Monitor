@@ -214,6 +214,21 @@ export default function ScoreTable() {
     prevPlayerCountRef.current = newPlayers.length;
   }
 
+  // 刷新玩家成绩
+  async function handleRefreshPlayer(playerId: string) {
+    try {
+      await invoke<string>('refresh_player_scores', { playerId });
+      // 刷新完成后重新查询已有数据
+      if (viewMode === 'single' && currentMapData && mapInput.trim()) {
+        searchMap();
+      } else if (viewMode === 'playlist' && playlistData && selectedPlaylistId) {
+        searchPlaylist();
+      }
+    } catch (e) {
+      console.error('刷新成绩失败:', e);
+    }
+  }
+
   // 拖拽排序
   function handleReorderPlayers(draggedId: string, targetId: string) {
     const draggedIndex = selectedPlayers.findIndex(p => p.id === draggedId);
@@ -351,6 +366,7 @@ export default function ScoreTable() {
             players={sortedPlayers}
             onAddPlayer={() => setIsPlayerModalOpen(true)}
             onRemovePlayer={handleRemovePlayer}
+            onRefreshPlayer={handleRefreshPlayer}
             onReorderPlayers={handleReorderPlayers}
             mapSort={mapSort}
             onToggleMapSort={() => setMapSort(s => s === 'asc' ? 'desc' : 'asc')}

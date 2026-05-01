@@ -311,3 +311,45 @@ pub fn update_player(app: AppHandle, player: PlayerInfo) -> Result<(), String> {
     let guard = state.lock().map_err(|e| e.to_string())?;
     db::update_player(&guard, &player).map_err(|e| e.to_string())
 }
+
+/// 手动刷新单个玩家的成绩（增量更新）
+#[tauri::command]
+pub async fn refresh_player_scores(
+    app: AppHandle,
+    task_state: State<'_, TaskState>,
+    player_id: String,
+) -> Result<String, String> {
+    let task_id = format!("refresh-player-{}", Uuid::new_v4());
+    let api = BeatLeaderApi::new().map_err(|e| e.to_string())?;
+
+    // 获取玩家名字用于显示
+    let display_name = {
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        let name = get_player_name(&guard, &player_id)
+            .map_err(|e| e.to_string())?
+            .unwrap_or_else(|| player_id.clone());
+        format!("刷新: {}", name)
+    };
+
+    task_state.register_with_name(&task_id, "refresh_player_scores", &player_id, &display_name);
+
+    // 复用 fetch_and_save_player（is_incremental=true, emit_events=true）
+    let result = fetch_and_save_player(
+        &app,
+        &task_state,
+        player_id.clone(),
+        task_id.clone(),
+        None,
+        None,
+        api,
+        true,
+        true,
+    ).await;
+
+    // 清理任务状态
+    task_state.remove(&task_id);
+
+    result.map(|_| task_id)
+}
