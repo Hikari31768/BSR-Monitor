@@ -29,6 +29,7 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, 
   const sourceKey = playlist.source;
   const sourceLabel = SOURCE_LABELS[sourceKey] ?? sourceKey;
   const sourceColor = SOURCE_COLORS[sourceKey] ?? SOURCE_COLORS.beatsaver;
+  const imageSrc = playlist.playlist_image ? `data:image/png;base64,${playlist.playlist_image}` : null;
 
   return (
     <div className={`bg-bs-bg-secondary rounded-xl p-5 border transition-all duration-300 ${
@@ -38,9 +39,9 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, 
     }`}>
       <div className="flex items-start gap-4">
         {/* 封面 */}
-        {playlist.playlist_image ? (
+        {imageSrc ? (
           <img
-            src={playlist.playlist_image}
+            src={imageSrc}
             alt={playlist.name}
             className={`w-14 h-14 rounded-xl object-cover ${
               isLoading
