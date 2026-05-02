@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { Playlist, PlaylistUIState, PlaylistSource } from '../types';
 import PlaylistCard from '../components/PlaylistCard';
@@ -448,19 +449,33 @@ export default function Playlists() {
           {addSource === 'local' && (
             <div>
               <label className="block text-sm text-bs-text-secondary mb-2">
-                .bplist 文件路径 <span className="text-red-400">*</span>
+                .bplist 文件 <span className="text-red-400">*</span>
               </label>
-              <input
-                type="text"
-                value={addFilePath}
-                onChange={(e) => {
-                  setAddFilePath(e.target.value);
-                  setAddFormError('');
-                }}
-                placeholder="如: C:\Playlists\my_playlist.bplist"
-                className="w-full px-4 py-3 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary placeholder-bs-text-muted focus:border-bs-accent-primary focus:ring-2 focus:ring-bs-accent-primary/20 focus:outline-none transition-all"
-              />
-              <p className="text-xs text-bs-text-muted mt-1">输入本地 .bplist 文件的完整路径</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={addFilePath}
+                  readOnly
+                  placeholder="请选择 .bplist 文件..."
+                  className="flex-1 px-4 py-3 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary placeholder-bs-text-muted focus:border-bs-accent-primary focus:ring-2 focus:ring-bs-accent-primary/20 focus:outline-none transition-all"
+                />
+                <button
+                  onClick={async () => {
+                    const selected = await open({
+                      multiple: false,
+                      filters: [{ name: 'Playlist', extensions: ['bplist'] }],
+                    });
+                    if (selected && typeof selected === 'string') {
+                      setAddFilePath(selected);
+                      setAddFormError('');
+                    }
+                  }}
+                  className="px-4 py-2.5 rounded-lg font-medium text-sm bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all flex items-center gap-1 whitespace-nowrap"
+                >
+                  浏览
+                </button>
+              </div>
+              <p className="text-xs text-bs-text-muted mt-1">选择本地 .bplist 文件</p>
             </div>
           )}
 

@@ -29,7 +29,18 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, 
   const sourceKey = playlist.source;
   const sourceLabel = SOURCE_LABELS[sourceKey] ?? sourceKey;
   const sourceColor = SOURCE_COLORS[sourceKey] ?? SOURCE_COLORS.beatsaver;
-  const imageSrc = playlist.playlist_image ? `data:image/png;base64,${playlist.playlist_image}` : null;
+  // 处理不同格式的 image 字段：
+  // - 直接 base64 数据: "iVBORw0KGgo..."
+  // - 带 base64, 前缀: "base64,/9j/4AAQSkZJR..."
+  const getImageData = () => {
+    if (!playlist.playlist_image) return null;
+    let data = playlist.playlist_image;
+    if (data.startsWith('base64,')) {
+      data = data.substring(7);
+    }
+    return `data:image/png;base64,${data}`;
+  };
+  const imageSrc = getImageData();
 
   return (
     <div className={`bg-bs-bg-secondary rounded-xl p-5 border transition-all duration-300 ${

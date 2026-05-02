@@ -10,6 +10,7 @@ use tauri::{Manager, Emitter};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(TaskState::default())
         .setup(|app| {
             let app_handle = app.handle();
