@@ -236,3 +236,28 @@ pub async fn add_playlist(
 5. 测试打谱查询页面歌单模式下的三种来源选择
 6. 测试删除歌单时 Playlists 目录下文件的清理
 7. 测试进度显示是否正常
+
+## 实施记录
+
+### 后端变更
+
+| 文件 | 改动摘要 |
+|------|---------|
+| `schema.rs` | DROP PlaylistMap 索引，重建 Playlist 表（source+identifier 组合主键），新增 localPath/lastBplistFetchedAt 字段 |
+| `mod.rs` | 初始化时创建 Playlists 目录 |
+| `operations.rs` | 新增 PlaylistSource 枚举（实现 ToSql/FromSql）、更新 Playlist 结构体、新增 BplistFile/BplistSong/BplistCustomData 解析结构体、重写所有 playlist DB 操作、新增 get_playlist_hashes/get_playlist_hashes_paginated/get_map_diffs_by_key_for_hash、删除 PlaylistMap 相关操作 |
+| `beatleader.rs` | SongResponse 新增 id 和 coverImage 字段 |
+| `beatsaver.rs` | 新增 UserProfileResponse 和 get_user_by_id 方法 |
+| `playlist.rs` | 完全重写：add_playlist 接收 source+identifier、新增 refresh_playlist 命令、新增 fetch_and_save_bplist 统一获取逻辑、新增 spawn_rating_fetch 后台拉取评级、新增 get_playlist_maps 从 bplist 读取谱面列表、delete_playlist 清理本地文件 |
+| `score.rs` | get_playlist_scores 改用 source+identifier，通过 get_playlist_hashes_paginated 分页，通过 get_map_diffs_by_key_for_hash 反查 key |
+| `lib.rs` | 更新命令注册（add_playlist/refresh_playlist/get_playlist/delete_playlist/get_playlist_maps/refresh_playlist_ratings 签名变更） |
+
+### 前端变更
+
+| 文件 | 改动摘要 |
+|------|---------|
+| `types/index.ts` | 新增 PlaylistSource 类型、更新 Playlist 接口（source/identifier/localPath/lastBplistFetchedAt）、删除 PlaylistMap 接口 |
+| `Playlists.tsx` | 添加弹窗改为三种来源 Tab 切换（BeatSaver/谱师/本地）、所有操作改用 source:identifier 组合 key |
+| `PlaylistCard.tsx` | 显示来源标签（不同颜色区分 beatsaver/mapper/local） |
+| `PlaylistSelect.tsx` | 选项值改为 `${source}:${identifier}` 格式，selectedId→selectedKey |
+| `ScoreTable.tsx` | 歌单模式状态管理改为 selectedPlaylistKey，查询时拆分 source+identifier |

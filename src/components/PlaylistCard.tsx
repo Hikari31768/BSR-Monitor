@@ -12,8 +12,23 @@ interface PlaylistCardProps {
   refreshingRatings?: boolean;
 }
 
+const SOURCE_LABELS: Record<string, string> = {
+  beatsaver: 'BeatSaver',
+  mapper: '谱师',
+  local: '本地',
+};
+
+const SOURCE_COLORS: Record<string, string> = {
+  beatsaver: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  mapper: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+  local: 'bg-green-500/15 text-green-400 border-green-500/30',
+};
+
 export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, onUpdate, onRefreshRatings, updating, refreshingRatings }: PlaylistCardProps) {
   const isLoading = uiState?.loading ?? false;
+  const sourceKey = playlist.source;
+  const sourceLabel = SOURCE_LABELS[sourceKey] ?? sourceKey;
+  const sourceColor = SOURCE_COLORS[sourceKey] ?? SOURCE_COLORS.beatsaver;
 
   return (
     <div className={`bg-bs-bg-secondary rounded-xl p-5 border transition-all duration-300 ${
@@ -52,6 +67,9 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, 
             <p className="text-bs-text-secondary text-sm truncate">by {playlist.owner_name}</p>
           )}
           <div className="flex items-center gap-2 mt-2">
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${sourceColor}`}>
+              {sourceLabel}
+            </span>
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
               isLoading
                 ? 'bg-bs-status-warning/15 text-bs-status-warning border border-bs-status-warning/30'

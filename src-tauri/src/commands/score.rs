@@ -3,10 +3,11 @@ use tauri::Manager;
 use crate::api::BeatLeaderApi;
 use crate::database::operations::PlayerScore;
 use crate::database::operations as db;
+use crate::database::operations::PlaylistSource;
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 
-// ============ 新增：打谱查询相关命令 ============
+// ============ 打谱查询相关命令 ============
 
 /// 单个谱面的难度信息
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -23,9 +24,9 @@ pub struct CurrentDiffInfo {
 pub struct ScoreRowData {
     pub mode: String,
     pub difficulty: String,
-    pub is_current_version: bool, // 是否当前版本难度
+    pub is_current_version: bool,
     #[serde(default)]
-    pub stars: Option<f32>,       // 星级
+    pub stars: Option<f32>,
     pub scores: Vec<PlayerScoreCell>,
 }
 
@@ -77,48 +78,56 @@ pub async fn get_map_scores(
 #[tauri::command]
 pub async fn get_playlist_scores(
     app: AppHandle,
-    playlist_id: i64,
+    source: String,
+    identifier: String,
     page: i32,
     player_ids: Vec<String>,
     reverse: bool,
 ) -> Result<PlaylistScoresResponse, String> {
-    let (playlist, map_keys, total_pages) = {
+    let playlist_source = match source.as_str() {
+        "beatsaver" => PlaylistSource::Beatsaver,
+        "mapper" => PlaylistSource::Mapper,
+        "local" => PlaylistSource::Local,
+        _ => return Err(format!("Invalid playlist source: {}", source)),
+    };
+
+    let (playlist, map_hashes, total_pages) = {
         let state = app.try_state::<Mutex<rusqlite::Connection>>()
             .ok_or("Database not initialized")?;
         let guard = state.lock().map_err(|e| e.to_string())?;
 
         // 1. 获取歌单信息
-        let playlist = db::get_playlist_by_id(&guard, playlist_id)
+        let playlist = db::get_playlist(&guard, &playlist_source, &identifier)
             .map_err(|e| e.to_string())?
-            .ok_or_else(|| format!("Playlist not found: {}", playlist_id))?;
+            .ok_or_else(|| format!("Playlist not found: {}/{}", source, identifier))?;
 
-        // 2. 获取分页的谱面 keys
-        let (map_keys, total_pages) = db::get_playlist_maps_paginated(&guard, playlist_id, page, 100, reverse)
+        // 2. 获取分页的谱面 hashes
+        let (map_hashes, total_pages) = db::get_playlist_hashes_paginated(&guard, &playlist_source, &identifier, page, 100, reverse)
             .map_err(|e| e.to_string())?;
 
-        (playlist, map_keys, total_pages)
-    }; // guard 在此处被 drop
+        (playlist, map_hashes, total_pages)
+    };
 
-    // 3. 逐个查询每个谱面的成绩（直接使用已有星级）
+    // 3. 逐个查询每个谱面的成绩（通过 hash 查找 Map）
     let state = app.try_state::<Mutex<rusqlite::Connection>>()
         .ok_or("Database not initialized")?;
     let guard = state.lock().map_err(|e| e.to_string())?;
 
     let mut maps: Vec<MapScoresResponse> = Vec::new();
-    for key in map_keys {
-        // 使用相同的逻辑查询单个谱面
-        let all_diffs = db::get_map_diffs_by_key(&guard, &key).map_err(|e| e.to_string())?;
-
-        if all_diffs.is_empty() {
+    for hash in map_hashes {
+        // 通过 hash 查找 MapDiff，再找到 key
+        let map_diffs = db::get_map_diffs_by_key_for_hash(&guard, &hash).map_err(|e| e.to_string())?;
+        if map_diffs.is_empty() {
             continue;
         }
 
-        let map = match db::get_map_by_key(&guard, &key).map_err(|e| e.to_string())? {
+        let key = &map_diffs[0].key;
+        let map = match db::get_map_by_key(&guard, key).map_err(|e| e.to_string())? {
             Some(m) => m,
             None => continue,
         };
 
-        match build_map_scores_response(&guard, map, all_diffs, &player_ids) {
+        match build_map_scores_response(&guard, map, map_diffs, &player_ids) {
             Ok(response) => maps.push(response),
             Err(_) => continue,
         }
@@ -258,7 +267,7 @@ fn build_score_rows(
                 mode: key.0.clone(),
                 difficulty: key.1.clone(),
                 is_current_version: false,
-                stars: None, // 旧版本不显示星级
+                stars: None,
                 scores,
             });
         }

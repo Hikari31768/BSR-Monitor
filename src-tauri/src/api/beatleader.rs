@@ -60,12 +60,15 @@ pub struct LeaderboardResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SongResponse {
+    pub id: String,
     pub hash: String,
     pub name: String,
     #[serde(default)]
     pub author: String,
     #[serde(default)]
     pub mapper: String,
+    #[serde(rename = "coverImage", default)]
+    pub cover_image: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

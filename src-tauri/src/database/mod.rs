@@ -8,6 +8,10 @@ pub fn init_database(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> 
     let app_dir = app.path().app_data_dir()?;
     std::fs::create_dir_all(&app_dir)?;
 
+    // 创建 Playlists 目录
+    let playlists_dir = app_dir.join("Playlists");
+    std::fs::create_dir_all(&playlists_dir)?;
+
     let db_path = app_dir.join("bsr_monitor.db");
     let db = rusqlite::Connection::open(&db_path)?;
 
@@ -20,5 +24,6 @@ pub fn init_database(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> 
     app.manage(std::sync::Mutex::new(db));
 
     println!("Database initialized at: {}", db_path.display());
+    println!("Playlists directory: {}", playlists_dir.display());
     Ok(())
 }

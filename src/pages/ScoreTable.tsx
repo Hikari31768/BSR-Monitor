@@ -35,7 +35,7 @@ export default function ScoreTable() {
 
   // 歌单模式
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
-  const [selectedPlaylistId, setSelectedPlaylistId] = useState<number | null>(null);
+  const [selectedPlaylistKey, setSelectedPlaylistKey] = useState<string | null>(null);
   const [playlistData, setPlaylistData] = useState<PlaylistScoresResponse | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [mapSort, setMapSort] = useState<'asc' | 'desc'>('asc');
@@ -140,7 +140,7 @@ export default function ScoreTable() {
 
   // 查询歌单
   const searchPlaylist = useCallback(async () => {
-    if (!selectedPlaylistId) return;
+    if (!selectedPlaylistKey) return;
     const players = selectedPlayersRef.current;
     if (players.length === 0) return;
 
@@ -149,9 +149,12 @@ export default function ScoreTable() {
     setDataError('');
 
     try {
+      const [source, ...identifierParts] = selectedPlaylistKey.split(':');
+      const identifier = identifierParts.join(':');
       const playerIds = players.map(p => p.id);
       const result = await invoke<PlaylistScoresResponse>('get_playlist_scores', {
-        playlistId: selectedPlaylistId,
+        source,
+        identifier,
         page: currentPage,
         playerIds,
         reverse: mapSort === 'desc',
@@ -164,18 +167,18 @@ export default function ScoreTable() {
     } finally {
       setLoadingData(false);
     }
-  }, [selectedPlaylistId, currentPage, mapSort]); // 移除 selectedPlayers 依赖
+  }, [selectedPlaylistKey, currentPage, mapSort]); // 移除 selectedPlayers 依赖
 
   // 切换歌单时重置页码和排序（不触发查询）
   useEffect(() => {
     setCurrentPage(1);
     setPlaylistData(null);
     setMapSort('asc');
-  }, [selectedPlaylistId]);
+  }, [selectedPlaylistKey]);
 
   // 查询条件变化时重置并查询（歌单切换、排序变化、玩家变化）
   useEffect(() => {
-    if (viewMode === 'playlist' && selectedPlaylistId) {
+    if (viewMode === 'playlist' && selectedPlaylistKey) {
       // 如果页码已经是 1，直接查询；否则 setCurrentPage(1) 会触发下面的 effect
       if (currentPage === 1) {
         searchPlaylist();
@@ -183,11 +186,11 @@ export default function ScoreTable() {
         setCurrentPage(1);
       }
     }
-  }, [viewMode, selectedPlaylistId, mapSort, selectedPlayers]); // 监听查询条件变化
+  }, [viewMode, selectedPlaylistKey, mapSort, selectedPlayers]); // 监听查询条件变化
 
   // 页码变化时查询（页码变化是用户主动操作）
   useEffect(() => {
-    if (viewMode === 'playlist' && selectedPlaylistId) {
+    if (viewMode === 'playlist' && selectedPlaylistKey) {
       searchPlaylist();
     }
   }, [currentPage]); // 仅监听页码变化
@@ -201,11 +204,11 @@ export default function ScoreTable() {
       // 如果已有查询数据，自动刷新
       if (viewMode === 'single' && currentMapData && !loadingData && mapInput.trim()) {
         searchMap();
-      } else if (viewMode === 'playlist' && playlistData && !loadingData && selectedPlaylistId) {
+      } else if (viewMode === 'playlist' && playlistData && !loadingData && selectedPlaylistKey) {
         // 查询条件变化 effect 会处理
       }
     }
-  }, [selectedPlayers, viewMode, currentMapData, playlistData, loadingData, mapInput, selectedPlaylistId]);
+  }, [selectedPlayers, viewMode, currentMapData, playlistData, loadingData, mapInput, selectedPlaylistKey]);
 
   // 添加玩家
   function handleAddPlayer(player: PlayerInfo) {
@@ -230,7 +233,7 @@ export default function ScoreTable() {
       // 刷新完成后重新查询已有数据
       if (viewMode === 'single' && currentMapData && mapInput.trim()) {
         searchMap();
-      } else if (viewMode === 'playlist' && playlistData && selectedPlaylistId) {
+      } else if (viewMode === 'playlist' && playlistData && selectedPlaylistKey) {
         searchPlaylist();
       }
     } catch (e) {
@@ -323,8 +326,8 @@ export default function ScoreTable() {
         <div className="mb-4 space-y-3">
           <PlaylistSelect
             playlists={playlists}
-            selectedId={selectedPlaylistId}
-            onSelect={setSelectedPlaylistId}
+            selectedKey={selectedPlaylistKey}
+            onSelect={setSelectedPlaylistKey}
           />
 
           {/* 分页控制 */}
@@ -397,7 +400,7 @@ export default function ScoreTable() {
                     ? '请先选择玩家'
                     : viewMode === 'single'
                       ? (mapInput ? '该谱面无玩家成绩数据' : '请输入谱面 Key 或 Hash 开始查询')
-                      : (selectedPlaylistId ? '该歌单暂无玩家成绩数据' : '请选择歌单开始查询')
+                      : (selectedPlaylistKey ? '该歌单暂无玩家成绩数据' : '请选择歌单开始查询')
                 }
               />
             </div>

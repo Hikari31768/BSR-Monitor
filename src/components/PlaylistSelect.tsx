@@ -3,20 +3,27 @@ import { Playlist } from '../types';
 
 interface PlaylistSelectProps {
   playlists: Playlist[];
-  selectedId: number | null;
-  onSelect: (id: number | null) => void;
+  selectedKey: string | null;
+  onSelect: (key: string | null) => void;
 }
 
-export default function PlaylistSelect({ playlists, selectedId, onSelect }: PlaylistSelectProps) {
+function playlistKey(p: Playlist): string {
+  return `${p.source}:${p.identifier}`;
+}
+
+export default function PlaylistSelect({ playlists, selectedKey, onSelect }: PlaylistSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const selectedPlaylist = playlists.find(p => p.playlist_id === selectedId);
+  const selectedPlaylist = playlists.find(p => playlistKey(p) === selectedKey);
 
   // 所有选项（包含"请选择歌单"选项）
-  const allOptions = [{ id: null as number | null, label: '请选择歌单' }, ...playlists.map(p => ({ id: p.playlist_id, label: `${p.name} (${p.total_maps || 0} 首)` }))];
+  const allOptions = [
+    { key: null as string | null, label: '请选择歌单' },
+    ...playlists.map(p => ({ key: playlistKey(p), label: `${p.name} (${p.total_maps || 0} 首)` }))
+  ];
 
   // 点击外部关闭
   useEffect(() => {
@@ -32,7 +39,7 @@ export default function PlaylistSelect({ playlists, selectedId, onSelect }: Play
   // 打开时重置 activeIndex
   useEffect(() => {
     if (isOpen) {
-      const currentIndex = allOptions.findIndex(o => o.id === selectedId);
+      const currentIndex = allOptions.findIndex(o => o.key === selectedKey);
       setActiveIndex(currentIndex >= 0 ? currentIndex : 0);
     }
   }, [isOpen]);
@@ -58,7 +65,7 @@ export default function PlaylistSelect({ playlists, selectedId, onSelect }: Play
       case 'Enter':
         e.preventDefault();
         if (activeIndex >= 0 && activeIndex < allOptions.length) {
-          onSelect(allOptions[activeIndex].id);
+          onSelect(allOptions[activeIndex].key);
           setIsOpen(false);
         }
         break;
@@ -117,17 +124,17 @@ export default function PlaylistSelect({ playlists, selectedId, onSelect }: Play
         >
           {allOptions.map((option, index) => (
             <div
-              key={option.id ?? 'none'}
+              key={option.key ?? 'none'}
               role="option"
-              aria-selected={selectedId === option.id}
+              aria-selected={selectedKey === option.key}
               tabIndex={-1}
               onClick={() => {
-                onSelect(option.id);
+                onSelect(option.key);
                 setIsOpen(false);
               }}
               onMouseEnter={() => setActiveIndex(index)}
               className={`px-4 py-3 cursor-pointer transition-colors ${
-                selectedId === option.id
+                selectedKey === option.key
                   ? 'bg-bs-accent-primary/20 text-bs-accent-primary'
                   : index === activeIndex
                     ? 'bg-bs-bg-hover text-bs-text-primary'

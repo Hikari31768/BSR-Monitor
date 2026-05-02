@@ -20,6 +20,8 @@ export interface PlaylistUIState {
   statusMessage: string;
 }
 
+export type PlaylistSource = 'beatsaver' | 'mapper' | 'local';
+
 export interface PlayerScore {
   player_id: string;
   score_id: number;
@@ -51,23 +53,19 @@ export interface MapDiff {
 }
 
 export interface Playlist {
-  playlist_id: number;
+  source: PlaylistSource;
+  identifier: string;
   name: string;
   description?: string;
   playlist_image?: string;
-  owner_id?: number;
+  owner_id?: string;
   owner_name?: string;
   total_maps?: number;
   created_at?: string;
   songs_changed_at?: string;
   download_url?: string;
-}
-
-export interface PlaylistMap {
-  playlist_id: number;
-  map_key: string;
-  map_order: number;
-  map?: Map;
+  local_path?: string;
+  last_bplist_fetched_at?: number;
 }
 
 export interface PlayerWithScoreCount extends PlayerInfo {

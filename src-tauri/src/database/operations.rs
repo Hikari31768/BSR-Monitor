@@ -52,28 +52,89 @@ pub struct PlayerScore {
     pub epoch_time: i64,
 }
 
+// 歌单来源
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum PlaylistSource {
+    Beatsaver,
+    Mapper,
+    Local,
+}
+
+impl rusqlite::types::ToSql for PlaylistSource {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        let s = match self {
+            PlaylistSource::Beatsaver => "beatsaver",
+            PlaylistSource::Mapper => "mapper",
+            PlaylistSource::Local => "local",
+        };
+        Ok(rusqlite::types::ToSqlOutput::Owned(rusqlite::types::Value::Text(s.to_string())))
+    }
+}
+
+impl rusqlite::types::FromSql for PlaylistSource {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        match value.as_str()? {
+            "beatsaver" => Ok(PlaylistSource::Beatsaver),
+            "mapper" => Ok(PlaylistSource::Mapper),
+            "local" => Ok(PlaylistSource::Local),
+            _ => Err(rusqlite::types::FromSqlError::Other(Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Invalid playlist source",
+            )))),
+        }
+    }
+}
+
 // Playlist 表数据结构
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Playlist {
-    pub playlist_id: i64,
+    pub source: PlaylistSource,
+    pub identifier: String,
     pub name: String,
     pub description: Option<String>,
     pub playlist_image: Option<String>,
-    pub owner_id: Option<i64>,
+    pub owner_id: Option<String>,
     pub owner_name: Option<String>,
     pub total_maps: Option<i32>,
     pub created_at: Option<String>,
     pub songs_changed_at: Option<String>,
     pub download_url: Option<String>,
+    pub local_path: Option<String>,
+    pub last_bplist_fetched_at: Option<i64>,
 }
 
-// PlaylistMap 表数据结构
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PlaylistMap {
-    pub playlist_id: i64,
-    pub map_key: String,
-    pub map_order: f32,
-    pub map: Option<Map>,
+// .bplist 文件解析结构体
+#[allow(dead_code)]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BplistSong {
+    pub key: Option<String>,
+    #[serde(rename = "songName")]
+    pub song_name: Option<String>,
+    #[serde(rename = "levelAuthorName")]
+    pub level_author_name: Option<String>,
+    pub hash: String,
+    #[serde(rename = "levelID")]
+    pub levelid: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BplistCustomData {
+    #[serde(rename = "syncURL")]
+    pub sync_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BplistFile {
+    #[serde(rename = "playlistTitle")]
+    pub playlist_title: String,
+    #[serde(rename = "playlistAuthor")]
+    pub playlist_author: String,
+    #[serde(rename = "customData")]
+    pub custom_data: Option<BplistCustomData>,
+    pub songs: Vec<BplistSong>,
+    #[serde(default)]
+    pub image: Option<String>,
 }
 
 // 难度值转换
@@ -171,8 +232,6 @@ pub fn insert_map_diffs_batch(conn: &Connection, key: &str, diffs: &[MapDiff]) -
     )?;
 
     // 批量插入新记录（都标记为当前版本）
-    // 使用 ON CONFLICT DO UPDATE，冲突时仅更新 isCurrent，
-    // 保留已有的星级/评级字段（来自 BeatLeader），避免被 BeatSaver 的 NULL 覆盖
     for diff in diffs {
         conn.execute(
             "INSERT INTO MapDiff (key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating)
@@ -181,7 +240,7 @@ pub fn insert_map_diffs_batch(conn: &Connection, key: &str, diffs: &[MapDiff]) -
             rusqlite::params![
                 diff.key,
                 diff.hash,
-                true, // 新版本都是当前版本
+                true,
                 diff.mode,
                 diff.difficulty,
                 diff.stars_rating,
@@ -202,6 +261,30 @@ pub fn get_map_diffs_by_key(conn: &Connection, key: &str) -> Result<Vec<MapDiff>
     )?;
 
     let diffs = stmt.query_map([key], |row| {
+        Ok(MapDiff {
+            key: row.get(0)?,
+            hash: row.get(1)?,
+            is_current: row.get(2)?,
+            mode: row.get(3)?,
+            difficulty: row.get(4)?,
+            stars_rating: row.get(5)?,
+            stars_fetched_at: row.get(6)?,
+            pass_rating: row.get(7)?,
+            acc_rating: row.get(8)?,
+            tech_rating: row.get(9)?,
+        })
+    })?.collect::<Result<Vec<_>, _>>()?;
+
+    Ok(diffs)
+}
+
+/// 通过 hash 查找 MapDiff 记录（用于歌单模式通过 hash 反查 key）
+pub fn get_map_diffs_by_key_for_hash(conn: &Connection, hash: &str) -> Result<Vec<MapDiff>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating FROM MapDiff WHERE hash = ?1"
+    )?;
+
+    let diffs = stmt.query_map([hash], |row| {
         Ok(MapDiff {
             key: row.get(0)?,
             hash: row.get(1)?,
@@ -392,7 +475,6 @@ pub fn update_player(conn: &Connection, player: &PlayerInfo) -> Result<(), rusql
 
 /// 原子化插入：仅当记录不存在或新成绩时间更晚时才更新/插入
 pub fn insert_score(conn: &Connection, score: &PlayerScore) -> Result<bool, rusqlite::Error> {
-    // 先尝试更新已存在且时间更旧的记录
     let updated = conn.execute(
         "UPDATE PlayerScore SET scoreId = ?2, leaderboardId = ?3, mapKey = ?4, accuracy = ?5, epochTime = ?6
          WHERE playerId = ?1 AND hash = ?7 AND mode = ?8 AND difficulty = ?9
@@ -415,7 +497,6 @@ pub fn insert_score(conn: &Connection, score: &PlayerScore) -> Result<bool, rusq
         return Ok(true);
     }
 
-    // 记录不存在或已有更晚成绩，尝试插入（若已存在且未更新说明本地更新，跳过）
     let inserted = conn.execute(
         "INSERT INTO PlayerScore (playerId, scoreId, leaderboardId, mapKey, hash, mode, difficulty, accuracy, epochTime)
          SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9
@@ -512,10 +593,11 @@ pub fn get_latest_score_time(conn: &Connection, player_id: &str) -> Result<Optio
 
 pub fn insert_playlist(conn: &Connection, playlist: &Playlist) -> Result<(), rusqlite::Error> {
     conn.execute(
-        "INSERT OR REPLACE INTO Playlist (playlistId, name, description, playlistImage, ownerId, ownerName, totalMaps, createdAt, songsChangedAt, downloadURL)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        "INSERT OR REPLACE INTO Playlist (source, identifier, name, description, playlistImage, ownerId, ownerName, totalMaps, createdAt, songsChangedAt, downloadURL, localPath, lastBplistFetchedAt)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         rusqlite::params![
-            playlist.playlist_id,
+            playlist.source,
+            playlist.identifier,
             playlist.name,
             playlist.description,
             playlist.playlist_image,
@@ -524,29 +606,34 @@ pub fn insert_playlist(conn: &Connection, playlist: &Playlist) -> Result<(), rus
             playlist.total_maps,
             playlist.created_at,
             playlist.songs_changed_at,
-            playlist.download_url
+            playlist.download_url,
+            playlist.local_path,
+            playlist.last_bplist_fetched_at,
         ],
     )?;
     Ok(())
 }
 
-pub fn get_playlist_by_id(conn: &Connection, playlist_id: i64) -> Result<Option<Playlist>, rusqlite::Error> {
+pub fn get_playlist(conn: &Connection, source: &PlaylistSource, identifier: &str) -> Result<Option<Playlist>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT playlistId, name, description, playlistImage, ownerId, ownerName, totalMaps, createdAt, songsChangedAt, downloadURL FROM Playlist WHERE playlistId = ?1"
+        "SELECT source, identifier, name, description, playlistImage, ownerId, ownerName, totalMaps, createdAt, songsChangedAt, downloadURL, localPath, lastBplistFetchedAt FROM Playlist WHERE source = ?1 AND identifier = ?2"
     )?;
 
-    let result = stmt.query_row([playlist_id], |row| {
+    let result = stmt.query_row(rusqlite::params![source, identifier], |row| {
         Ok(Playlist {
-            playlist_id: row.get(0)?,
-            name: row.get(1)?,
-            description: row.get(2)?,
-            playlist_image: row.get(3)?,
-            owner_id: row.get(4)?,
-            owner_name: row.get(5)?,
-            total_maps: row.get(6)?,
-            created_at: row.get(7)?,
-            songs_changed_at: row.get(8)?,
-            download_url: row.get(9)?,
+            source: row.get(0)?,
+            identifier: row.get(1)?,
+            name: row.get(2)?,
+            description: row.get(3)?,
+            playlist_image: row.get(4)?,
+            owner_id: row.get(5)?,
+            owner_name: row.get(6)?,
+            total_maps: row.get(7)?,
+            created_at: row.get(8)?,
+            songs_changed_at: row.get(9)?,
+            download_url: row.get(10)?,
+            local_path: row.get(11)?,
+            last_bplist_fetched_at: row.get(12)?,
         })
     });
 
@@ -559,130 +646,59 @@ pub fn get_playlist_by_id(conn: &Connection, playlist_id: i64) -> Result<Option<
 
 pub fn get_all_playlists(conn: &Connection) -> Result<Vec<Playlist>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT playlistId, name, description, playlistImage, ownerId, ownerName, totalMaps, createdAt, songsChangedAt, downloadURL FROM Playlist"
+        "SELECT source, identifier, name, description, playlistImage, ownerId, ownerName, totalMaps, createdAt, songsChangedAt, downloadURL, localPath, lastBplistFetchedAt FROM Playlist"
     )?;
 
     let playlists = stmt.query_map([], |row| {
         Ok(Playlist {
-            playlist_id: row.get(0)?,
-            name: row.get(1)?,
-            description: row.get(2)?,
-            playlist_image: row.get(3)?,
-            owner_id: row.get(4)?,
-            owner_name: row.get(5)?,
-            total_maps: row.get(6)?,
-            created_at: row.get(7)?,
-            songs_changed_at: row.get(8)?,
-            download_url: row.get(9)?,
+            source: row.get(0)?,
+            identifier: row.get(1)?,
+            name: row.get(2)?,
+            description: row.get(3)?,
+            playlist_image: row.get(4)?,
+            owner_id: row.get(5)?,
+            owner_name: row.get(6)?,
+            total_maps: row.get(7)?,
+            created_at: row.get(8)?,
+            songs_changed_at: row.get(9)?,
+            download_url: row.get(10)?,
+            local_path: row.get(11)?,
+            last_bplist_fetched_at: row.get(12)?,
         })
     })?.collect::<Result<Vec<_>, _>>()?;
 
     Ok(playlists)
 }
 
-pub fn delete_playlist(conn: &Connection, playlist_id: i64) -> Result<(), String> {
-    conn.execute("BEGIN", []).map_err(|e| e.to_string())?;
-    if let Err(e) = conn.execute(
-        "DELETE FROM PlaylistMap WHERE playlistId = ?1",
-        [playlist_id],
-    ) {
-        let _ = conn.execute("ROLLBACK", []);
-        return Err(e.to_string());
-    }
-    if let Err(e) = conn.execute(
-        "DELETE FROM Playlist WHERE playlistId = ?1",
-        [playlist_id],
-    ) {
-        let _ = conn.execute("ROLLBACK", []);
-        return Err(e.to_string());
-    }
-    conn.execute("COMMIT", []).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-/// 仅删除歌单的谱面关联（用于更新）
-pub fn delete_playlist_maps(conn: &Connection, playlist_id: i64) -> Result<(), rusqlite::Error> {
+pub fn delete_playlist(conn: &Connection, source: &PlaylistSource, identifier: &str) -> Result<(), String> {
     conn.execute(
-        "DELETE FROM PlaylistMap WHERE playlistId = ?1",
-        [playlist_id],
-    )?;
+        "DELETE FROM Playlist WHERE source = ?1 AND identifier = ?2",
+        rusqlite::params![source, identifier],
+    ).map_err(|e| e.to_string())?;
     Ok(())
 }
 
-/// 更新歌单的 totalMaps 字段
-pub fn update_playlist_total_maps(conn: &Connection, playlist_id: i64, total_maps: Option<i32>) -> Result<(), rusqlite::Error> {
-    conn.execute(
-        "UPDATE Playlist SET totalMaps = ?2 WHERE playlistId = ?1",
-        rusqlite::params![playlist_id, total_maps],
-    )?;
-    Ok(())
+/// 从 .bplist 文件中读取谱面 hash 列表（保持原始顺序）
+pub fn get_playlist_hashes_from_bplist(bplist_path: &str) -> Result<Vec<String>, String> {
+    let content = std::fs::read_to_string(bplist_path)
+        .map_err(|e| format!("Failed to read bplist file: {}", e))?;
+    let bplist: BplistFile = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse bplist: {}", e))?;
+    Ok(bplist.songs.iter().map(|s| s.hash.clone()).collect())
 }
 
+/// 获取歌单中所有谱面的 hash 列表（从 .bplist 文件读取）
+pub fn get_playlist_hashes(conn: &Connection, source: &PlaylistSource, identifier: &str) -> Result<Vec<String>, String> {
+    let playlist = get_playlist(conn, source, identifier)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Playlist not found: {:?}/{}", source, identifier))?;
 
-/// 在单一事务中保存 Map + MapDiff + PlaylistMap，用于歌单批量导入
-pub fn save_playlist_map_entry(
-    conn: &Connection,
-    playlist_id: i64,
-    map: &Map,
-    diffs: &[MapDiff],
-    map_order: f32,
-) -> Result<(), String> {
-    conn.execute("BEGIN", []).map_err(|e| e.to_string())?;
-    if let Err(e) = insert_map(conn, map) {
-        let _ = conn.execute("ROLLBACK", []);
-        return Err(e.to_string());
-    }
-    if !diffs.is_empty() {
-        if let Err(e) = insert_map_diffs_batch(conn, &map.key, diffs) {
-            let _ = conn.execute("ROLLBACK", []);
-            return Err(e.to_string());
-        }
-    }
-    if let Err(e) = conn.execute(
-        "INSERT OR REPLACE INTO PlaylistMap (playlistId, mapKey, mapOrder) VALUES (?1, ?2, ?3)",
-        rusqlite::params![playlist_id, map.key, map_order],
-    ) {
-        let _ = conn.execute("ROLLBACK", []);
-        return Err(e.to_string());
-    }
-    conn.execute("COMMIT", []).map_err(|e| e.to_string())?;
-    Ok(())
-}
+    let bplist_path = match &playlist.local_path {
+        Some(path) => path.clone(),
+        None => return Err("Playlist has no local bplist path".to_string()),
+    };
 
-pub fn get_playlist_maps(conn: &Connection, playlist_id: i64) -> Result<Vec<PlaylistMap>, rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        "SELECT pm.playlistId, pm.mapKey, pm.mapOrder,
-                m.key, m.songName, m.songAuthorName, m.levelAuthorName, m.rating, m.coverURL, m.previewURL
-         FROM PlaylistMap pm
-         LEFT JOIN Map m ON pm.mapKey = m.key
-         WHERE pm.playlistId = ?1
-         ORDER BY pm.mapOrder"
-    )?;
-
-    let maps = stmt.query_map([playlist_id], |row| {
-        let key: Option<String> = row.get(3)?;
-        let map = if let Some(_) = key {
-            Some(Map {
-                key: row.get(3)?,
-                song_name: row.get(4)?,
-                song_author_name: row.get(5)?,
-                level_author_name: row.get(6)?,
-                rating: row.get(7)?,
-                cover_url: row.get(8)?,
-                preview_url: row.get(9)?,
-            })
-        } else {
-            None
-        };
-        Ok(PlaylistMap {
-            playlist_id: row.get(0)?,
-            map_key: row.get(1)?,
-            map_order: row.get(2)?,
-            map,
-        })
-    })?.collect::<Result<Vec<_>, _>>()?;
-
-    Ok(maps)
+    get_playlist_hashes_from_bplist(&bplist_path)
 }
 
 /// 获取玩家在指定 hash 列表中的成绩
@@ -725,36 +741,39 @@ pub fn get_scores_by_hashes_and_player(
     Ok(scores)
 }
 
-/// 获取歌单谱面分页（按 mapOrder 排序）
-pub fn get_playlist_maps_paginated(
+/// 获取歌单谱面分页（按 .bplist 中 songs 顺序）
+pub fn get_playlist_hashes_paginated(
     conn: &Connection,
-    playlist_id: i64,
+    source: &PlaylistSource,
+    identifier: &str,
     page: i32,
     page_size: i32,
     reverse: bool,
-) -> Result<(Vec<String>, i32), rusqlite::Error> {
-    // 获取总数
-    let total: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM PlaylistMap WHERE playlistId = ?1",
-        [playlist_id],
-        |row| row.get(0),
-    )?;
+) -> Result<(Vec<String>, i32), String> {
+    let playlist = get_playlist(conn, source, identifier)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Playlist not found".to_string())?;
 
+    let bplist_path = playlist.local_path
+        .ok_or_else(|| "Playlist has no local bplist path".to_string())?;
+
+    let all_hashes = get_playlist_hashes_from_bplist(&bplist_path)?;
+    let total = all_hashes.len();
     let total_pages = ((total as f64) / (page_size as f64)).ceil() as i32;
-    let offset = (page - 1) * page_size;
 
-    let order_by = if reverse { "DESC" } else { "ASC" };
+    let offset = ((page - 1) * page_size) as usize;
+    let end = (offset + page_size as usize).min(total);
 
-    // 获取指定页的 map keys
-    let query = format!(
-        "SELECT mapKey FROM PlaylistMap WHERE playlistId = ?1 ORDER BY mapOrder {} LIMIT ?2 OFFSET ?3",
-        order_by
-    );
-    let mut stmt = conn.prepare(&query)?;
+    let mut page_hashes: Vec<String>;
+    if offset >= total {
+        page_hashes = vec![];
+    } else {
+        page_hashes = all_hashes[offset..end].to_vec();
+    }
 
-    let keys = stmt.query_map(rusqlite::params![playlist_id, page_size, offset], |row| {
-        row.get::<_, String>(0)
-    })?.collect::<Result<Vec<_>, _>>()?;
+    if reverse {
+        page_hashes.reverse();
+    }
 
-    Ok((keys, total_pages))
+    Ok((page_hashes, total_pages))
 }

@@ -134,6 +134,16 @@ pub struct MapDetailWithOrder {
     pub order: f32,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserProfileResponse {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub avatar: Option<String>,
+    #[serde(rename = "playlistUrl")]
+    pub playlist_url: Option<String>,
+}
+
 pub struct BeatSaverApi {
     client: ApiClient,
 }
@@ -189,6 +199,19 @@ impl BeatSaverApi {
 
     pub async fn get_playlist(&self, playlist_id: i32, page: i32) -> Result<PlaylistPage, ApiError> {
         let url = self.client.beatsaver_url(format!("/playlists/id/{playlist_id}/{page}").as_str());
+
+        self.client.request_with_retry(|| {
+            let url = url.clone();
+            let client = self.client.client().clone();
+            Box::pin(async move {
+                let response = client.get(&url).send().await?;
+                Self::handle_response(response).await
+            })
+        }, MAX_RETRIES).await
+    }
+
+    pub async fn get_user_by_id(&self, user_id: &str) -> Result<UserProfileResponse, ApiError> {
+        let url = self.client.beatsaver_url(format!("/users/id/{user_id}").as_str());
 
         self.client.request_with_retry(|| {
             let url = url.clone();

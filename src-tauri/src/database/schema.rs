@@ -91,32 +91,23 @@ pub fn create_tables(conn: &Connection) -> Result<(), rusqlite::Error> {
         [],
     )?;
 
-    // Playlist 表 - 歌单元数据
+    // Playlist 表 - 歌单元数据（source + identifier 组合主键）
     conn.execute(
         "CREATE TABLE IF NOT EXISTS Playlist (
-            playlistId INTEGER PRIMARY KEY,
+            source TEXT NOT NULL CHECK(source IN ('beatsaver', 'mapper', 'local')),
+            identifier TEXT NOT NULL,
             name TEXT,
             description TEXT,
             playlistImage TEXT,
-            ownerId INTEGER,
+            ownerId TEXT,
             ownerName TEXT,
             totalMaps INTEGER,
             createdAt TEXT,
             songsChangedAt TEXT,
-            downloadURL TEXT
-        )",
-        [],
-    )?;
-
-    // PlaylistMap 表 - 歌单与谱面的关联关系
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS PlaylistMap (
-            playlistId INTEGER NOT NULL,
-            mapKey VARCHAR(16) NOT NULL,
-            mapOrder FLOAT NOT NULL,
-            PRIMARY KEY (playlistId, mapKey),
-            FOREIGN KEY (playlistId) REFERENCES Playlist(playlistId),
-            FOREIGN KEY (mapKey) REFERENCES Map(key)
+            downloadURL TEXT,
+            localPath TEXT,
+            lastBplistFetchedAt BIGINT,
+            PRIMARY KEY (source, identifier)
         )",
         [],
     )?;
@@ -136,10 +127,6 @@ pub fn create_tables(conn: &Connection) -> Result<(), rusqlite::Error> {
     )?;
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_playerscore_time ON PlayerScore(epochTime)",
-        [],
-    )?;
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_playlistmap_playlist ON PlaylistMap(playlistId)",
         [],
     )?;
 
