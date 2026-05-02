@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import {
   PlayerInfo,
   Map,
@@ -47,14 +48,38 @@ export default function ScoreTable() {
   const [loadingData, setLoadingData] = useState(false);
   const [dataError, setDataError] = useState<string>('');
 
-  // 用于追踪玩家数量变化
-  const prevPlayerCountRef = useRef(0);
-
-  // 用于存储最新的 selectedPlayers，供 callback 使用
+  // 所有可变值都用 ref 存储，确保 callback 和 effect 不依赖 state
   const selectedPlayersRef = useRef(selectedPlayers);
-  useEffect(() => {
-    selectedPlayersRef.current = selectedPlayers;
-  }, [selectedPlayers]);
+  useEffect(() => { selectedPlayersRef.current = selectedPlayers; }, [selectedPlayers]);
+
+  const mapInputRef = useRef(mapInput);
+  useEffect(() => { mapInputRef.current = mapInput; }, [mapInput]);
+
+  const currentMapKeyRef = useRef<string | null>(null);
+  useEffect(() => { currentMapKeyRef.current = currentMapData?.map.key ?? null; }, [currentMapData]);
+
+  const currentMapDataRef = useRef(currentMapData);
+  useEffect(() => { currentMapDataRef.current = currentMapData; }, [currentMapData]);
+
+  const playlistDataRef = useRef(playlistData);
+  useEffect(() => { playlistDataRef.current = playlistData; }, [playlistData]);
+
+  const viewModeRef = useRef(viewMode);
+  useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
+
+  const selectedPlaylistKeyRef = useRef(selectedPlaylistKey);
+  useEffect(() => { selectedPlaylistKeyRef.current = selectedPlaylistKey; }, [selectedPlaylistKey]);
+
+  const currentPageRef = useRef(currentPage);
+  useEffect(() => { currentPageRef.current = currentPage; }, [currentPage]);
+
+  const mapSortRef = useRef(mapSort);
+  useEffect(() => { mapSortRef.current = mapSort; }, [mapSort]);
+
+  const loadingDataRef = useRef(loadingData);
+  useEffect(() => { loadingDataRef.current = loadingData; }, [loadingData]);
+
+  const prevPlayerCountRef = useRef(0);
 
   // 初始化加载
   useEffect(() => {
@@ -68,7 +93,6 @@ export default function ScoreTable() {
       const list = await invoke<PlayerInfo[]>('get_player_list');
       if (list.length === 0) return;
 
-      // 优先使用标星玩家作为默认
       const starredId = (() => {
         try { return localStorage.getItem('starred_player_id'); } catch { return null; }
       })();
@@ -100,9 +124,18 @@ export default function ScoreTable() {
     }
   }
 
-  // 查询单谱面 - 使用 ref 获取最新 players，避免依赖数组变化导致重新创建
+  /** 仅查询成绩（不调用 get_map_by_key/hash，不触发星级补全） */
+  async function fetchScores(key: string) {
+    const playerIds = selectedPlayersRef.current.map(p => p.id);
+    if (playerIds.length === 0) return;
+    const result = await invoke<MapScoresResponse>('get_map_scores', { key, playerIds });
+    setCurrentMapData(result);
+  }
+
+  /** 完整查询：先获取谱面信息（含星级补全），再查成绩 */
   const searchMap = useCallback(async () => {
-    if (!mapInput.trim()) return;
+    const input = mapInputRef.current.trim();
+    if (!input) return;
     const players = selectedPlayersRef.current;
     if (players.length === 0) return;
 
@@ -111,36 +144,39 @@ export default function ScoreTable() {
     setDataError('');
 
     try {
-      // 先获取/更新谱面信息（支持 key 或 hash）
-      let key = mapInput.trim();
+      let key = input;
       if (key.length === 40) {
-        // 是 hash，先获取谱面
         const map = await invoke<Map>('get_map_by_hash', { hash: key });
         key = map.key;
       } else {
-        // 是 key，获取谱面信息（会自动存入数据库）
         await invoke<Map>('get_map_by_key', { key });
       }
 
-      // 查询成绩
-      const playerIds = players.map(p => p.id);
-      const result = await invoke<MapScoresResponse>('get_map_scores', {
-        key,
-        playerIds,
-      });
-
-      setCurrentMapData(result);
+      await fetchScores(key);
     } catch (e) {
       console.error('查询谱面失败:', e);
       setDataError(`查询失败: ${e}`);
     } finally {
       setLoadingData(false);
     }
-  }, [mapInput]); // 移除 selectedPlayers 依赖
+  }, []); // 无依赖，完全稳定
 
-  // 查询歌单
+  /** 监听 BeatLeader 星级补全完成 → 仅刷新成绩，不重新获取谱面 */
+  useEffect(() => {
+    const unlisten = listen<string>('map-stars-ready', (event) => {
+      const key = event.payload;
+      if (currentMapKeyRef.current === key) {
+        fetchScores(key).catch(console.error);
+      }
+    });
+    return () => {
+      unlisten.then(fn => fn());
+    };
+  }, []);
+
+  /** 查询歌单 — 无依赖，完全稳定 */
   const searchPlaylist = useCallback(async () => {
-    if (!selectedPlaylistKey) return;
+    if (!selectedPlaylistKeyRef.current) return;
     const players = selectedPlayersRef.current;
     if (players.length === 0) return;
 
@@ -149,15 +185,15 @@ export default function ScoreTable() {
     setDataError('');
 
     try {
-      const [source, ...identifierParts] = selectedPlaylistKey.split(':');
+      const [source, ...identifierParts] = selectedPlaylistKeyRef.current.split(':');
       const identifier = identifierParts.join(':');
       const playerIds = players.map(p => p.id);
       const result = await invoke<PlaylistScoresResponse>('get_playlist_scores', {
         source,
         identifier,
-        page: currentPage,
+        page: currentPageRef.current,
         playerIds,
-        reverse: mapSort === 'desc',
+        reverse: mapSortRef.current === 'desc',
       });
 
       setPlaylistData(result);
@@ -167,48 +203,44 @@ export default function ScoreTable() {
     } finally {
       setLoadingData(false);
     }
-  }, [selectedPlaylistKey, currentPage, mapSort]); // 移除 selectedPlayers 依赖
+  }, []); // 无依赖，完全稳定
 
-  // 切换歌单时重置页码和排序（不触发查询）
+  // 切换歌单时重置页码和排序
   useEffect(() => {
     setCurrentPage(1);
     setPlaylistData(null);
     setMapSort('asc');
   }, [selectedPlaylistKey]);
 
-  // 查询条件变化时重置并查询（歌单切换、排序变化、玩家变化）
+  // 查询条件变化时查询（歌单模式）
   useEffect(() => {
     if (viewMode === 'playlist' && selectedPlaylistKey) {
-      // 如果页码已经是 1，直接查询；否则 setCurrentPage(1) 会触发下面的 effect
       if (currentPage === 1) {
         searchPlaylist();
       } else {
         setCurrentPage(1);
       }
     }
-  }, [viewMode, selectedPlaylistKey, mapSort, selectedPlayers]); // 监听查询条件变化
+  }, [viewMode, selectedPlaylistKey, mapSort, selectedPlayers]);
 
-  // 页码变化时查询（页码变化是用户主动操作）
+  // 页码变化时查询
   useEffect(() => {
     if (viewMode === 'playlist' && selectedPlaylistKey) {
       searchPlaylist();
     }
-  }, [currentPage]); // 仅监听页码变化
+  }, [currentPage]);
 
-  // 玩家数量变化时自动刷新成绩（已有数据时）
+  // 玩家数量变化时自动刷新成绩
   useEffect(() => {
     const currentCount = selectedPlayers.length;
     if (currentCount !== prevPlayerCountRef.current) {
-      // 玩家数量变化了（增加或减少）
       prevPlayerCountRef.current = currentCount;
-      // 如果已有查询数据，自动刷新
-      if (viewMode === 'single' && currentMapData && !loadingData && mapInput.trim()) {
-        searchMap();
-      } else if (viewMode === 'playlist' && playlistData && !loadingData && selectedPlaylistKey) {
-        // 查询条件变化 effect 会处理
+      if (viewModeRef.current === 'single' && currentMapDataRef.current && !loadingDataRef.current && mapInputRef.current.trim()) {
+        const key = currentMapDataRef.current.map.key;
+        fetchScores(key).catch(console.error);
       }
     }
-  }, [selectedPlayers, viewMode, currentMapData, playlistData, loadingData, mapInput, selectedPlaylistKey]);
+  }, [selectedPlayers]);
 
   // 添加玩家
   function handleAddPlayer(player: PlayerInfo) {
@@ -222,7 +254,6 @@ export default function ScoreTable() {
   function handleRemovePlayer(playerId: string) {
     const newPlayers = selectedPlayers.filter(p => p.id !== playerId);
     setSelectedPlayers(newPlayers);
-    // 同步更新 ref，避免后续添加玩家时判断失效
     prevPlayerCountRef.current = newPlayers.length;
   }
 
@@ -230,10 +261,9 @@ export default function ScoreTable() {
   async function handleRefreshPlayer(playerId: string) {
     try {
       await invoke<string>('refresh_player_scores', { playerId });
-      // 刷新完成后重新查询已有数据
-      if (viewMode === 'single' && currentMapData && mapInput.trim()) {
-        searchMap();
-      } else if (viewMode === 'playlist' && playlistData && selectedPlaylistKey) {
+      if (viewModeRef.current === 'single' && currentMapDataRef.current) {
+        fetchScores(currentMapDataRef.current.map.key).catch(console.error);
+      } else if (viewModeRef.current === 'playlist' && playlistDataRef.current) {
         searchPlaylist();
       }
     } catch (e) {
@@ -245,25 +275,22 @@ export default function ScoreTable() {
   function handleReorderPlayers(draggedId: string, targetId: string) {
     const draggedIndex = selectedPlayers.findIndex(p => p.id === draggedId);
     const targetIndex = selectedPlayers.findIndex(p => p.id === targetId);
-
     if (draggedIndex === -1 || targetIndex === -1) return;
 
     const newPlayers = [...selectedPlayers];
     const [removed] = newPlayers.splice(draggedIndex, 1);
     newPlayers.splice(targetIndex, 0, removed);
-
-    // 重新分配 order
     setSelectedPlayers(newPlayers.map((p, i) => ({ ...p, order: i })));
   }
 
-  // 获取当前显示的数据 - 使用 useMemo 缓存
+  // 获取当前显示的数据
   const displayData = useMemo(() => {
     return viewMode === 'single'
       ? (currentMapData ? [currentMapData] : [])
       : (playlistData?.maps || []);
   }, [viewMode, currentMapData, playlistData]);
 
-  // 构建表头数据 - 使用 useMemo 缓存
+  // 构建表头数据
   const sortedPlayers = useMemo(() => {
     return [...selectedPlayers].sort((a, b) => a.order - b.order);
   }, [selectedPlayers]);

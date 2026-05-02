@@ -220,6 +220,17 @@ pub fn get_map_by_key(conn: &Connection, key: &str) -> Result<Option<Map>, rusql
     }
 }
 
+/// 获取谱面的首个 hash（用于 BeatLeader 查询）
+pub fn get_map_hash_by_key(conn: &Connection, key: &str) -> Result<Option<String>, rusqlite::Error> {
+    let mut stmt = conn.prepare("SELECT hash FROM MapDiff WHERE key = ?1 LIMIT 1")?;
+    let result = stmt.query_row([key], |row| row.get(0));
+    match result {
+        Ok(hash) => Ok(Some(hash)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
 /// 批量插入同一版本的多个难度（先重置旧版本，再插入新版本）
 pub fn insert_map_diffs_batch(conn: &Connection, key: &str, diffs: &[MapDiff]) -> Result<(), rusqlite::Error> {
     if diffs.is_empty() {
@@ -303,6 +314,61 @@ pub fn get_map_diffs_by_key_for_hash(conn: &Connection, hash: &str) -> Result<Ve
     Ok(diffs)
 }
 
+/// 更新指定 MapDiff 记录的评级信息（按 hash + mode + difficulty 匹配）
+pub fn update_diff_ratings(
+    conn: &Connection,
+    key: &str,
+    hash: &str,
+    mode: &str,
+    difficulty: &str,
+    stars: Option<f32>,
+    pass_rating: Option<f32>,
+    acc_rating: Option<f32>,
+    tech_rating: Option<f32>,
+) -> Result<(), rusqlite::Error> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    let updated = conn.execute(
+        "UPDATE MapDiff SET
+            starsRating = ?5,
+            starsFetchedAt = ?6,
+            passRating = ?7,
+            accRating = ?8,
+            techRating = ?9
+         WHERE LOWER(hash) = LOWER(?1) AND mode = ?2 AND difficulty = ?3",
+        rusqlite::params![
+            hash, mode, difficulty,
+            key,
+            stars,
+            now,
+            pass_rating,
+            acc_rating,
+            tech_rating,
+        ],
+    )?;
+
+    // 如果没有匹配到现有记录，INSERT 一条（BeatLeader 可能有 BeatSaver 没有的难度模式）
+    if updated == 0 {
+        conn.execute(
+            "INSERT OR IGNORE INTO MapDiff (key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            rusqlite::params![
+                key, hash, true, mode, difficulty,
+                stars,
+                now,
+                pass_rating,
+                acc_rating,
+                tech_rating,
+            ],
+        )?;
+    }
+
+    Ok(())
+}
+
 /// 找出指定 hash 列表中还有难度未拉取评级的 hash（去重）
 pub fn get_hashes_needing_ratings(conn: &Connection, hashes: &[String]) -> Result<Vec<String>, rusqlite::Error> {
     if hashes.is_empty() {
@@ -351,30 +417,6 @@ pub fn get_existing_hashes(conn: &Connection, hashes: &[String]) -> Result<Vec<S
     })?.collect::<Result<Vec<_>, _>>()?;
 
     Ok(result)
-}
-
-/// 更新指定难度的所有评级（按 hash + mode + difficulty 定位）
-pub fn update_diff_ratings(
-    conn: &Connection,
-    hash: &str,
-    mode: &str,
-    difficulty: &str,
-    stars: Option<f32>,
-    pass_rating: Option<f32>,
-    acc_rating: Option<f32>,
-    tech_rating: Option<f32>,
-) -> Result<(), rusqlite::Error> {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
-
-    conn.execute(
-        "UPDATE MapDiff SET starsRating = ?1, starsFetchedAt = ?2, passRating = ?3, accRating = ?4, techRating = ?5 WHERE hash = ?6 AND mode = ?7 AND difficulty = ?8",
-        rusqlite::params![stars, now, pass_rating, acc_rating, tech_rating, hash, mode, difficulty],
-    )?;
-
-    Ok(())
 }
 
 // ============ PlayerInfo CRUD ============

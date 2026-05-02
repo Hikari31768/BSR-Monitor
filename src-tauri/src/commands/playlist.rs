@@ -538,6 +538,7 @@ pub async fn refresh_playlist_ratings(
     for (idx, hash) in all_hashes.iter().enumerate() {
         match api.get_leaderboards_by_hash(hash).await {
             Ok(response) => {
+                let key = &response.song.id;
                 let state = app.try_state::<Mutex<rusqlite::Connection>>();
                 if let Some(state) = state {
                     if let Ok(guard) = state.lock() {
@@ -557,7 +558,7 @@ pub async fn refresh_playlist_ratings(
                                 diff.difficulty_name.clone()
                             };
                             let _ = db::update_diff_ratings(
-                                &guard, &hash, &mode_name, &difficulty_name,
+                                &guard, key, &hash, &mode_name, &difficulty_name,
                                 diff.stars,
                                 diff.pass_rating,
                                 diff.acc_rating,
