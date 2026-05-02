@@ -136,7 +136,7 @@ pub struct MapDetailWithOrder {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserProfileResponse {
-    pub id: String,
+    pub id: i64,
     pub name: String,
     #[serde(default)]
     pub avatar: Option<String>,
