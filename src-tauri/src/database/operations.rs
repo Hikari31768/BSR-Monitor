@@ -379,14 +379,16 @@ pub fn get_hashes_needing_ratings(conn: &Connection, hashes: &[String]) -> Resul
         return Ok(vec![]);
     }
 
-    let placeholders = hashes.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    // MapDiff 中 hash 统一存储为小写，需规范化输入后再查询
+    let lower_hashes: Vec<String> = hashes.iter().map(|h| h.to_lowercase()).collect();
+    let placeholders = lower_hashes.iter().map(|_| "?").collect::<Vec<_>>().join(",");
     let sql = format!(
         "SELECT DISTINCT hash FROM MapDiff WHERE hash IN ({}) AND starsFetchedAt IS NULL",
         placeholders
     );
 
     let mut params: Vec<&dyn rusqlite::ToSql> = Vec::new();
-    for hash in hashes {
+    for hash in &lower_hashes {
         params.push(hash);
     }
 
@@ -404,14 +406,16 @@ pub fn get_existing_hashes(conn: &Connection, hashes: &[String]) -> Result<Vec<S
         return Ok(vec![]);
     }
 
-    let placeholders = hashes.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    // MapDiff 中 hash 统一存储为小写，需规范化输入后再查询
+    let lower_hashes: Vec<String> = hashes.iter().map(|h| h.to_lowercase()).collect();
+    let placeholders = lower_hashes.iter().map(|_| "?").collect::<Vec<_>>().join(",");
     let sql = format!(
         "SELECT DISTINCT hash FROM MapDiff WHERE hash IN ({})",
         placeholders
     );
 
     let mut params: Vec<&dyn rusqlite::ToSql> = Vec::new();
-    for hash in hashes {
+    for hash in &lower_hashes {
         params.push(hash);
     }
 

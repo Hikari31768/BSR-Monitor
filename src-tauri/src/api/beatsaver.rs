@@ -185,7 +185,9 @@ impl BeatSaverApi {
     }
 
     pub async fn get_map_by_hash(&self, hash: &str) -> Result<MapDetail, ApiError> {
-        let url = self.client.beatsaver_url(format!("/maps/hash/{hash}").as_str());
+        // BeatSaver 对 hash 大小写不敏感，但统一转为小写保持一致性
+        let normalized = hash.to_lowercase();
+        let url = self.client.beatsaver_url(format!("/maps/hash/{normalized}").as_str());
 
         self.client.request_with_retry(|| {
             let url = url.clone();

@@ -174,7 +174,7 @@ pub async fn fetch_and_save_player(
                 score_id: score_data.score.id as i64,
                 leaderboard_id: score_data.leaderboard.id.clone(),
                 map_key,
-                hash: score_data.leaderboard.song_hash.clone(),
+                hash: score_data.leaderboard.song_hash.to_lowercase(),
                 mode: score_data.leaderboard.mode_name.clone(),
                 difficulty,
                 accuracy: score_data.score.accuracy,

@@ -185,8 +185,8 @@ async fn process_playlist(
     emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
     task_state.update(&task_id, 15.0, &format!("已获取歌单: {}", playlist.name));
 
-    // 4. 后台任务：补全数据库中未收录的谱面信息
-    let hashes: Vec<String> = bplist.songs.iter().map(|s| s.hash.clone()).collect();
+    // 4. 后台任务：补全数据库中未收录的谱面信息（bplist hash 统一转小写，与数据库存储一致）
+    let hashes: Vec<String> = bplist.songs.iter().map(|s| s.hash.to_lowercase()).collect();
     spawn_complete_map_info(app, &hashes, &playlist.name);
 
     // 发送完成进度
