@@ -102,6 +102,7 @@ pub struct Playlist {
     pub download_url: Option<String>,
     pub local_path: Option<String>,
     pub last_bplist_fetched_at: Option<i64>,
+    pub updated_at: Option<i64>,
 }
 
 // .bplist 文件解析结构体
@@ -311,6 +312,31 @@ pub fn get_hashes_needing_ratings(conn: &Connection, hashes: &[String]) -> Resul
     let placeholders = hashes.iter().map(|_| "?").collect::<Vec<_>>().join(",");
     let sql = format!(
         "SELECT DISTINCT hash FROM MapDiff WHERE hash IN ({}) AND starsFetchedAt IS NULL",
+        placeholders
+    );
+
+    let mut params: Vec<&dyn rusqlite::ToSql> = Vec::new();
+    for hash in hashes {
+        params.push(hash);
+    }
+
+    let mut stmt = conn.prepare(&sql)?;
+    let result = stmt.query_map(rusqlite::params_from_iter(params), |row| {
+        row.get::<_, String>(0)
+    })?.collect::<Result<Vec<_>, _>>()?;
+
+    Ok(result)
+}
+
+/// 找出指定 hash 列表中已在数据库中存在的 hash（用于增量补全时跳过已收录的谱面）
+pub fn get_existing_hashes(conn: &Connection, hashes: &[String]) -> Result<Vec<String>, rusqlite::Error> {
+    if hashes.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let placeholders = hashes.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT DISTINCT hash FROM MapDiff WHERE hash IN ({})",
         placeholders
     );
 
@@ -593,8 +619,8 @@ pub fn get_latest_score_time(conn: &Connection, player_id: &str) -> Result<Optio
 
 pub fn insert_playlist(conn: &Connection, playlist: &Playlist) -> Result<(), rusqlite::Error> {
     conn.execute(
-        "INSERT OR REPLACE INTO Playlist (source, identifier, name, description, playlistImage, ownerId, ownerName, totalMaps, createdAt, songsChangedAt, downloadURL, localPath, lastBplistFetchedAt)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+        "INSERT OR REPLACE INTO Playlist (source, identifier, name, description, playlistImage, ownerId, ownerName, totalMaps, createdAt, songsChangedAt, downloadURL, localPath, lastBplistFetchedAt, updatedAt)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         rusqlite::params![
             playlist.source,
             playlist.identifier,
@@ -609,6 +635,7 @@ pub fn insert_playlist(conn: &Connection, playlist: &Playlist) -> Result<(), rus
             playlist.download_url,
             playlist.local_path,
             playlist.last_bplist_fetched_at,
+            playlist.updated_at,
         ],
     )?;
     Ok(())
@@ -616,7 +643,7 @@ pub fn insert_playlist(conn: &Connection, playlist: &Playlist) -> Result<(), rus
 
 pub fn get_playlist(conn: &Connection, source: &PlaylistSource, identifier: &str) -> Result<Option<Playlist>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT source, identifier, name, description, playlistImage, ownerId, ownerName, totalMaps, createdAt, songsChangedAt, downloadURL, localPath, lastBplistFetchedAt FROM Playlist WHERE source = ?1 AND identifier = ?2"
+        "SELECT source, identifier, name, description, playlistImage, ownerId, ownerName, totalMaps, createdAt, songsChangedAt, downloadURL, localPath, lastBplistFetchedAt, updatedAt FROM Playlist WHERE source = ?1 AND identifier = ?2"
     )?;
 
     let result = stmt.query_row(rusqlite::params![source, identifier], |row| {
@@ -634,6 +661,7 @@ pub fn get_playlist(conn: &Connection, source: &PlaylistSource, identifier: &str
             download_url: row.get(10)?,
             local_path: row.get(11)?,
             last_bplist_fetched_at: row.get(12)?,
+            updated_at: row.get(13)?,
         })
     });
 
@@ -646,7 +674,7 @@ pub fn get_playlist(conn: &Connection, source: &PlaylistSource, identifier: &str
 
 pub fn get_all_playlists(conn: &Connection) -> Result<Vec<Playlist>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT source, identifier, name, description, playlistImage, ownerId, ownerName, totalMaps, createdAt, songsChangedAt, downloadURL, localPath, lastBplistFetchedAt FROM Playlist"
+        "SELECT source, identifier, name, description, playlistImage, ownerId, ownerName, totalMaps, createdAt, songsChangedAt, downloadURL, localPath, lastBplistFetchedAt, updatedAt FROM Playlist"
     )?;
 
     let playlists = stmt.query_map([], |row| {
@@ -664,6 +692,7 @@ pub fn get_all_playlists(conn: &Connection) -> Result<Vec<Playlist>, rusqlite::E
             download_url: row.get(10)?,
             local_path: row.get(11)?,
             last_bplist_fetched_at: row.get(12)?,
+            updated_at: row.get(13)?,
         })
     })?.collect::<Result<Vec<_>, _>>()?;
 

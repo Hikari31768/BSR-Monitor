@@ -42,6 +42,16 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, 
   };
   const imageSrc = getImageData();
 
+  const formatUpdateTime = (ts?: number) => {
+    if (!ts) return null;
+    const d = new Date(ts * 1000);
+    return d.toLocaleDateString('zh-CN', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit',
+    });
+  };
+  const updateTimeText = formatUpdateTime(playlist.updated_at);
+
   return (
     <div className={`bg-bs-bg-secondary rounded-xl p-5 border transition-all duration-300 ${
       isLoading
@@ -83,6 +93,12 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, 
           {playlist.owner_name && !isLoading && (
             <p className="text-bs-text-secondary text-sm truncate">by {playlist.owner_name}</p>
           )}
+          {updateTimeText && !isLoading && (
+            <p className="text-bs-text-muted text-xs flex items-center gap-1 mt-1">
+              <Clock size={12} />
+              {updateTimeText}
+            </p>
+          )}
           <div className="flex items-center gap-2 mt-2">
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
               isLoading
@@ -102,7 +118,7 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, 
         </div>
 
         {/* 操作按钮 */}
-        <div className="grid grid-cols-2 gap-2 w-fit">
+        <div className="flex flex-col gap-2 w-fit">
           {!isLoading ? (
             <>
               {onUpdate && (
@@ -115,13 +131,6 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, 
                   {updating ? '更新中' : '更新歌单'}
                 </button>
               )}
-              <button
-                onClick={onViewMaps}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-bg-tertiary text-bs-text-secondary hover:bg-bs-bg-hover hover:text-bs-text-primary transition-all flex items-center gap-1 justify-center"
-              >
-                <Eye size={14} />
-                查看
-              </button>
               {onRefreshRatings && (
                 <button
                   onClick={onRefreshRatings}
@@ -142,7 +151,7 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, 
             </>
           ) : (
             <button
-              className="col-span-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-status-warning/20 text-bs-status-warning border border-bs-status-warning/30 cursor-not-allowed flex items-center gap-1 justify-center"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-bs-status-warning/20 text-bs-status-warning border border-bs-status-warning/30 cursor-not-allowed flex items-center gap-1 justify-center"
               disabled
             >
               <Clock size={14} />

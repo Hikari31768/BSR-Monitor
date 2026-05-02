@@ -66,6 +66,7 @@ export interface Playlist {
   download_url?: string;
   local_path?: string;
   last_bplist_fetched_at?: number;
+  updated_at?: number;
 }
 
 export interface PlayerWithScoreCount extends PlayerInfo {

@@ -107,6 +107,7 @@ pub fn create_tables(conn: &Connection) -> Result<(), rusqlite::Error> {
             downloadURL TEXT,
             localPath TEXT,
             lastBplistFetchedAt BIGINT,
+            updatedAt BIGINT,
             PRIMARY KEY (source, identifier)
         )",
         [],

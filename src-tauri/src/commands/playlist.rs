@@ -147,6 +147,10 @@ async fn process_playlist(
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64),
+        updated_at: Some(std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64),
     };
 
     {
@@ -162,9 +166,9 @@ async fn process_playlist(
     emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
     task_state.update(&task_id, 15.0, &format!("已获取歌单: {}", playlist.name));
 
-    // 4. 后台任务：对每个 hash 调用 BeatLeader API 获取详细信息
+    // 4. 后台任务：补全数据库中未收录的谱面信息
     let hashes: Vec<String> = bplist.songs.iter().map(|s| s.hash.clone()).collect();
-    spawn_rating_fetch(app, &hashes, &playlist.name);
+    spawn_complete_map_info(app, &hashes, &playlist.name);
 
     // 发送完成进度
     let msg = format!("{}完成！共 {} 首歌曲", if is_update { "更新" } else { "添加" }, song_count);
@@ -247,8 +251,8 @@ async fn fetch_and_save_bplist(
     Ok((bplist_content, target_path.to_string_lossy().to_string()))
 }
 
-/// 后台拉取评级数据
-fn spawn_rating_fetch(
+/// 后台补全谱面信息（仅拉取数据库中未收录的 hash）
+fn spawn_complete_map_info(
     app: &AppHandle,
     hashes: &[String],
     playlist_name: &str,
@@ -257,17 +261,36 @@ fn spawn_rating_fetch(
         return;
     }
 
-    let rating_task_id = format!("rating-{}", Uuid::new_v4());
-    let rating_display = format!("{} - 拉取评级", playlist_name);
+    // 从数据库查询已存在的 hash，过滤掉无需拉取的部分
+    let missing_hashes = {
+        let state = app.try_state::<Mutex<rusqlite::Connection>>();
+        match state {
+            Some(s) => {
+                if let Ok(guard) = s.lock() {
+                    let existing = db::get_existing_hashes(&guard, hashes).unwrap_or_default();
+                    let existing_set: std::collections::HashSet<_> = existing.into_iter().collect();
+                    hashes.iter().filter(|h| !existing_set.contains(*h)).cloned().collect::<Vec<_>>()
+                } else {
+                    hashes.to_vec()
+                }
+            }
+            None => hashes.to_vec(),
+        }
+    };
 
-    // Register via app state
-    if let Some(ts) = app.try_state::<crate::task_state::TaskState>() {
-        ts.register_with_name(&rating_task_id, "fetch_ratings", "rating", &rating_display);
+    if missing_hashes.is_empty() {
+        return;
     }
 
-    let hashes = hashes.to_vec();
+    let task_id = format!("complete-{}", Uuid::new_v4());
+    let display = format!("{} - 补全谱面信息", playlist_name);
+
+    if let Some(ts) = app.try_state::<crate::task_state::TaskState>() {
+        ts.register_with_name(&task_id, "complete_map_info", "complete", &display);
+    }
+
     let app_clone = app.clone();
-    let rating_task_id_clone = rating_task_id.clone();
+    let task_id_clone = task_id.clone();
 
     tokio::spawn(async move {
         let ts = match app_clone.try_state::<crate::task_state::TaskState>() {
@@ -275,18 +298,17 @@ fn spawn_rating_fetch(
             None => return,
         };
 
-        let total = hashes.len() as u64;
-        ts.update(&rating_task_id_clone, 0.0, &format!("正在拉取评级 (0/{})", total));
+        let total = missing_hashes.len() as u64;
+        ts.update(&task_id_clone, 0.0, &format!("正在补全谱面信息 (0/{})", total));
 
         let api = match crate::api::BeatLeaderApi::new() {
             Ok(a) => a,
             Err(_) => return,
         };
 
-        for (idx, hash) in hashes.iter().enumerate() {
+        for (idx, hash) in missing_hashes.iter().enumerate() {
             match api.get_leaderboards_by_hash(hash).await {
                 Ok(response) => {
-                    // 更新 Map 表
                     let key = response.song.id.trim_end_matches('x').to_string();
                     let map = Map {
                         key: key.clone(),
@@ -298,7 +320,6 @@ fn spawn_rating_fetch(
                         preview_url: None,
                     };
 
-                    // 构建 MapDiff 列表（过滤 mode > 8 的非常规模式）
                     let diffs: Vec<MapDiff> = response.leaderboards.iter()
                         .filter(|entry| entry.difficulty.mode <= 8)
                         .map(|entry| {
@@ -345,22 +366,22 @@ fn spawn_rating_fetch(
 
             let current = (idx + 1) as u64;
             let progress = (current as f64 / total as f64) * 100.0;
-            ts.update(&rating_task_id_clone, progress, &format!("正在拉取评级 ({}/{})", current, total));
+            ts.update(&task_id_clone, progress, &format!("正在补全谱面信息 ({}/{})", current, total));
 
-            let payload = ProgressPayload::new(TaskType::FetchRatings, rating_task_id_clone.clone())
-                .with_progress("fetching_ratings".to_string(), progress)
-                .with_message(format!("正在拉取评级 ({}/{})", current, total));
+            let payload = ProgressPayload::new(TaskType::FetchRatings, task_id_clone.clone())
+                .with_progress("fetching_map_info".to_string(), progress)
+                .with_message(format!("正在补全谱面信息 ({}/{})", current, total));
             let _ = emit_progress_event(&app_clone, &payload);
         }
 
-        ts.update(&rating_task_id_clone, 100.0, "评级拉取完成");
-        let payload = ProgressPayload::new(TaskType::FetchRatings, rating_task_id_clone.clone())
+        ts.update(&task_id_clone, 100.0, "谱面信息补全完成");
+        let payload = ProgressPayload::new(TaskType::FetchRatings, task_id_clone.clone())
             .with_progress("completed".to_string(), 100.0)
-            .with_message("评级拉取完成".to_string());
+            .with_message("谱面信息补全完成".to_string());
         let _ = emit_progress_event(&app_clone, &payload);
 
         if let Some(ts) = app_clone.try_state::<crate::task_state::TaskState>() {
-            ts.remove(&rating_task_id_clone);
+            ts.remove(&task_id_clone);
         }
     });
 }
