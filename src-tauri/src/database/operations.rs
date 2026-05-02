@@ -740,20 +740,25 @@ pub fn get_scores_by_hashes_and_player(
         return Ok(vec![]);
     }
 
-    let placeholders = hashes.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    // BeatLeader API 不同端点返回的 hash 大小写不一致：
+    // MapDiff 中是大写，PlayerScore 中是小写。
+    // 使用 LOWER() 进行不区分大小写的匹配。
+    let lower_hashes: Vec<String> = hashes.iter().map(|h| h.to_lowercase()).collect();
+    let placeholders = lower_hashes.iter().map(|_| "?").collect::<Vec<_>>().join(",");
     let sql = format!(
         "SELECT playerId, scoreId, leaderboardId, mapKey, hash, mode, difficulty, accuracy, epochTime
-         FROM PlayerScore WHERE playerId = ? AND hash IN ({})",
+         FROM PlayerScore WHERE playerId = ? AND LOWER(hash) IN ({})",
         placeholders
     );
 
-    let mut params: Vec<&dyn rusqlite::ToSql> = vec![&player_id];
-    for hash in hashes {
-        params.push(hash);
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(player_id.to_string())];
+    for hash in lower_hashes {
+        params.push(Box::new(hash));
     }
+    let raw_params: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
 
     let mut stmt = conn.prepare(&sql)?;
-    let scores = stmt.query_map(rusqlite::params_from_iter(params), |row| {
+    let scores = stmt.query_map(rusqlite::params_from_iter(raw_params), |row| {
         Ok(PlayerScore {
             player_id: row.get(0)?,
             score_id: row.get(1)?,
