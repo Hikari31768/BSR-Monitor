@@ -455,8 +455,11 @@ export default function Playlists() {
                 <input
                   type="text"
                   value={addFilePath}
-                  readOnly
-                  placeholder="请选择 .bplist 文件..."
+                  onChange={(e) => {
+                    setAddFilePath(e.target.value);
+                    setAddFormError('');
+                  }}
+                  placeholder="请输入或选择 .bplist 文件路径..."
                   className="flex-1 px-4 py-3 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary placeholder-bs-text-muted focus:border-bs-accent-primary focus:ring-2 focus:ring-bs-accent-primary/20 focus:outline-none transition-all"
                 />
                 <button
