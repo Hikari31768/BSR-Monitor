@@ -97,6 +97,7 @@ export interface ScoreRowData {
 export interface PlayerScoreCell {
   player_id: string;
   accuracy: number;
+  is_expired: boolean;
 }
 
 export interface MapScoresResponse {

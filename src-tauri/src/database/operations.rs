@@ -151,30 +151,30 @@ pub fn difficulty_from_value(value: i32) -> String {
 }
 
 // leaderboardId 解析
-/// 解析 leaderboardId，返回 (key, difficulty, mode)
-/// 格式: "keyxD{mode}" 或 "keyD{mode}"，失败返回 (None, 0, 0)
+/// 从 BeatLeader leaderboard ID 中解析 map_key、difficulty、mode
+/// 格式: {key}{版本x+}{难度}{模式}
+/// - 版本段: 空=首次上传, x=第二次, xx=第三次...
+/// - 难度: 1=Easy, 3=Normal, 5=Hard, 7=Expert, 9=ExpertPlus (1位数字)
+/// - 模式: 0=Legacy, 1=Standard, 2=OneSaber... (1位数字)
+/// 示例: "46f3cxxx91" → key="46f3c", difficulty=9, mode=1
+///       "36303x71"   → key="36303", difficulty=7, mode=1
+///       "171f891"    → key="171f8", difficulty=9, mode=1
 pub fn parse_leaderboard_id(leaderboard_id: &str) -> (Option<String>, i32, i32) {
-    if leaderboard_id.is_empty() {
+    let len = leaderboard_id.len();
+    if len < 3 {
         return (None, 0, 0);
     }
 
-    if let Some((left, suffix)) = leaderboard_id.rsplit_once('x') {
-        if left.is_empty() || suffix.len() < 2 {
-            return (None, 0, 0);
-        }
-        let difficulty = suffix[0..1].parse::<i32>().unwrap_or(0);
-        let mode = suffix[1..].parse::<i32>().unwrap_or(0);
-        (Some(left.to_string()), difficulty, mode)
-    } else {
-        if leaderboard_id.len() < 2 {
-            return (None, 0, 0);
-        }
-        let mode_start = leaderboard_id.len() - 1;
-        let mode = leaderboard_id[mode_start..].parse::<i32>().unwrap_or(0);
-        let difficulty = leaderboard_id[mode_start - 1..mode_start].parse::<i32>().unwrap_or(0);
-        let key = &leaderboard_id[0..mode_start - 1];
-        (Some(key.to_string()), difficulty, mode)
+    let mode = leaderboard_id[len - 1..].parse::<i32>().unwrap_or(0);
+    let difficulty = leaderboard_id[len - 2..len - 1].parse::<i32>().unwrap_or(0);
+    // 去除末尾的 x（版本标记），得到纯净的 map key
+    let key = leaderboard_id[0..len - 2].trim_end_matches('x');
+
+    if key.is_empty() {
+        return (None, 0, 0);
     }
+
+    (Some(key.to_string()), difficulty, mode)
 }
 
 // ============ Map CRUD ============
@@ -243,15 +243,16 @@ pub fn insert_map_diffs_batch(conn: &Connection, key: &str, diffs: &[MapDiff]) -
         [key],
     )?;
 
-    // 批量插入新记录（都标记为当前版本）
+    // 批量插入新记录（都标记为当前版本，hash 统一转小写）
     for diff in diffs {
+        let normalized_hash = diff.hash.to_lowercase();
         conn.execute(
             "INSERT INTO MapDiff (key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
              ON CONFLICT(key, hash, mode, difficulty) DO UPDATE SET isCurrent = excluded.isCurrent",
             rusqlite::params![
                 diff.key,
-                diff.hash,
+                normalized_hash,
                 true,
                 diff.mode,
                 diff.difficulty,
@@ -293,7 +294,7 @@ pub fn get_map_diffs_by_key(conn: &Connection, key: &str) -> Result<Vec<MapDiff>
 /// 通过 hash 查找 MapDiff 记录（用于歌单模式通过 hash 反查 key）
 pub fn get_map_diffs_by_key_for_hash(conn: &Connection, hash: &str) -> Result<Vec<MapDiff>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating FROM MapDiff WHERE hash = ?1"
+        "SELECT key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating FROM MapDiff WHERE LOWER(hash) = LOWER(?1)"
     )?;
 
     let diffs = stmt.query_map([hash], |row| {
@@ -333,6 +334,7 @@ pub fn update_diff_ratings(
 
     let updated = conn.execute(
         "UPDATE MapDiff SET
+            hash = ?10,
             starsRating = ?5,
             starsFetchedAt = ?6,
             passRating = ?7,
@@ -347,16 +349,18 @@ pub fn update_diff_ratings(
             pass_rating,
             acc_rating,
             tech_rating,
+            hash.to_lowercase(),
         ],
     )?;
 
     // 如果没有匹配到现有记录，INSERT 一条（BeatLeader 可能有 BeatSaver 没有的难度模式）
     if updated == 0 {
+        let normalized_hash = hash.to_lowercase();
         conn.execute(
             "INSERT OR IGNORE INTO MapDiff (key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             rusqlite::params![
-                key, hash, true, mode, difficulty,
+                key, normalized_hash, true, mode, difficulty,
                 stars,
                 now,
                 pass_rating,
@@ -543,9 +547,10 @@ pub fn update_player(conn: &Connection, player: &PlayerInfo) -> Result<(), rusql
 
 /// 原子化插入：仅当记录不存在或新成绩时间更晚时才更新/插入
 pub fn insert_score(conn: &Connection, score: &PlayerScore) -> Result<bool, rusqlite::Error> {
+    let normalized_hash = score.hash.to_lowercase();
     let updated = conn.execute(
         "UPDATE PlayerScore SET scoreId = ?2, leaderboardId = ?3, mapKey = ?4, accuracy = ?5, epochTime = ?6
-         WHERE playerId = ?1 AND hash = ?7 AND mode = ?8 AND difficulty = ?9
+         WHERE playerId = ?1 AND LOWER(hash) = LOWER(?7) AND mode = ?8 AND difficulty = ?9
          AND epochTime < ?10",
         rusqlite::params![
             score.player_id,
@@ -554,7 +559,7 @@ pub fn insert_score(conn: &Connection, score: &PlayerScore) -> Result<bool, rusq
             score.map_key,
             score.accuracy,
             score.epoch_time,
-            score.hash,
+            normalized_hash,
             score.mode,
             score.difficulty,
             score.epoch_time,
@@ -570,14 +575,14 @@ pub fn insert_score(conn: &Connection, score: &PlayerScore) -> Result<bool, rusq
          SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9
          WHERE NOT EXISTS (
              SELECT 1 FROM PlayerScore
-             WHERE playerId = ?1 AND hash = ?5 AND mode = ?6 AND difficulty = ?7
+             WHERE playerId = ?1 AND LOWER(hash) = LOWER(?5) AND mode = ?6 AND difficulty = ?7
          )",
         rusqlite::params![
             score.player_id,
             score.score_id,
             score.leaderboard_id,
             score.map_key,
-            score.hash,
+            normalized_hash,
             score.mode,
             score.difficulty,
             score.accuracy,
@@ -655,6 +660,34 @@ pub fn get_latest_score_time(conn: &Connection, player_id: &str) -> Result<Optio
         |row| row.get(0),
     )?;
     Ok(result)
+}
+
+/// 按 map_key 查询指定玩家的成绩（包含所有版本）
+pub fn get_scores_by_key_and_player(
+    conn: &Connection,
+    map_key: &str,
+    player_id: &str,
+) -> Result<Vec<PlayerScore>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT playerId, scoreId, leaderboardId, mapKey, hash, mode, difficulty, accuracy, epochTime
+         FROM PlayerScore WHERE playerId = ? AND mapKey = ?"
+    )?;
+
+    let scores = stmt.query_map([player_id, map_key], |row| {
+        Ok(PlayerScore {
+            player_id: row.get(0)?,
+            score_id: row.get(1)?,
+            leaderboard_id: row.get(2)?,
+            map_key: row.get(3)?,
+            hash: row.get(4)?,
+            mode: row.get(5)?,
+            difficulty: row.get(6)?,
+            accuracy: row.get(7)?,
+            epoch_time: row.get(8)?,
+        })
+    })?.collect::<Result<Vec<_>, _>>()?;
+
+    Ok(scores)
 }
 
 // ============ Playlist CRUD ============
@@ -749,13 +782,13 @@ pub fn delete_playlist(conn: &Connection, source: &PlaylistSource, identifier: &
     Ok(())
 }
 
-/// 从 .bplist 文件中读取谱面 hash 列表（保持原始顺序）
+/// 从 .bplist 文件中读取谱面 hash 列表（保持原始顺序，统一转小写）
 pub fn get_playlist_hashes_from_bplist(bplist_path: &str) -> Result<Vec<String>, String> {
     let content = std::fs::read_to_string(bplist_path)
         .map_err(|e| format!("Failed to read bplist file: {}", e))?;
     let bplist: BplistFile = serde_json::from_str(&content)
         .map_err(|e| format!("Failed to parse bplist: {}", e))?;
-    Ok(bplist.songs.iter().map(|s| s.hash.clone()).collect())
+    Ok(bplist.songs.iter().map(|s| s.hash.to_lowercase()).collect())
 }
 
 /// 获取歌单中所有谱面的 hash 列表（从 .bplist 文件读取）

@@ -356,7 +356,7 @@ fn spawn_complete_map_info(
 
                         MapDiff {
                             key: key.clone(),
-                            hash: hash.clone(),
+                            hash: response.song.hash.clone(),
                             is_current: true,
                             mode: mode_name,
                             difficulty: difficulty_name,
@@ -557,8 +557,10 @@ pub async fn refresh_playlist_ratings(
                             } else {
                                 diff.difficulty_name.clone()
                             };
+                            // 使用 BeatLeader 返回的 hash（与 PlayerScore 中的 hash 格式一致）
+                            let bl_hash = &response.song.hash;
                             let _ = db::update_diff_ratings(
-                                &guard, key, &hash, &mode_name, &difficulty_name,
+                                &guard, key, bl_hash, &mode_name, &difficulty_name,
                                 diff.stars,
                                 diff.pass_rating,
                                 diff.acc_rating,

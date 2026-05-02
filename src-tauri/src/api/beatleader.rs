@@ -188,7 +188,9 @@ impl BeatLeaderApi {
 
     /// 通过 hash 获取谱面所有难度的排行榜信息（包含星级）
     pub async fn get_leaderboards_by_hash(&self, hash: &str) -> Result<LeaderboardsByHashResponse, ApiError> {
-        let url = self.client.bl_url(format!("/leaderboards/hash/{hash}").as_str());
+        // 统一转为小写，确保 API 请求一致性
+        let normalized = hash.to_lowercase();
+        let url = self.client.bl_url(format!("/leaderboards/hash/{normalized}").as_str());
 
         self.client.request_with_retry(|| {
             let url = url.clone();

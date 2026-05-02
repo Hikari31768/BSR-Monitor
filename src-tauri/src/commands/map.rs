@@ -42,7 +42,9 @@ fn spawn_enrich_stars(app: &AppHandle, key: String, hash: String) {
             let difficulty = &entry.difficulty.difficulty_name;
             let diff = &entry.difficulty;
 
-            let _ = db::update_diff_ratings(&guard, &key, &hash, mode, difficulty,
+            // 使用 BeatLeader 返回的 hash（与 PlayerScore 中的 hash 格式一致）
+            let bl_hash = &response.song.hash;
+            let _ = db::update_diff_ratings(&guard, &key, bl_hash, mode, difficulty,
                 diff.stars, diff.pass_rating, diff.acc_rating, diff.tech_rating);
         }
 

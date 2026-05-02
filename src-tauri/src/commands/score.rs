@@ -35,6 +35,9 @@ pub struct ScoreRowData {
 pub struct PlayerScoreCell {
     pub player_id: String,
     pub accuracy: f32,
+    /// 该成绩是否为旧版本（hash 不在当前版本中）
+    #[serde(default)]
+    pub is_expired: bool,
 }
 
 
@@ -116,18 +119,21 @@ pub async fn get_playlist_scores(
     let mut maps: Vec<MapScoresResponse> = Vec::new();
     for hash in map_hashes {
         // 通过 hash 查找 MapDiff，再找到 key
-        let map_diffs = db::get_map_diffs_by_key_for_hash(&guard, &hash).map_err(|e| e.to_string())?;
-        if map_diffs.is_empty() {
+        let map_diffs_by_hash = db::get_map_diffs_by_key_for_hash(&guard, &hash).map_err(|e| e.to_string())?;
+        if map_diffs_by_hash.is_empty() {
             continue;
         }
 
-        let key = &map_diffs[0].key;
+        let key = &map_diffs_by_hash[0].key;
         let map = match db::get_map_by_key(&guard, key).map_err(|e| e.to_string())? {
             Some(m) => m,
             None => continue,
         };
 
-        match build_map_scores_response(&guard, map, map_diffs, &player_ids) {
+        // 获取该 key 下所有 MapDiff 记录（包含所有版本），用于正确判断 current_diffs
+        let all_diffs = db::get_map_diffs_by_key(&guard, key).map_err(|e| e.to_string())?;
+
+        match build_map_scores_response(&guard, map, all_diffs, &player_ids) {
             Ok(response) => maps.push(response),
             Err(_) => continue,
         }
@@ -160,24 +166,22 @@ fn build_map_scores_response(
         })
         .collect();
 
-    // 2. 获取所有版本的 hash 列表
-    let all_hashes: Vec<String> = all_diffs
+    // 当前版本所有难度对应的 hash 集合（统一转小写）
+    let current_hashes: std::collections::HashSet<String> = current_diffs
         .iter()
-        .map(|d| d.hash.clone())
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
+        .map(|d| d.hash.to_lowercase())
         .collect();
 
-    // 3. 查询所有指定玩家的成绩
+    // 2. 按 map_key 查询所有指定玩家的成绩（包含旧版本成绩）
     let mut all_scores: Vec<PlayerScore> = Vec::new();
     for player_id in player_ids {
-        let player_scores = db::get_scores_by_hashes_and_player(guard, &all_hashes, player_id)
+        let player_scores = db::get_scores_by_key_and_player(guard, &map.key, player_id)
             .map_err(|e| e.to_string())?;
         all_scores.extend(player_scores);
     }
 
-    // 4. 构建成绩行（从 all_diffs 中获取星级）
-    let score_rows = build_score_rows(&current_diffs, &all_diffs, all_scores);
+    // 3. 构建成绩行（从 all_diffs 中获取星级）
+    let score_rows = build_score_rows(&current_diffs, &all_diffs, &current_hashes, all_scores);
 
     Ok(MapScoresResponse {
         map,
@@ -190,6 +194,7 @@ fn build_map_scores_response(
 fn build_score_rows(
     current_diffs: &[CurrentDiffInfo],
     all_diffs: &[db::MapDiff],
+    current_hashes: &std::collections::HashSet<String>,
     all_scores: Vec<PlayerScore>,
 ) -> Vec<ScoreRowData> {
     // 1. 构建当前版本难度集合 + 星级映射
@@ -212,21 +217,44 @@ fn build_score_rows(
         let key = (diff.mode.clone(), diff.difficulty.clone());
         let player_scores = scores_by_diff.get(&key).cloned().unwrap_or_default();
 
-        let mut player_best: std::collections::HashMap<String, f32> = std::collections::HashMap::new();
+        // 对每个玩家，分别记录当前版本成绩和旧版本成绩
+        let mut player_current_best: std::collections::HashMap<String, f32> = std::collections::HashMap::new();
+        let mut player_expired_best: std::collections::HashMap<String, f32> = std::collections::HashMap::new();
+
         for (player_id, score) in player_scores {
-            let entry = player_best.entry(player_id).or_insert(0.0);
+            let is_expired = !current_hashes.contains(&score.hash.to_lowercase());
+            let entry = if is_expired {
+                player_expired_best.entry(player_id).or_insert(0.0)
+            } else {
+                player_current_best.entry(player_id).or_insert(0.0)
+            };
             if score.accuracy > *entry {
                 *entry = score.accuracy;
             }
         }
 
-        let scores: Vec<PlayerScoreCell> = player_best
+        // 记录已有当前版本成绩的玩家 ID（用于后续过滤）
+        let current_player_ids: std::collections::HashSet<String> = player_current_best.keys().cloned().collect();
+
+        let mut scores: Vec<PlayerScoreCell> = player_current_best
             .into_iter()
             .map(|(player_id, accuracy)| PlayerScoreCell {
                 player_id,
                 accuracy,
+                is_expired: false,
             })
             .collect();
+
+        // 对于没有当前版本成绩但有旧版本成绩的玩家，添加过期成绩
+        for (player_id, accuracy) in player_expired_best {
+            if !current_player_ids.contains(&player_id) {
+                scores.push(PlayerScoreCell {
+                    player_id,
+                    accuracy,
+                    is_expired: true,
+                });
+            }
+        }
 
         // 查找该难度的星级（从 all_diffs 中按 hash+mode+difficulty 匹配）
         let stars = all_diffs
@@ -244,7 +272,7 @@ fn build_score_rows(
         });
     }
 
-    // 4. 添加有成绩但不在当前版本的难度
+    // 4. 添加有成绩但不在当前版本的难度（旧版本的难度在当前版本不存在）
     for (key, player_scores) in &scores_by_diff {
         if !current_diff_set.contains(key) {
             let mut player_best: std::collections::HashMap<String, f32> = std::collections::HashMap::new();
@@ -260,6 +288,7 @@ fn build_score_rows(
                 .map(|(player_id, accuracy)| PlayerScoreCell {
                     player_id,
                     accuracy,
+                    is_expired: true,
                 })
                 .collect();
 
@@ -330,7 +359,7 @@ pub async fn update_player_scores(
                 score_id: score_data.score.id as i64,
                 leaderboard_id: score_data.leaderboard.id.clone(),
                 map_key,
-                hash: score_data.leaderboard.song_hash.clone(),
+                hash: score_data.leaderboard.song_hash.to_lowercase(),
                 mode: score_data.leaderboard.mode_name.clone(),
                 difficulty,
                 accuracy: score_data.score.accuracy,
