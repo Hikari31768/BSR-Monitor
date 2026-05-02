@@ -150,31 +150,46 @@ pub fn difficulty_from_value(value: i32) -> String {
     }.to_string()
 }
 
-// leaderboardId 解析
-/// 从 BeatLeader leaderboard ID 中解析 map_key、difficulty、mode
-/// 格式: {key}{版本x+}{难度}{模式}
-/// - 版本段: 空=首次上传, x=第二次, xx=第三次...
+/// 从 BeatLeader leaderboard ID 中解析 map_key、difficulty、mode。
+///
+/// 格式: `{key}{版本x+}{难度}{模式}`
+/// - 版本段: 空=首次上传, `x`=第二次, `xx`=第三次...
 /// - 难度: 1=Easy, 3=Normal, 5=Hard, 7=Expert, 9=ExpertPlus (1位数字)
-/// - 模式: 0=Legacy, 1=Standard, 2=OneSaber... (1位数字)
-/// 示例: "46f3cxxx91" → key="46f3c", difficulty=9, mode=1
-///       "36303x71"   → key="36303", difficulty=7, mode=1
-///       "171f891"    → key="171f8", difficulty=9, mode=1
+/// - 模式: 0=Legacy, 1=Standard, 2=OneSaber, 3=NoArrows, 4=90Degree, 5=360Degree, 6=Lightshow, 7=Lawless
+///
+/// 示例: `"46f3cxxx91"` → key="46f3c", difficulty=9, mode=1
+///       `"36303x71"` → key="36303", difficulty=7, mode=1
+///       `"171f891"` → key="171f8", difficulty=9, mode=1
+///
+/// 注意：版本段为空且模式值超过 1 位时，key 解析不准确（BL 上游格式限制，无法避免）。
 pub fn parse_leaderboard_id(leaderboard_id: &str) -> (Option<String>, i32, i32) {
-    let len = leaderboard_id.len();
-    if len < 3 {
+    if leaderboard_id.len() < 3 {
         return (None, 0, 0);
     }
 
-    let mode = leaderboard_id[len - 1..].parse::<i32>().unwrap_or(0);
-    let difficulty = leaderboard_id[len - 2..len - 1].parse::<i32>().unwrap_or(0);
-    // 去除末尾的 x（版本标记），得到纯净的 map key
-    let key = leaderboard_id[0..len - 2].trim_end_matches('x');
-
-    if key.is_empty() {
-        return (None, 0, 0);
+    if let Some(pos) = leaderboard_id.find('x') {
+        let key = &leaderboard_id[..pos];
+        // 去掉版本段的所有 x，剩余纯数字部分：{难度}{模式}
+        let suffix: String = leaderboard_id[pos..].chars().filter(|c| *c != 'x').collect();
+        if suffix.len() < 2 || key.is_empty() {
+            return (None, 0, 0);
+        }
+        let difficulty = suffix[0..1].parse::<i32>().unwrap_or(0);
+        let mode = suffix[1..].parse::<i32>().unwrap_or(0);
+        (Some(key.to_string()), difficulty, mode)
+    } else {
+        // 无版本段：末尾 1 位模式 + 倒数第 2 位难度 + 剩余 key
+        let len = leaderboard_id.len();
+        let mode = leaderboard_id[len - 1..].parse::<i32>().unwrap_or(0);
+        let difficulty = leaderboard_id[len - 2..len - 1]
+            .parse::<i32>()
+            .unwrap_or(0);
+        let key = &leaderboard_id[..len - 2];
+        if key.is_empty() {
+            return (None, 0, 0);
+        }
+        (Some(key.to_string()), difficulty, mode)
     }
-
-    (Some(key.to_string()), difficulty, mode)
 }
 
 // ============ Map CRUD ============
