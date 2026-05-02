@@ -126,11 +126,30 @@ async fn process_playlist(
 
     let song_count = bplist.songs.len();
 
+    // 精简谱师歌单名称：Maps by YoLeax (4 Total) -> YoLeax
+    let playlist_name = match source {
+        PlaylistSource::Mapper => {
+            // 尝试从 "Maps by XXX (N Total)" 中提取 XXX
+            if let Some(start) = bplist.playlist_title.find("Maps by ") {
+                let name_start = start + 8;
+                let rest = &bplist.playlist_title[name_start..];
+                if let Some(end) = rest.find(" (") {
+                    rest[..end].trim().to_string()
+                } else {
+                    rest.trim().to_string()
+                }
+            } else {
+                bplist.playlist_title.clone()
+            }
+        }
+        _ => bplist.playlist_title.clone(),
+    };
+
     // 3. 保存歌单元信息到 Playlist 表
     let playlist = Playlist {
         source: source.clone(),
         identifier: identifier.to_string(),
-        name: bplist.playlist_title.clone(),
+        name: playlist_name,
         description: None,
         playlist_image: bplist.image.clone().filter(|s| !s.is_empty()),
         owner_id: match source {
