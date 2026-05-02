@@ -13,7 +13,7 @@ interface PlaylistCardProps {
 }
 
 const SOURCE_LABELS: Record<string, string> = {
-  beatsaver: 'BeatSaver',
+  beatsaver: 'Saver',
   mapper: '谱师',
   local: '本地',
 };
@@ -49,26 +49,31 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, 
         : 'border-bs-border shadow-lg hover:border-bs-accent-secondary/50 hover:shadow-xl hover:shadow-bs-accent-secondary/5 group'
     }`}>
       <div className="flex items-start gap-4">
-        {/* 封面 */}
-        {imageSrc ? (
-          <img
-            src={imageSrc}
-            alt={playlist.name}
-            className={`w-14 h-14 rounded-xl object-cover ${
+        {/* 封面 + 谱面性质 */}
+        <div className="flex flex-col items-center">
+          {imageSrc ? (
+            <img
+              src={imageSrc}
+              alt={playlist.name}
+              className={`w-14 h-14 rounded-xl object-cover ${
+                isLoading
+                  ? 'ring-2 ring-bs-status-warning/50'
+                  : 'ring-2 ring-bs-border group-hover:ring-bs-accent-secondary/50'
+              } transition-all`}
+            />
+          ) : (
+            <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl ${
               isLoading
-                ? 'ring-2 ring-bs-status-warning/50'
-                : 'ring-2 ring-bs-border group-hover:ring-bs-accent-secondary/50'
-            } transition-all`}
-          />
-        ) : (
-          <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl ${
-            isLoading
-              ? 'bg-bs-status-warning/10 ring-2 ring-bs-status-warning/50'
-              : 'bg-bs-bg-tertiary ring-2 ring-bs-border group-hover:ring-bs-accent-secondary/50'
-          } transition-all`}>
-            <List size={28} className="text-bs-text-muted" />
-          </div>
-        )}
+                ? 'bg-bs-status-warning/10 ring-2 ring-bs-status-warning/50'
+                : 'bg-bs-bg-tertiary ring-2 ring-bs-border group-hover:ring-bs-accent-secondary/50'
+            } transition-all`}>
+              <List size={28} className="text-bs-text-muted" />
+            </div>
+          )}
+          <span className={`mt-1.5 inline-flex items-center justify-center w-14 py-0.5 rounded text-xs font-medium whitespace-nowrap ${sourceColor}`}>
+            {sourceLabel}
+          </span>
+        </div>
 
         {/* 信息 */}
         <div className="flex-1 min-w-0">
@@ -79,9 +84,6 @@ export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, 
             <p className="text-bs-text-secondary text-sm truncate">by {playlist.owner_name}</p>
           )}
           <div className="flex items-center gap-2 mt-2">
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${sourceColor}`}>
-              {sourceLabel}
-            </span>
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
               isLoading
                 ? 'bg-bs-status-warning/15 text-bs-status-warning border border-bs-status-warning/30'
