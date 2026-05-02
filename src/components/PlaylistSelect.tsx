@@ -1,6 +1,18 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Playlist } from '../types';
 
+const SOURCE_LABELS: Record<string, string> = {
+  beatsaver: 'Saver',
+  mapper: '谱师',
+  local: '本地',
+};
+
+const SOURCE_COLORS: Record<string, string> = {
+  beatsaver: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  mapper: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+  local: 'bg-green-500/15 text-green-400 border-green-500/30',
+};
+
 interface PlaylistSelectProps {
   playlists: Playlist[];
   selectedKey: string | null;
@@ -21,8 +33,8 @@ export default function PlaylistSelect({ playlists, selectedKey, onSelect }: Pla
 
   // 所有选项（包含"请选择歌单"选项）
   const allOptions = [
-    { key: null as string | null, label: '请选择歌单' },
-    ...playlists.map(p => ({ key: playlistKey(p), label: `${p.name} (${p.total_maps || 0} 首)` }))
+    { key: null as string | null, label: '请选择歌单', playlist: null as Playlist | null },
+    ...playlists.map(p => ({ key: playlistKey(p), label: `${p.name} (${p.total_maps || 0} 首)`, playlist: p }))
   ];
 
   // 点击外部关闭
@@ -108,9 +120,16 @@ export default function PlaylistSelect({ playlists, selectedKey, onSelect }: Pla
           backgroundSize: '1.25rem',
         }}
       >
-        {selectedPlaylist
-          ? `${selectedPlaylist.name} (${selectedPlaylist.total_maps || 0} 首)`
-          : '请选择歌单'}
+        {selectedPlaylist ? (
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${SOURCE_COLORS[selectedPlaylist.source]}`}>
+              {SOURCE_LABELS[selectedPlaylist.source]}
+            </span>
+            <span className="truncate">{selectedPlaylist.name} ({selectedPlaylist.total_maps || 0} 首)</span>
+          </div>
+        ) : (
+          '请选择歌单'
+        )}
       </button>
 
       {/* 下拉菜单 */}
@@ -122,28 +141,39 @@ export default function PlaylistSelect({ playlists, selectedKey, onSelect }: Pla
           aria-label="歌单列表"
           className="absolute top-full left-0 right-0 mt-1 bg-bs-bg-tertiary border border-bs-border rounded-lg shadow-lg overflow-hidden z-50 max-h-60 overflow-y-auto"
         >
-          {allOptions.map((option, index) => (
-            <div
-              key={option.key ?? 'none'}
-              role="option"
-              aria-selected={selectedKey === option.key}
-              tabIndex={-1}
-              onClick={() => {
-                onSelect(option.key);
-                setIsOpen(false);
-              }}
-              onMouseEnter={() => setActiveIndex(index)}
-              className={`px-4 py-3 cursor-pointer transition-colors ${
-                selectedKey === option.key
-                  ? 'bg-bs-accent-primary/20 text-bs-accent-primary'
-                  : index === activeIndex
-                    ? 'bg-bs-bg-hover text-bs-text-primary'
-                    : 'text-bs-text-secondary hover:text-bs-text-primary'
-              }`}
-            >
-              {option.label}
-            </div>
-          ))}
+          {allOptions.map((option, index) => {
+            const sourceKey = option.playlist?.source;
+            const sourceLabel = sourceKey ? SOURCE_LABELS[sourceKey] : null;
+            const sourceColor = sourceKey ? SOURCE_COLORS[sourceKey] : null;
+
+            return (
+              <div
+                key={option.key ?? 'none'}
+                role="option"
+                aria-selected={selectedKey === option.key}
+                tabIndex={-1}
+                onClick={() => {
+                  onSelect(option.key);
+                  setIsOpen(false);
+                }}
+                onMouseEnter={() => setActiveIndex(index)}
+                className={`px-4 py-3 cursor-pointer transition-colors flex items-center gap-2 ${
+                  selectedKey === option.key
+                    ? 'bg-bs-accent-primary/20 text-bs-accent-primary'
+                    : index === activeIndex
+                      ? 'bg-bs-bg-hover text-bs-text-primary'
+                      : 'text-bs-text-secondary hover:text-bs-text-primary'
+                }`}
+              >
+                {sourceLabel && sourceColor && (
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${sourceColor}`}>
+                    {sourceLabel}
+                  </span>
+                )}
+                <span className="truncate">{option.label}</span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
