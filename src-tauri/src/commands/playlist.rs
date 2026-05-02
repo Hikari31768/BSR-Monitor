@@ -298,8 +298,10 @@ fn spawn_rating_fetch(
                         preview_url: None,
                     };
 
-                    // 构建 MapDiff 列表
-                    let diffs: Vec<MapDiff> = response.leaderboards.iter().map(|entry| {
+                    // 构建 MapDiff 列表（过滤 mode > 8 的非常规模式）
+                    let diffs: Vec<MapDiff> = response.leaderboards.iter()
+                        .filter(|entry| entry.difficulty.mode <= 8)
+                        .map(|entry| {
                         let diff = &entry.difficulty;
                         let mode_name = if diff.mode_name.is_empty() {
                             "Standard".to_string()
@@ -500,6 +502,9 @@ pub async fn refresh_playlist_ratings(
                 if let Some(state) = state {
                     if let Ok(guard) = state.lock() {
                         for entry in &response.leaderboards {
+                            if entry.difficulty.mode > 8 {
+                                continue;
+                            }
                             let diff = &entry.difficulty;
                             let mode_name = if diff.mode_name.is_empty() {
                                 "Standard".to_string()
