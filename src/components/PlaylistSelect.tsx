@@ -101,7 +101,7 @@ export default function PlaylistSelect({ playlists, selectedKey, onSelect }: Pla
   return (
     <div
       ref={containerRef}
-      className="relative"
+      className="relative w-full"
       onKeyDown={handleKeyDown}
     >
       {/* 触发按钮 */}

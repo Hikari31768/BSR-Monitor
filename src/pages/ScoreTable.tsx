@@ -22,6 +22,71 @@ interface SelectedPlayer extends PlayerInfo {
   order: number;
 }
 
+const SOURCE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'all', label: '全部' },
+  { value: 'beatsaver', label: 'Saver' },
+  { value: 'mapper', label: '谱师' },
+  { value: 'local', label: '本地' },
+];
+
+/** 歌单类型筛选下拉框（自定义样式，与 PlaylistSelect 风格一致） */
+function SourceSelect({ selected, onSelect }: { selected: string; onSelect: (v: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative w-32 shrink-0">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-4 py-3 pr-10 bg-bs-bg-tertiary border border-bs-border rounded-lg text-bs-text-primary text-left hover:border-bs-border-hover transition-all"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right 0.75rem center',
+          backgroundSize: '1.25rem',
+        }}
+      >
+        {SOURCE_OPTIONS.find(o => o.value === selected)?.label ?? '全部'}
+      </button>
+
+      {isOpen && (
+        <div
+          ref={listRef}
+          className="absolute top-full left-0 right-0 mt-1 bg-bs-bg-tertiary border border-bs-border rounded-lg shadow-lg overflow-hidden z-50 max-h-60 overflow-y-auto"
+        >
+          {SOURCE_OPTIONS.map(option => (
+            <div
+              key={option.value}
+              onClick={() => {
+                onSelect(option.value);
+                setIsOpen(false);
+              }}
+              className={`px-4 py-3 cursor-pointer transition-colors ${
+                selected === option.value
+                  ? 'bg-bs-accent-primary/20 text-bs-accent-primary'
+                  : 'text-bs-text-secondary hover:text-bs-text-primary hover:bg-bs-bg-hover'
+              }`}
+            >
+              {option.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ScoreTable() {
   // 视图模式
   const [viewMode, setViewMode] = useState<ViewMode>('single');
@@ -37,6 +102,7 @@ export default function ScoreTable() {
   // 歌单模式
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [selectedPlaylistKey, setSelectedPlaylistKey] = useState<string | null>(null);
+  const [selectedSource, setSelectedSource] = useState<string>('all');
   const [playlistData, setPlaylistData] = useState<PlaylistScoresResponse | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [mapSort, setMapSort] = useState<'asc' | 'desc'>('asc');
@@ -69,6 +135,9 @@ export default function ScoreTable() {
 
   const selectedPlaylistKeyRef = useRef(selectedPlaylistKey);
   useEffect(() => { selectedPlaylistKeyRef.current = selectedPlaylistKey; }, [selectedPlaylistKey]);
+
+  const selectedSourceRef = useRef(selectedSource);
+  useEffect(() => { selectedSourceRef.current = selectedSource; }, [selectedSource]);
 
   const currentPageRef = useRef(currentPage);
   useEffect(() => { currentPageRef.current = currentPage; }, [currentPage]);
@@ -212,6 +281,12 @@ export default function ScoreTable() {
     setMapSort('asc');
   }, [selectedPlaylistKey]);
 
+  // 歌单类型筛选变化时，清空已选歌单
+  useEffect(() => {
+    setSelectedPlaylistKey(null);
+    setPlaylistData(null);
+  }, [selectedSource]);
+
   // 查询条件变化时查询（歌单模式）
   useEffect(() => {
     if (viewMode === 'playlist' && selectedPlaylistKey) {
@@ -351,11 +426,14 @@ export default function ScoreTable() {
       {/* 歌单选择 - 精简版 */}
       {viewMode === 'playlist' && (
         <div className="mb-4 space-y-3">
-          <PlaylistSelect
-            playlists={playlists}
-            selectedKey={selectedPlaylistKey}
-            onSelect={setSelectedPlaylistKey}
-          />
+          <div className="flex gap-2">
+            <SourceSelect selected={selectedSource} onSelect={setSelectedSource} />
+            <PlaylistSelect
+              playlists={playlists.filter(p => selectedSource === 'all' || p.source === selectedSource)}
+              selectedKey={selectedPlaylistKey}
+              onSelect={setSelectedPlaylistKey}
+            />
+          </div>
 
           {/* 分页控制 */}
           {playlistData && playlistData.total_pages > 1 && (
