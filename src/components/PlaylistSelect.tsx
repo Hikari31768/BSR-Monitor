@@ -88,16 +88,6 @@ export default function PlaylistSelect({ playlists, selectedKey, onSelect }: Pla
     }
   }, [isOpen, activeIndex, allOptions, onSelect]);
 
-  // 滚动活跃项到可视区域
-  useEffect(() => {
-    if (isOpen && activeIndex >= 0 && listRef.current) {
-      const item = listRef.current.children[activeIndex] as HTMLElement;
-      if (item) {
-        item.scrollIntoView({ block: 'nearest' });
-      }
-    }
-  }, [activeIndex, isOpen]);
-
   return (
     <div
       ref={containerRef}
