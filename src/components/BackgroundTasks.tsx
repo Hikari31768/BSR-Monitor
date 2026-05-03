@@ -35,6 +35,16 @@ export default function BackgroundTasks() {
             message: status.message,
             display_name: status.display_name,
           };
+          // 如果恢复的任务已完成（进度 100），设置定时器移除
+          if (status.progress >= 100) {
+            setTimeout(() => {
+              setTasks(p => {
+                const next = { ...p };
+                delete next[taskId];
+                return next;
+              });
+            }, 3000);
+          }
         }
       }
       setTasks(prev => ({ ...prev, ...backgroundTasks }));
