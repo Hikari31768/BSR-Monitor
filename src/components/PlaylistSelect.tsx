@@ -129,7 +129,7 @@ export default function PlaylistSelect({ playlists, selectedKey, onSelect }: Pla
           id="playlist-listbox"
           role="listbox"
           aria-label="歌单列表"
-          className="absolute top-full left-0 right-0 mt-1 bg-bs-bg-tertiary border border-bs-border rounded-lg shadow-lg overflow-hidden z-50 max-h-60 overflow-y-auto"
+          className="absolute top-full left-0 right-0 mt-1 bg-bs-bg-tertiary border border-bs-border rounded-lg shadow-lg overflow-hidden z-50 max-h-60 overflow-y-auto score-table-scroll"
         >
           {allOptions.map((option, index) => {
             const sourceKey = option.playlist?.source;
@@ -147,7 +147,7 @@ export default function PlaylistSelect({ playlists, selectedKey, onSelect }: Pla
                   setIsOpen(false);
                 }}
                 onMouseEnter={() => setActiveIndex(index)}
-                className={`px-4 py-3 cursor-pointer transition-colors flex items-center gap-2 ${
+                className={`px-4 py-3.5 cursor-pointer transition-colors flex items-center gap-2 ${
                   selectedKey === option.key
                     ? 'bg-bs-accent-primary/20 text-bs-accent-primary'
                     : index === activeIndex
