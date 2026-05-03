@@ -81,6 +81,16 @@ interface UserPrefs {
 - 偏好加载完成后一次性设置正确的 `viewMode`
 - 加载期间显示骨架屏（animate-pulse），避免任何 Tab 处于激活状态
 
+## 修复：切换歌单时不重置排序
+
+**问题**：切换歌单、切换页面、重启程序后，谱面排序（mapSort）被重置为 'asc'，持久化偏好未能生效。
+
+**原因**：切换歌单的 effect 中调用了 `setMapSort('asc')`，导致每次切换歌单都强制重置排序。
+
+**修复** ([src/pages/ScoreTable.tsx:306-310](src/pages/ScoreTable.tsx#L306-L310))：
+- 移除 `setMapSort('asc')` 调用
+- 切换歌单时只重置页码和数据，保留用户的排序偏好
+
 ## 状态
 
 已完成

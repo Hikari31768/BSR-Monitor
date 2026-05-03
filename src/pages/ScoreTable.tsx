@@ -302,11 +302,10 @@ export default function ScoreTable() {
     }
   }, []); // 无依赖，完全稳定
 
-  // 切换歌单时重置页码和排序
+  // 切换歌单时重置页码和数据（但保留排序偏好）
   useEffect(() => {
     setCurrentPage(1);
     setPlaylistData(null);
-    setMapSort('asc');
   }, [selectedPlaylistKey]);
 
   // 歌单类型筛选变化时，清空已选歌单
