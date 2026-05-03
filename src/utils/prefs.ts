@@ -8,6 +8,7 @@ interface UserPrefsRs {
     selected_playlist_key: string | null;
     map_sort: string;
     diff_sort: string;
+    selected_player_ids: string[];
   };
   volume: number;
   starred_player_id: string | null;
@@ -23,6 +24,7 @@ function fromRustFormat(rs: UserPrefsRs): UserPrefs {
       selectedPlaylistKey: rs.score_table.selected_playlist_key,
       mapSort: rs.score_table.map_sort as 'asc' | 'desc',
       diffSort: rs.score_table.diff_sort as 'asc' | 'desc',
+      selectedPlayerIds: rs.score_table.selected_player_ids || [],
     },
     volume: rs.volume,
     starredPlayerId: rs.starred_player_id,
@@ -39,6 +41,7 @@ function toRustFormat(prefs: UserPrefs): UserPrefsRs {
       selected_playlist_key: prefs.scoreTable.selectedPlaylistKey,
       map_sort: prefs.scoreTable.mapSort,
       diff_sort: prefs.scoreTable.diffSort,
+      selected_player_ids: prefs.scoreTable.selectedPlayerIds,
     },
     volume: prefs.volume,
     starred_player_id: prefs.starredPlayerId,

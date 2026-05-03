@@ -47,6 +47,7 @@ pub struct ScoreTablePrefs {
     pub selected_playlist_key: Option<String>,
     pub map_sort: String,
     pub diff_sort: String,
+    pub selected_player_ids: Vec<String>,
 }
 
 impl Default for UserPrefs {
@@ -57,6 +58,7 @@ impl Default for UserPrefs {
                 selected_playlist_key: None,
                 map_sort: "asc".to_string(),
                 diff_sort: "desc".to_string(),
+                selected_player_ids: Vec::new(),
             },
             volume: 1.0,
             starred_player_id: None,

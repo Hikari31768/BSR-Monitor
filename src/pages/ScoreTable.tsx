@@ -153,6 +153,7 @@ export default function ScoreTable() {
   useEffect(() => { loadingDataRef.current = loadingData; }, [loadingData]);
 
   const prevPlayerCountRef = useRef(0);
+  const savedPlayerIdsRef = useRef<string[]>([]);
 
   // 初始化加载：先加载偏好，再加载数据
   useEffect(() => {
@@ -161,6 +162,8 @@ export default function ScoreTable() {
       setSelectedPlaylistKey(prefs.scoreTable.selectedPlaylistKey);
       setMapSort(prefs.scoreTable.mapSort);
       setDiffSort(prefs.scoreTable.diffSort);
+      // 保存玩家ID到ref，供loadPlayers使用
+      savedPlayerIdsRef.current = prefs.scoreTable.selectedPlayerIds || [];
       setPrefsLoaded(true);
     });
   }, []);
@@ -173,9 +176,10 @@ export default function ScoreTable() {
       prefs.scoreTable.selectedPlaylistKey = selectedPlaylistKey;
       prefs.scoreTable.mapSort = mapSort;
       prefs.scoreTable.diffSort = diffSort;
+      prefs.scoreTable.selectedPlayerIds = selectedPlayers.map(p => p.id);
       saveUserPrefs(prefs);
     });
-  }, [viewMode, selectedPlaylistKey, mapSort, diffSort, prefsLoaded]);
+  }, [viewMode, selectedPlaylistKey, mapSort, diffSort, selectedPlayers, prefsLoaded]);
 
   // 初始化加载玩家和歌单（等待偏好加载完成后）
   useEffect(() => {
@@ -190,17 +194,34 @@ export default function ScoreTable() {
       const list = await invoke<PlayerInfo[]>('get_player_list');
       if (list.length === 0) return;
 
-      // 从 JSON 文件读取标星玩家
-      const prefs = await loadUserPrefs();
-      const starredId = prefs.starredPlayerId;
+      const savedIds = savedPlayerIdsRef.current;
+      if (savedIds.length > 0) {
+        // 恢复保存的玩家列表
+        const restoredPlayers: SelectedPlayer[] = [];
+        let order = 0;
+        for (const id of savedIds) {
+          const player = list.find(p => p.id === id);
+          if (player) {
+            restoredPlayers.push({ ...player, order });
+            order++;
+          }
+        }
+        if (restoredPlayers.length > 0) {
+          setSelectedPlayers(restoredPlayers);
+          prevPlayerCountRef.current = restoredPlayers.length;
+        }
+      } else {
+        // 没有保存的玩家，使用标星玩家或第一个玩家作为默认
+        const prefs = await loadUserPrefs();
+        const starredId = prefs.starredPlayerId;
+        const defaultPlayer = starredId
+          ? list.find(p => p.id === starredId)
+          : list[0];
 
-      const defaultPlayer = starredId
-        ? list.find(p => p.id === starredId)
-        : list[0];
-
-      if (defaultPlayer && selectedPlayers.length === 0) {
-        setSelectedPlayers([{ ...defaultPlayer, order: 0 }]);
-        prevPlayerCountRef.current = 1;
+        if (defaultPlayer && selectedPlayers.length === 0) {
+          setSelectedPlayers([{ ...defaultPlayer, order: 0 }]);
+          prevPlayerCountRef.current = 1;
+        }
       }
     } catch (e) {
       console.error('加载玩家失败:', e);

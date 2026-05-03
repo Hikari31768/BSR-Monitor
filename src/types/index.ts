@@ -132,6 +132,7 @@ export interface UserPrefs {
     selectedPlaylistKey: string | null;
     mapSort: 'asc' | 'desc';
     diffSort: 'asc' | 'desc';
+    selectedPlayerIds: string[];
   };
   volume: number;
   starredPlayerId: string | null;
@@ -143,6 +144,7 @@ export const defaultUserPrefs: UserPrefs = {
     selectedPlaylistKey: null,
     mapSort: 'asc',
     diffSort: 'desc',
+    selectedPlayerIds: [],
   },
   volume: 1,
   starredPlayerId: null,

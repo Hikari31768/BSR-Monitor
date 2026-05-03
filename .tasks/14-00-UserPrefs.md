@@ -9,6 +9,7 @@
 3. **成绩表格排序方式**：谱面排序（asc/desc）、难度排序（asc/desc）
 4. **标星玩家**：从 localStorage 迁移到 JSON 文件
 5. **音量大小**：全局音量控制
+6. **打谱查询页面已选玩家**：记忆表格中显示的玩家列表
 
 ## 存储方案
 
@@ -31,6 +32,7 @@ pub struct ScoreTablePrefs {
     pub selected_playlist_key: Option<String>,
     pub map_sort: String,
     pub diff_sort: String,
+    pub selected_player_ids: Vec<String>,  // 打谱查询页已选玩家
 }
 ```
 
@@ -42,6 +44,7 @@ interface UserPrefs {
     selectedPlaylistKey: string | null;
     mapSort: 'asc' | 'desc';
     diffSort: 'asc' | 'desc';
+    selectedPlayerIds: string[];  // 打谱查询页已选玩家
   };
   volume: number;
   starredPlayerId: string | null;
@@ -67,7 +70,7 @@ interface UserPrefs {
 | src-tauri/src/lib.rs | 注册 load_user_prefs 和 save_user_prefs 命令 |
 | src/utils/prefs.ts | 新建：前端偏好管理模块，处理 camel/snake 转换 |
 | src/pages/Players.tsx | 使用新 prefs 系统管理 starredPlayerId |
-| src/pages/ScoreTable.tsx | 使用新 prefs 系统管理视图模式、歌单、排序 |
+| src/pages/ScoreTable.tsx | 使用新 prefs 系统管理视图模式、歌单、排序、玩家列表 |
 | src/contexts/AudioContext.tsx | 使用新 prefs 系统管理音量 |
 
 ## 修复：避免视图模式切换抽动
@@ -90,6 +93,25 @@ interface UserPrefs {
 **修复** ([src/pages/ScoreTable.tsx:306-310](src/pages/ScoreTable.tsx#L306-L310))：
 - 移除 `setMapSort('asc')` 调用
 - 切换歌单时只重置页码和数据，保留用户的排序偏好
+
+## 新增：打谱查询页面玩家列表持久化
+
+**需求**：记忆打谱查询页面表格中已选的玩家列表。
+
+**实现** ([src/pages/ScoreTable.tsx](src/pages/ScoreTable.tsx))：
+- 添加 `selectedPlayerIds` 到 UserPrefs 类型
+- 玩家选择变化时自动保存 ID 列表
+- 加载页面时按保存的顺序恢复玩家选择
+- 优先恢复保存的玩家列表，无保存时回退到标星玩家或第一个玩家
+
+**文件变更**：
+- `src/types/index.ts`: 添加 `selectedPlayerIds: string[]` 字段
+- `src-tauri/src/commands/common.rs`: 添加 `selected_player_ids: Vec<String>` 字段
+- `src/utils/prefs.ts`: 更新转换逻辑
+- `src/pages/ScoreTable.tsx`: 
+  - 添加 `savedPlayerIdsRef` 存储加载的玩家ID
+  - 修改 `loadPlayers` 优先恢复保存的玩家列表
+  - 保存 effect 中添加 `selectedPlayers` 依赖，自动持久化
 
 ## 状态
 
