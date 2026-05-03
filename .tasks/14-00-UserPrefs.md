@@ -70,6 +70,17 @@ interface UserPrefs {
 | src/pages/ScoreTable.tsx | 使用新 prefs 系统管理视图模式、歌单、排序 |
 | src/contexts/AudioContext.tsx | 使用新 prefs 系统管理音量 |
 
+## 修复：避免视图模式切换抽动
+
+**问题**：当记忆的是歌单模式时，进入打谱查询页会先显示"单谱面"Tab点亮，然后迅速切换到"歌单"。
+
+**原因**：`useState('single')` 初始值硬编码为 'single'，然后异步加载偏好后才切换到正确的模式。
+
+**修复** ([src/pages/ScoreTable.tsx](src/pages/ScoreTable.tsx))：
+- `viewMode` 初始值改为 `null`，表示尚未加载
+- 偏好加载完成后一次性设置正确的 `viewMode`
+- 加载期间显示骨架屏（animate-pulse），避免任何 Tab 处于激活状态
+
 ## 状态
 
 已完成

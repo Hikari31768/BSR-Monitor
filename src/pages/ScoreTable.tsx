@@ -89,8 +89,8 @@ function SourceSelect({ selected, onSelect }: { selected: string; onSelect: (v: 
 }
 
 export default function ScoreTable() {
-  // 视图模式
-  const [viewMode, setViewMode] = useState<ViewMode>('single');
+  // 视图模式（null 表示尚未加载）
+  const [viewMode, setViewMode] = useState<ViewMode | null>(null);
 
   // 玩家管理
   const [selectedPlayers, setSelectedPlayers] = useState<SelectedPlayer[]>([]);
@@ -169,7 +169,7 @@ export default function ScoreTable() {
   useEffect(() => {
     if (!prefsLoaded) return;
     loadUserPrefs().then(prefs => {
-      prefs.scoreTable.viewMode = viewMode;
+      prefs.scoreTable.viewMode = viewMode ?? 'single';
       prefs.scoreTable.selectedPlaylistKey = selectedPlaylistKey;
       prefs.scoreTable.mapSort = mapSort;
       prefs.scoreTable.diffSort = diffSort;
@@ -388,6 +388,7 @@ export default function ScoreTable() {
 
   // 获取当前显示的数据
   const displayData = useMemo(() => {
+    if (viewMode === null) return [];
     return viewMode === 'single'
       ? (currentMapData ? [currentMapData] : [])
       : (playlistData?.maps || []);
@@ -404,26 +405,40 @@ export default function ScoreTable() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-bs-text-primary tracking-tight">打谱查询</h1>
         <div className="flex gap-2">
-          <button
-            onClick={() => setViewMode('single')}
-            className={`px-4 py-2 rounded-lg font-medium transition-all ${
-              viewMode === 'single'
-                ? 'bg-bs-accent-primary text-white shadow-lg hover:bg-bs-accent-secondary hover:shadow-bs-accent-primary/30'
-                : 'bg-bs-bg-tertiary text-bs-text-secondary shadow-sm hover:bg-bs-bg-hover hover:text-bs-text-primary'
-            }`}
-          >
-            单谱面
-          </button>
-          <button
-            onClick={() => setViewMode('playlist')}
-            className={`px-4 py-2 rounded-lg font-medium transition-all ${
-              viewMode === 'playlist'
-                ? 'bg-bs-accent-primary text-white shadow-lg hover:bg-bs-accent-secondary hover:shadow-bs-accent-primary/30'
-                : 'bg-bs-bg-tertiary text-bs-text-secondary shadow-sm hover:bg-bs-bg-hover hover:text-bs-text-primary'
-            }`}
-          >
-            歌单
-          </button>
+          {viewMode === null ? (
+            // 加载中状态：显示骨架屏或禁用态按钮
+            <>
+              <div className="px-4 py-2 rounded-lg bg-bs-bg-tertiary text-bs-text-muted animate-pulse">
+                单谱面
+              </div>
+              <div className="px-4 py-2 rounded-lg bg-bs-bg-tertiary text-bs-text-muted animate-pulse">
+                歌单
+              </div>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setViewMode('single')}
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                  viewMode === 'single'
+                    ? 'bg-bs-accent-primary text-white shadow-lg hover:bg-bs-accent-secondary hover:shadow-bs-accent-primary/30'
+                    : 'bg-bs-bg-tertiary text-bs-text-secondary shadow-sm hover:bg-bs-bg-hover hover:text-bs-text-primary'
+                }`}
+              >
+                单谱面
+              </button>
+              <button
+                onClick={() => setViewMode('playlist')}
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                  viewMode === 'playlist'
+                    ? 'bg-bs-accent-primary text-white shadow-lg hover:bg-bs-accent-secondary hover:shadow-bs-accent-primary/30'
+                    : 'bg-bs-bg-tertiary text-bs-text-secondary shadow-sm hover:bg-bs-bg-hover hover:text-bs-text-primary'
+                }`}
+              >
+                歌单
+              </button>
+            </>
+          )}
         </div>
       </div>
 
