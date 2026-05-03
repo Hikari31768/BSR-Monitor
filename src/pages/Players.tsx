@@ -400,7 +400,7 @@ export default function Players() {
       {players.length === 0 ? (
         <EmptyState message="暂无玩家，点击上方按钮添加" />
       ) : (
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))' }}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))' }}>
           {[...players]
             .sort((a, b) => {
               if (starredPlayerId && a.id === starredPlayerId) return -1;

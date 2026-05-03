@@ -9,9 +9,7 @@ export default function Layout() {
       <div className="h-screen bg-bs-bg-primary flex overflow-hidden">
         <Sidebar />
         <main className="flex-1 p-8 overflow-hidden">
-          <div className="max-w-6xl mx-auto h-full">
-            <Outlet />
-          </div>
+          <Outlet />
         </main>
         <BackgroundTasks />
       </div>
