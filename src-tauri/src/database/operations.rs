@@ -898,19 +898,21 @@ pub fn get_playlist_hashes_paginated(
     let total = all_hashes.len();
     let total_pages = ((total as f64) / (page_size as f64)).ceil() as i32;
 
+    // 先对整个列表反转，再分页
+    let ordered_hashes: Vec<String> = if reverse {
+        all_hashes.into_iter().rev().collect()
+    } else {
+        all_hashes
+    };
+
     let offset = ((page - 1) * page_size) as usize;
     let end = (offset + page_size as usize).min(total);
 
-    let mut page_hashes: Vec<String>;
-    if offset >= total {
-        page_hashes = vec![];
+    let page_hashes: Vec<String> = if offset >= total {
+        vec![]
     } else {
-        page_hashes = all_hashes[offset..end].to_vec();
-    }
-
-    if reverse {
-        page_hashes.reverse();
-    }
+        ordered_hashes[offset..end].to_vec()
+    };
 
     Ok((page_hashes, total_pages))
 }
