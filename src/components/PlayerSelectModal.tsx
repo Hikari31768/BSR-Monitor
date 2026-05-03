@@ -37,7 +37,7 @@ export default function PlayerSelectModal({ isOpen, onClose, onSelect, excludeId
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="选择玩家">
-      <div className="w-96 max-h-96 overflow-y-auto">
+      <div className="w-96 max-h-96 overflow-y-auto score-table-scroll">
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <div className="w-6 h-6 border-2 border-bs-accent-primary border-t-transparent rounded-full animate-spin"></div>
