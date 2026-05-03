@@ -38,18 +38,38 @@ pub async fn add_player(
     let task_id = task_id.unwrap_or_else(|| Uuid::new_v4().to_string());
     let api = BeatLeaderApi::new().map_err(|e| e.to_string())?;
 
-    task_state.register(&task_id, "add_player", &id);
+    // 先调用 API 获取玩家信息（支持自定义 ID，返回原始数字 ID）
+    let player_response = api.get_player(&id)
+        .await
+        .map_err(|e| e.to_string())?;
 
-    // 检查是否已存在
+    // 使用 API 返回的原始数字 ID 作为系统主键
+    let canonical_id = player_response.id.clone();
+
+    // 使用原始 ID 注册任务，确保前端进度恢复能正确匹配
+    task_state.register(&task_id, "add_player", &canonical_id);
+
+    // 使用原始 ID 检查是否已存在
     let existing = {
         let state = app.try_state::<Mutex<rusqlite::Connection>>()
             .ok_or("Database not initialized")?;
         let guard = state.lock().map_err(|e| e.to_string())?;
-        db::get_player_by_id(&guard, &id).map_err(|e| e.to_string())?
+        db::get_player_by_id(&guard, &canonical_id).map_err(|e| e.to_string())?
     };
 
     let is_incremental = existing.is_some();
-    let result = fetch_and_save_player(&app, &task_state, id, task_id.clone(), live_url, alias, api, is_incremental, true).await;
+    let result = fetch_and_save_player(
+        &app,
+        &task_state,
+        &canonical_id,
+        player_response,
+        task_id.clone(),
+        live_url,
+        alias,
+        api,
+        is_incremental,
+        true,
+    ).await;
 
     // 无论成功失败都移除任务记录
     task_state.remove(&task_id);
@@ -61,7 +81,8 @@ pub async fn add_player(
 pub async fn fetch_and_save_player(
     app: &AppHandle,
     task_state: &TaskState,
-    id: String,
+    id: &str,
+    player_response: crate::api::beatleader::PlayerResponse,
     task_id: String,
     live_url: Option<String>,
     alias: Option<String>,
@@ -81,14 +102,9 @@ pub async fn fetch_and_save_player(
     }
     task_state.update(&task_id, 2.0, &msg);
 
-    // Step 2: 调用 API 获取玩家信息
-    let player_response = api.get_player(&id)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // 构建玩家信息 — id 使用用户输入的值，确保外键一致
+    // 构建玩家信息 — 使用 API 返回的原始数字 ID
     let player_info = PlayerInfo {
-        id: id.clone(),
+        id: id.to_string(),
         name: player_response.name.clone(),
         avatar_url: Some(player_response.avatar.clone()),
         live_url,
@@ -120,7 +136,7 @@ pub async fn fetch_and_save_player(
         let state = app.try_state::<Mutex<rusqlite::Connection>>()
             .ok_or("Database not initialized")?;
         let guard = state.lock().map_err(|e| e.to_string())?;
-        db::get_latest_score_time(&guard, &id).map_err(|e| e.to_string())?
+        db::get_latest_score_time(&guard, id).map_err(|e| e.to_string())?
     } else {
         None
     };
@@ -147,7 +163,7 @@ pub async fn fetch_and_save_player(
         }
 
         // API 调用
-        let response = api.get_player_scores(&id, page, page_size)
+        let response = api.get_player_scores(id, page, page_size)
             .await
             .map_err(|e| e.to_string())?;
 
@@ -170,7 +186,7 @@ pub async fn fetch_and_save_player(
             let (map_key, _, _) = db::parse_leaderboard_id(&score_data.leaderboard.id);
             let difficulty = db::difficulty_from_value(score_data.leaderboard.difficulty);
             scores_to_insert.push(crate::database::operations::PlayerScore {
-                player_id: id.clone(),
+                player_id: id.to_string(),
                 score_id: score_data.score.id as i64,
                 leaderboard_id: score_data.leaderboard.id.clone(),
                 map_key,
@@ -347,24 +363,33 @@ pub async fn refresh_player_scores(
     let task_id = format!("refresh-player-{}", Uuid::new_v4());
     let api = BeatLeaderApi::new().map_err(|e| e.to_string())?;
 
+    // 先获取玩家信息（支持原始 ID 或自定义 ID）
+    let player_response = api.get_player(&player_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // 使用 API 返回的原始数字 ID
+    let canonical_id = player_response.id.clone();
+
     // 获取玩家名字用于显示
     let display_name = {
         let state = app.try_state::<Mutex<rusqlite::Connection>>()
             .ok_or("Database not initialized")?;
         let guard = state.lock().map_err(|e| e.to_string())?;
-        let name = get_player_name(&guard, &player_id)
+        let name = get_player_name(&guard, &canonical_id)
             .map_err(|e| e.to_string())?
-            .unwrap_or_else(|| player_id.clone());
+            .unwrap_or_else(|| player_response.name.clone());
         format!("刷新: {}", name)
     };
 
-    task_state.register_with_name(&task_id, "refresh_player_scores", &player_id, &display_name);
+    task_state.register_with_name(&task_id, "refresh_player_scores", &canonical_id, &display_name);
 
     // 复用 fetch_and_save_player（is_incremental=true, emit_events=true）
     let result = fetch_and_save_player(
         &app,
         &task_state,
-        player_id.clone(),
+        &canonical_id,
+        player_response,
         task_id.clone(),
         None,
         None,

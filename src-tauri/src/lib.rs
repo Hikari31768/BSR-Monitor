@@ -90,10 +90,18 @@ pub fn run() {
                             Ok(a) => a,
                             Err(_) => continue,
                         };
+
+                        // 先获取玩家信息（使用原始 ID）
+                        let player_response = match api.get_player(player_id).await {
+                            Ok(p) => p,
+                            Err(_) => continue,
+                        };
+
                         let _ = commands::player::fetch_and_save_player(
                             &app_handle_clone,
                             &task_state,
-                            player_id.clone(),
+                            player_id,
+                            player_response,
                             format!("sub-{}", uuid::Uuid::new_v4()),
                             None,
                             None,
