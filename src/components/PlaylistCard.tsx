@@ -1,5 +1,5 @@
 import { Playlist, PlaylistUIState } from '../types';
-import { Clock, Eye, Trash2, List, RefreshCw, Star } from 'lucide-react';
+import { Clock, Trash2, List, RefreshCw, Star } from 'lucide-react';
 
 interface PlaylistCardProps {
   playlist: Playlist;
@@ -24,7 +24,7 @@ const SOURCE_COLORS: Record<string, string> = {
   local: 'bg-green-500/15 text-green-400 border-green-500/30',
 };
 
-export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps, onUpdate, onRefreshRatings, updating, refreshingRatings }: PlaylistCardProps) {
+export default function PlaylistCard({ playlist, uiState, onDelete, onViewMaps: _onViewMaps, onUpdate, onRefreshRatings, updating, refreshingRatings }: PlaylistCardProps) {
   const isLoading = uiState?.loading ?? false;
   const sourceKey = playlist.source;
   const sourceLabel = SOURCE_LABELS[sourceKey] ?? sourceKey;
