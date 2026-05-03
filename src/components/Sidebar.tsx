@@ -70,7 +70,13 @@ export default function Sidebar() {
 
       {/* 底部版本 + 操作按钮 */}
       <div className="px-4 pb-3 flex items-center gap-2">
-        <p className="text-xs text-bs-text-muted shrink-0">v{version}</p>
+        <button
+          onClick={() => invoke('open_url', { url: 'https://github.com/YoLeax/BSR-Monitor' })}
+          className="text-xs text-bs-text-muted shrink-0 hover:text-bs-text-primary transition-colors cursor-pointer"
+          title="在 GitHub 上查看项目"
+        >
+          v{version}
+        </button>
         <div className="flex-1" />
         <button
           onClick={() => invoke('open_data_dir')}
