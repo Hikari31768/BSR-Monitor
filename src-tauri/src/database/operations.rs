@@ -442,6 +442,15 @@ pub fn get_existing_hashes(conn: &Connection, hashes: &[String]) -> Result<Vec<S
     Ok(result)
 }
 
+/// 更新指定 key 的 previewURL
+pub fn update_map_preview_url(conn: &Connection, key: &str, preview_url: &str) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "UPDATE Map SET previewURL = ?2 WHERE key = ?1",
+        rusqlite::params![key, preview_url],
+    )?;
+    Ok(())
+}
+
 // ============ PlayerInfo CRUD ============
 
 pub fn insert_player(conn: &Connection, player: &PlayerInfo) -> Result<(), rusqlite::Error> {

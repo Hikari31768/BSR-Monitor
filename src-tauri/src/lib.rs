@@ -134,6 +134,7 @@ pub fn run() {
             commands::score::get_playlist_scores,
             commands::map::get_map_by_key,
             commands::map::get_map_by_hash,
+            commands::map::fetch_and_store_preview_url,
             commands::playlist::add_playlist,
             commands::playlist::refresh_playlist,
             commands::playlist::get_playlist_list,

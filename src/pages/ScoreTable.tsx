@@ -519,6 +519,20 @@ export default function ScoreTable() {
                   players={sortedPlayers}
                   showMapDivider={viewMode === 'playlist' && mapIndex < displayData.length - 1}
                   diffSort={diffSort}
+                  onPreviewUrlReady={(url) => {
+                    if (viewModeRef.current === 'single' && currentMapDataRef.current?.map.key === mapData.map.key) {
+                      setCurrentMapData(prev => prev ? { ...prev, map: { ...prev.map, preview_url: url } } : null);
+                    } else if (viewModeRef.current === 'playlist' && playlistDataRef.current) {
+                      setPlaylistData(prev => prev ? {
+                        ...prev,
+                        maps: prev.maps.map(m =>
+                          m.map.key === mapData.map.key
+                            ? { ...m, map: { ...m.map, preview_url: url } }
+                            : m
+                        ),
+                      } : null);
+                    }
+                  }}
                 />
               ))}
             </div>

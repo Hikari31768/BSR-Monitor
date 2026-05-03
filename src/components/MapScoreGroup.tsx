@@ -30,7 +30,8 @@ export default function MapScoreGroup({
   players,
   showMapDivider,
   diffSort = 'desc',
-}: MapScoreGroupProps) {
+  onPreviewUrlReady,
+}: MapScoreGroupProps & { onPreviewUrlReady?: (url: string) => void }) {
   // 难度列排序（前端排序）
   const sortedScores = useMemo(() => {
     return [...scores].sort((a, b) => {
@@ -95,7 +96,7 @@ export default function MapScoreGroup({
         {/* 谱面信息 */}
         <div className="group p-4 border-r border-bs-border">
           <div className="flex gap-3">
-            <CoverWithAudio map={map} />
+            <CoverWithAudio map={map} onPreviewUrlReady={onPreviewUrlReady} />
             <div className="flex-1 min-w-0">
               <p className="font-medium text-bs-text-primary truncate">{map.song_name}</p>
               <p className="text-xs text-bs-text-muted truncate">{map.level_author_name}</p>

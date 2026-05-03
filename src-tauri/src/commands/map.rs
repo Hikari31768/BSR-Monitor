@@ -7,7 +7,6 @@ use crate::database::operations::{MapDiff};
 use crate::database::operations as db;
 use crate::commands::common::convert_map_detail;
 use std::sync::Mutex;
-
 /// 在后台调用 BeatLeader /leaderboards/hash/{hash} 补全星级和评级信息
 /// 完成后通过 `map-stars-ready` 事件通知前端（携带 map key）
 fn spawn_enrich_stars(app: &AppHandle, key: String, hash: String) {
@@ -176,4 +175,44 @@ pub async fn get_map_by_hash(app: AppHandle, hash: String) -> Result<crate::data
     spawn_enrich_stars(&app, key.clone(), hash);
 
     Ok(map)
+}
+
+/// 获取并存储谱面的 previewURL（按需调用，仅当 DB 中无 preview_url 时）
+#[tauri::command]
+pub async fn fetch_and_store_preview_url(app: AppHandle, key: String) -> Result<String, String> {
+    // 先检查数据库是否已有 previewURL
+    {
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        if let Some(map) = db::get_map_by_key(&guard, &key).map_err(|e| e.to_string())? {
+            if let Some(ref url) = map.preview_url {
+                if !url.is_empty() {
+                    return Ok(url.clone());
+                }
+            }
+        }
+    }
+
+    // 调用 BeatSaver /maps/id/{key} 获取 previewURL
+    let api = BeatSaverApi::new().map_err(|e| e.to_string())?;
+    let map_detail = api.get_map_by_key(&key)
+        .await
+        .map_err(|e| format!("Failed to fetch map from BeatSaver: {}", e))?;
+
+    let preview_url = map_detail.versions.first()
+        .map(|v| v.preview_url.clone())
+        .filter(|u| !u.is_empty())
+        .ok_or_else(|| "Map has no preview URL".to_string())?;
+
+    // 更新数据库
+    {
+        let state = app.try_state::<Mutex<rusqlite::Connection>>()
+            .ok_or("Database not initialized")?;
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        db::update_map_preview_url(&guard, &key, &preview_url)
+            .map_err(|e| format!("Failed to save preview URL: {}", e))?;
+    }
+
+    Ok(preview_url)
 }
