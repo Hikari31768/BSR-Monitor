@@ -145,6 +145,8 @@ pub fn run() {
             commands::leaderboard::get_leaderboard,
             commands::common::get_version,
             commands::common::open_data_dir,
+            commands::common::load_user_prefs,
+            commands::common::save_user_prefs,
             task_state::get_active_tasks,
         ])
         .run(tauri::generate_context!())

@@ -15,6 +15,7 @@ import PlaylistSelect from '../components/PlaylistSelect';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { loadUserPrefs, saveUserPrefs } from '../utils/prefs';
 
 type ViewMode = 'single' | 'playlist';
 
@@ -114,6 +115,9 @@ export default function ScoreTable() {
   const [loadingData, setLoadingData] = useState(false);
   const [dataError, setDataError] = useState<string>('');
 
+  // 偏好是否已加载
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+
   // 所有可变值都用 ref 存储，确保 callback 和 effect 不依赖 state
   const selectedPlayersRef = useRef(selectedPlayers);
   useEffect(() => { selectedPlayersRef.current = selectedPlayers; }, [selectedPlayers]);
@@ -150,11 +154,35 @@ export default function ScoreTable() {
 
   const prevPlayerCountRef = useRef(0);
 
-  // 初始化加载
+  // 初始化加载：先加载偏好，再加载数据
   useEffect(() => {
+    loadUserPrefs().then(prefs => {
+      setViewMode(prefs.scoreTable.viewMode);
+      setSelectedPlaylistKey(prefs.scoreTable.selectedPlaylistKey);
+      setMapSort(prefs.scoreTable.mapSort);
+      setDiffSort(prefs.scoreTable.diffSort);
+      setPrefsLoaded(true);
+    });
+  }, []);
+
+  // 偏好变化时保存
+  useEffect(() => {
+    if (!prefsLoaded) return;
+    loadUserPrefs().then(prefs => {
+      prefs.scoreTable.viewMode = viewMode;
+      prefs.scoreTable.selectedPlaylistKey = selectedPlaylistKey;
+      prefs.scoreTable.mapSort = mapSort;
+      prefs.scoreTable.diffSort = diffSort;
+      saveUserPrefs(prefs);
+    });
+  }, [viewMode, selectedPlaylistKey, mapSort, diffSort, prefsLoaded]);
+
+  // 初始化加载玩家和歌单（等待偏好加载完成后）
+  useEffect(() => {
+    if (!prefsLoaded) return;
     loadPlayers();
     loadPlaylists();
-  }, []);
+  }, [prefsLoaded]);
 
   async function loadPlayers() {
     setLoadingPlayers(true);
@@ -162,9 +190,9 @@ export default function ScoreTable() {
       const list = await invoke<PlayerInfo[]>('get_player_list');
       if (list.length === 0) return;
 
-      const starredId = (() => {
-        try { return localStorage.getItem('starred_player_id'); } catch { return null; }
-      })();
+      // 从 JSON 文件读取标星玩家
+      const prefs = await loadUserPrefs();
+      const starredId = prefs.starredPlayerId;
 
       const defaultPlayer = starredId
         ? list.find(p => p.id === starredId)

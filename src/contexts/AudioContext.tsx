@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
+import { loadUserPrefs, saveUserPrefs } from '../utils/prefs';
 
 interface AudioContextType {
   volume: number;
@@ -18,20 +19,23 @@ const AudioContext = createContext<AudioContextType>({
   currentPlayingId: null,
 });
 
-const VOLUME_KEY = 'bsr-monitor-audio-volume';
-
 export function AudioProvider({ children }: { children: ReactNode }) {
-  const [volume, setVolumeState] = useState(() => {
-    const saved = localStorage.getItem(VOLUME_KEY);
-    return saved ? parseFloat(saved) : 1;
-  });
+  const [volume, setVolumeState] = useState(1);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [currentPlayingId, setCurrentPlayingId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // 初始化：加载保存的音量
+  useEffect(() => {
+    loadUserPrefs().then(prefs => {
+      setVolumeState(prefs.volume);
+      setIsLoaded(true);
+    });
+  }, []);
 
   // Create global Audio singleton on mount
   useEffect(() => {
     const audio = new Audio();
-    audio.volume = volume;
     audioRef.current = audio;
 
     // 监听播放结束事件，自动清除 currentPlayingId
@@ -48,12 +52,16 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const setVolume = useCallback((v: number) => {
+  // 音量变化时更新 audio 元素并保存
+  const setVolume = useCallback(async (v: number) => {
     setVolumeState(v);
-    localStorage.setItem(VOLUME_KEY, v.toString());
     if (audioRef.current) {
       audioRef.current.volume = v;
     }
+    // 保存到 JSON 文件
+    const prefs = await loadUserPrefs();
+    prefs.volume = v;
+    await saveUserPrefs(prefs);
   }, []);
 
   const playPreview = useCallback(async (url: string, id?: string) => {
@@ -80,6 +88,11 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     audio.currentTime = 0;
     setCurrentPlayingId(null);
   }, []);
+
+  // 等待加载完成再渲染子组件，确保音量值正确
+  if (!isLoaded) {
+    return null;
+  }
 
   return (
     <AudioContext.Provider value={{ volume, setVolume, playPreview, stopPreview, audioRef, currentPlayingId }}>

@@ -6,6 +6,7 @@ import PlayerCard from '../components/PlayerCard';
 import Modal from '../components/Modal';
 import EmptyState from '../components/EmptyState';
 import { Plus } from 'lucide-react';
+import { loadUserPrefs, saveUserPrefs, migrateFromLocalStorage } from '../utils/prefs';
 
 export default function Players() {
   const [players, setPlayers] = useState<PlayerWithScoreCount[]>([]);
@@ -21,27 +22,29 @@ export default function Players() {
   const [editFormError, setEditFormError] = useState<string>('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string>('');
-  const [starredPlayerId, setStarredPlayerId] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem('starred_player_id');
-    } catch {
-      return null;
-    }
-  });
+  const [starredPlayerId, setStarredPlayerId] = useState<string | null>(null);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
   const unlistenRef = useRef<UnlistenFn | null>(null);
+
+  // 初始化：加载偏好（包括迁移旧数据）
+  useEffect(() => {
+    // 先尝试迁移旧数据，然后加载
+    migrateFromLocalStorage().then(() => {
+      loadUserPrefs().then(prefs => {
+        setStarredPlayerId(prefs.starredPlayerId);
+        setPrefsLoaded(true);
+      });
+    });
+  }, []);
 
   // 持久化标星玩家
   useEffect(() => {
-    try {
-      if (starredPlayerId) {
-        localStorage.setItem('starred_player_id', starredPlayerId);
-      } else {
-        localStorage.removeItem('starred_player_id');
-      }
-    } catch {
-      // ignore
-    }
-  }, [starredPlayerId]);
+    if (!prefsLoaded) return;
+    loadUserPrefs().then(prefs => {
+      prefs.starredPlayerId = starredPlayerId;
+      saveUserPrefs(prefs);
+    });
+  }, [starredPlayerId, prefsLoaded]);
 
   function handleToggleStar(playerId: string) {
     setStarredPlayerId(prev => prev === playerId ? null : playerId);

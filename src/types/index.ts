@@ -123,3 +123,27 @@ export interface PlaylistScoresResponse {
 
 import { difficultyColors, modeNames } from '../constants';
 export { difficultyColors, modeNames };
+
+// ============ 用户偏好 ============
+
+export interface UserPrefs {
+  scoreTable: {
+    viewMode: 'single' | 'playlist';
+    selectedPlaylistKey: string | null;
+    mapSort: 'asc' | 'desc';
+    diffSort: 'asc' | 'desc';
+  };
+  volume: number;
+  starredPlayerId: string | null;
+}
+
+export const defaultUserPrefs: UserPrefs = {
+  scoreTable: {
+    viewMode: 'single',
+    selectedPlaylistKey: null,
+    mapSort: 'asc',
+    diffSort: 'desc',
+  },
+  volume: 1,
+  starredPlayerId: null,
+};
