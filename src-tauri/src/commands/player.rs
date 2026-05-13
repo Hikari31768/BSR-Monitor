@@ -1,6 +1,7 @@
 use tauri::AppHandle;
 use tauri::Manager;
 use tauri::State;
+use tauri_plugin_opener::OpenerExt;
 use crate::api::BeatLeaderApi;
 use crate::database::operations::{PlayerInfo};
 use crate::database::operations as db;
@@ -330,27 +331,10 @@ pub fn update_player(app: AppHandle, player: PlayerInfo) -> Result<(), String> {
 
 /// 在系统默认浏览器中打开 URL
 #[tauri::command]
-pub fn open_url(url: String) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    return std::process::Command::new("cmd")
-        .args(["/c", "start", &url])
-        .spawn()
+pub fn open_url(window: tauri::Window, url: String) -> Result<(), String> {
+    window.opener().open_url(&url, None::<&str>)
         .map(|_| ())
-        .map_err(|e| e.to_string());
-    #[cfg(target_os = "macos")]
-    return std::process::Command::new("open")
-        .arg(&url)
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string());
-    #[cfg(target_os = "linux")]
-    return std::process::Command::new("xdg-open")
-        .arg(&url)
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string());
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    return Err("不支持的平台".to_string());
+        .map_err(|e| e.to_string())
 }
 
 /// 手动刷新单个玩家的成绩（增量更新）
