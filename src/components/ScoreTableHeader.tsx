@@ -96,7 +96,10 @@ export default function ScoreTableHeader({
         style={{ gridTemplateColumns: gridColumns }}
       >
         {/* 谱面信息列 */}
-        <div className="p-4 border-r border-bs-border flex items-center justify-center gap-1">
+        <div
+          className="sticky-col-1 p-4 border-r border-bs-border flex items-center justify-center gap-1"
+          style={{ backgroundColor: 'var(--color-bg-tertiary)' }}
+        >
           <span className="text-sm font-medium text-bs-text-secondary">谱面信息</span>
           {showMapSort && (
             <button
@@ -114,7 +117,10 @@ export default function ScoreTableHeader({
         </div>
 
         {/* 难度信息列 */}
-        <div className="p-4 border-r border-bs-border flex items-center justify-center gap-1">
+        <div
+          className="sticky-col-2 p-4 border-r border-bs-border flex items-center justify-center gap-1"
+          style={{ backgroundColor: 'var(--color-bg-tertiary)' }}
+        >
           <span className="text-sm font-medium text-bs-text-secondary">难度</span>
           <button
             onClick={onToggleDiffSort}

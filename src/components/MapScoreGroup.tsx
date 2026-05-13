@@ -94,7 +94,7 @@ export default function MapScoreGroup({
         style={{ gridTemplateColumns: gridColumns }}
       >
         {/* 谱面信息 */}
-        <div className="group p-4 border-r border-bs-border">
+        <div className="sticky-col-1 group p-4 border-r border-bs-border">
           <div className="flex gap-3">
             <CoverWithAudio map={map} onPreviewUrlReady={onPreviewUrlReady} />
             <div className="flex-1 min-w-0">
@@ -123,7 +123,7 @@ export default function MapScoreGroup({
         </div>
 
         {/* 难度列 */}
-        <div className="p-4 border-r border-bs-border flex items-center justify-center">
+        <div className="sticky-col-2 p-4 border-r border-bs-border flex items-center justify-center">
           <span className="text-xs text-bs-text-muted">无成绩</span>
         </div>
 
@@ -152,7 +152,7 @@ export default function MapScoreGroup({
       }}
     >
       {/* 谱面信息列 - 跨所有行 */}
-      <div className="group p-4 border-r border-bs-border row-span-full">
+      <div className="sticky-col-1 group p-4 border-r border-bs-border row-span-full">
         <div className="flex gap-3">
           <CoverWithAudio map={map} />
           <div className="flex-1 min-w-0">
@@ -187,7 +187,7 @@ export default function MapScoreGroup({
           {/* 难度信息 */}
           <div
             key={`diff-${index}`}
-            className={`p-4 border-r border-bs-border flex items-center gap-2 ${
+            className={`sticky-col-2 p-4 border-r border-bs-border flex items-center gap-2 ${
               index > 0 ? 'border-t border-bs-border/50' : ''
             }`}
           >
