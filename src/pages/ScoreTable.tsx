@@ -540,7 +540,7 @@ export default function ScoreTable() {
 
       {/* 成绩表格 - 占据剩余高度，独立滚动 */}
       <div className="bg-bs-bg-secondary rounded-xl border border-bs-border shadow-lg overflow-hidden flex-1 flex flex-col min-h-0">
-        <div className="score-table-scroll overflow-auto flex-1 flex flex-col min-h-0">
+        <div className="score-table-scroll overflow-auto flex-1 flex flex-col min-h-0" style={{ overscrollBehavior: 'none' }}>
           {/* 表头 - 始终显示，提供添加玩家的入口 */}
           <ScoreTableHeader
             players={sortedPlayers}
