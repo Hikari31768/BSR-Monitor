@@ -21,7 +21,7 @@ export default function Sidebar() {
   }, []);
 
   return (
-    <aside className="w-52 bg-bs-bg-secondary border-r border-bs-border flex flex-col shrink-0">
+    <aside className="w-52 bg-bs-bg-secondary border-r border-bs-border flex flex-col shrink-0 overscroll-contain">
       {/* Logo 区域 */}
       <div className="p-6 border-b border-bs-border">
         <div className="text-xl font-bold text-bs-text-primary tracking-tight text-center">!bsr 👀</div>
