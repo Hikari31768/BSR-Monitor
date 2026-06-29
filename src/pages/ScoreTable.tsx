@@ -7,6 +7,7 @@ import {
   Playlist,
   MapScoresResponse,
   PlaylistScoresResponse,
+  PlayerFilterState,
 } from '../types';
 import ScoreTableHeader from '../components/ScoreTableHeader';
 import MapScoreGroup from '../components/MapScoreGroup';
@@ -108,6 +109,9 @@ export default function ScoreTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const [mapSort, setMapSort] = useState<'asc' | 'desc'>('asc');
   const [diffSort, setDiffSort] = useState<'asc' | 'desc'>('desc');
+
+  // 玩家成绩筛选（仅歌单模式生效，不持久化）
+  const [playerFilters, setPlayerFilters] = useState<Record<string, PlayerFilterState>>({});
 
   // 加载状态
   const [, setLoadingPlayers] = useState(false);
@@ -378,7 +382,28 @@ export default function ScoreTable() {
     const newPlayers = selectedPlayers.filter(p => p.id !== playerId);
     setSelectedPlayers(newPlayers);
     prevPlayerCountRef.current = newPlayers.length;
+    // 清理该玩家的筛选状态
+    setPlayerFilters(prev => {
+      if (!(playerId in prev)) return prev;
+      const next = { ...prev };
+      delete next[playerId];
+      return next;
+    });
   }
+
+  // 切换玩家成绩筛选
+  const handleTogglePlayerFilter = useCallback((playerId: string, type: 'has_scores' | 'no_scores') => {
+    setPlayerFilters(prev => {
+      const current = prev[playerId] ?? 'none';
+      const next: Record<string, PlayerFilterState> = { ...prev };
+      if (current === type) {
+        delete next[playerId];
+      } else {
+        next[playerId] = type;
+      }
+      return next;
+    });
+  }, []);
 
   // 刷新玩家成绩
   async function handleRefreshPlayer(playerId: string) {
@@ -409,15 +434,31 @@ export default function ScoreTable() {
   // 获取当前显示的数据
   const displayData = useMemo(() => {
     if (viewMode === null) return [];
-    return viewMode === 'single'
+    const data = viewMode === 'single'
       ? (currentMapData ? [currentMapData] : [])
       : (playlistData?.maps || []);
-  }, [viewMode, currentMapData, playlistData]);
+
+    if (viewMode !== 'playlist') return data;
+
+    return data.filter(mapData => {
+      return Object.entries(playerFilters).every(([playerId, filter]) => {
+        if (filter === 'none') return true;
+        const hasScore = mapData.scores.some(row =>
+          row.scores.some(s => s.player_id === playerId)
+        );
+        return filter === 'has_scores' ? hasScore : !hasScore;
+      });
+    });
+  }, [viewMode, currentMapData, playlistData, playerFilters]);
 
   // 构建表头数据
   const sortedPlayers = useMemo(() => {
     return [...selectedPlayers].sort((a, b) => a.order - b.order);
   }, [selectedPlayers]);
+
+  const hasActivePlayerFilter = useMemo(() => {
+    return Object.values(playerFilters).some(state => state !== 'none');
+  }, [playerFilters]);
 
   return (
     <div className="animate-fade-in h-full flex flex-col">
@@ -553,6 +594,9 @@ export default function ScoreTable() {
             showMapSort={viewMode === 'playlist'}
             diffSort={diffSort}
             onToggleDiffSort={() => setDiffSort(s => s === 'asc' ? 'desc' : 'asc')}
+            viewMode={viewMode}
+            playerFilters={playerFilters}
+            onTogglePlayerFilter={handleTogglePlayerFilter}
           />
 
           {/* 表格内容 */}
@@ -568,7 +612,9 @@ export default function ScoreTable() {
                     ? '请先选择玩家'
                     : viewMode === 'single'
                       ? (mapInput ? '该谱面无玩家成绩数据' : '请输入谱面 Key 或 Hash 开始查询')
-                      : (selectedPlaylistKey ? '该歌单暂无玩家成绩数据' : '请选择歌单开始查询')
+                      : hasActivePlayerFilter && (playlistData?.maps.length ?? 0) > 0
+                        ? '没有符合当前筛选条件的谱面'
+                        : (selectedPlaylistKey ? '该歌单暂无玩家成绩数据' : '请选择歌单开始查询')
                 }
               />
             </div>

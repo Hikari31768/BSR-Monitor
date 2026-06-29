@@ -14,6 +14,9 @@ export interface PlayerUIState {
   updatingMessage?: string;
 }
 
+/** 打谱查询页玩家成绩筛选状态 */
+export type PlayerFilterState = 'none' | 'has_scores' | 'no_scores';
+
 export interface PlaylistUIState {
   loading: boolean;
   progress: number;
