@@ -3,7 +3,7 @@ import { Map, ScoreRowData, PlayerInfo } from '../types';
 import DiffBadge from './DiffBadge';
 import ModeIcon from './ModeIcon';
 import CoverWithAudio from './CoverWithAudio';
-import CopyKeyButton from './CopyKeyButton';
+import MapKeyButtons from './MapKeyButtons';
 import { formatAccuracy } from '../utils/format';
 
 interface MapScoreGroupProps {
@@ -100,10 +100,7 @@ export default function MapScoreGroup({
             <div className="flex-1 min-w-0">
               <p className="font-medium text-bs-text-primary truncate">{map.song_name}</p>
               <p className="text-xs text-bs-text-muted truncate">{map.level_author_name}</p>
-              <div className="flex items-center gap-1 mt-1">
-                <p className="text-xs text-bs-text-secondary">{map.key}</p>
-                <CopyKeyButton mapKey={map.key} />
-              </div>
+              <MapKeyButtons mapKey={map.key} />
             </div>
           </div>
           {noScoreDiffGroups.length > 0 && (
@@ -158,10 +155,7 @@ export default function MapScoreGroup({
           <div className="flex-1 min-w-0">
             <p className="font-medium text-bs-text-primary truncate">{map.song_name}</p>
             <p className="text-xs text-bs-text-muted truncate">{map.level_author_name}</p>
-            <div className="flex items-center gap-1 mt-1">
-              <p className="text-xs text-bs-text-secondary">{map.key}</p>
-              <CopyKeyButton mapKey={map.key} />
-            </div>
+            <MapKeyButtons mapKey={map.key} />
           </div>
         </div>
         {/* 无成绩难度徽章 */}
