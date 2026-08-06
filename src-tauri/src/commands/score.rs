@@ -34,6 +34,7 @@ pub struct ScoreRowData {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlayerScoreCell {
     pub player_id: String,
+    pub score_id: i64,
     pub accuracy: f32,
     /// 该成绩是否为旧版本（hash 不在当前版本中）
     #[serde(default)]
@@ -218,18 +219,18 @@ fn build_score_rows(
         let player_scores = scores_by_diff.get(&key).cloned().unwrap_or_default();
 
         // 对每个玩家，分别记录当前版本成绩和旧版本成绩
-        let mut player_current_best: std::collections::HashMap<String, f32> = std::collections::HashMap::new();
-        let mut player_expired_best: std::collections::HashMap<String, f32> = std::collections::HashMap::new();
+        let mut player_current_best: std::collections::HashMap<String, (f32, i64)> = std::collections::HashMap::new();
+        let mut player_expired_best: std::collections::HashMap<String, (f32, i64)> = std::collections::HashMap::new();
 
         for (player_id, score) in player_scores {
             let is_expired = !current_hashes.contains(&score.hash.to_lowercase());
             let entry = if is_expired {
-                player_expired_best.entry(player_id).or_insert(0.0)
+                player_expired_best.entry(player_id).or_insert((0.0, score.score_id))
             } else {
-                player_current_best.entry(player_id).or_insert(0.0)
+                player_current_best.entry(player_id).or_insert((0.0, score.score_id))
             };
-            if score.accuracy > *entry {
-                *entry = score.accuracy;
+            if score.accuracy > entry.0 {
+                entry.0 = score.accuracy;
             }
         }
 
@@ -238,19 +239,21 @@ fn build_score_rows(
 
         let mut scores: Vec<PlayerScoreCell> = player_current_best
             .into_iter()
-            .map(|(player_id, accuracy)| PlayerScoreCell {
+            .map(|(player_id, score_info)| PlayerScoreCell {
                 player_id,
-                accuracy,
+                score_id: score_info.1,
+                accuracy: score_info.0,
                 is_expired: false,
             })
             .collect();
 
         // 对于没有当前版本成绩但有旧版本成绩的玩家，添加过期成绩
-        for (player_id, accuracy) in player_expired_best {
+        for (player_id, score_info) in player_expired_best {
             if !current_player_ids.contains(&player_id) {
                 scores.push(PlayerScoreCell {
                     player_id,
-                    accuracy,
+                    score_id: score_info.1,
+                    accuracy: score_info.0,
                     is_expired: true,
                 });
             }
@@ -275,19 +278,20 @@ fn build_score_rows(
     // 4. 添加有成绩但不在当前版本的难度（旧版本的难度在当前版本不存在）
     for (key, player_scores) in &scores_by_diff {
         if !current_diff_set.contains(key) {
-            let mut player_best: std::collections::HashMap<String, f32> = std::collections::HashMap::new();
+            let mut player_best: std::collections::HashMap<String, (f32, i64)> = std::collections::HashMap::new();
             for (player_id, score) in player_scores {
-                let entry = player_best.entry(player_id.clone()).or_insert(0.0);
-                if score.accuracy > *entry {
-                    *entry = score.accuracy;
+                let entry = player_best.entry(player_id.clone()).or_insert((0.0, score.score_id));
+                if score.accuracy > entry.0 {
+                    entry.0 = score.accuracy;
                 }
             }
 
             let scores: Vec<PlayerScoreCell> = player_best
                 .into_iter()
-                .map(|(player_id, accuracy)| PlayerScoreCell {
+                .map(|(player_id, score_info)| PlayerScoreCell {
                     player_id,
-                    accuracy,
+                    score_id: score_info.1,
+                    accuracy: score_info.0,
                     is_expired: true,
                 })
                 .collect();
