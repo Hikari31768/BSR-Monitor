@@ -25,7 +25,7 @@ impl Default for TaskState {
             tasks: Mutex::new(HashMap::new()),
             player_slots: tokio::sync::Semaphore::new(crate::sync_batch::PLAYER_CONCURRENCY),
             playlist_slots: tokio::sync::Semaphore::new(crate::sync_batch::PLAYLIST_CONCURRENCY),
-            map_info_slots: tokio::sync::Semaphore::new(crate::sync_batch::PLAYLIST_CONCURRENCY),
+            map_info_slots: tokio::sync::Semaphore::new(crate::sync_batch::MAP_INFO_CONCURRENCY),
         }
     }
 }

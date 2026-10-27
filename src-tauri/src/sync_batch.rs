@@ -1,8 +1,9 @@
 use std::{future::Future, sync::Arc};
 use tokio::task::JoinSet;
 
-pub const PLAYER_CONCURRENCY: usize = 3;
-pub const PLAYLIST_CONCURRENCY: usize = 3;
+pub const PLAYER_CONCURRENCY: usize = 5;
+pub const PLAYLIST_CONCURRENCY: usize = 5;
+pub const MAP_INFO_CONCURRENCY: usize = 5;
 
 #[derive(Default, Debug, PartialEq)]
 pub struct BatchSummary {
