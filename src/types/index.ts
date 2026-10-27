@@ -4,6 +4,7 @@ export interface PlayerInfo {
   avatar_url?: string;
   live_url?: string;
   alias?: string;
+  updated_at?: number;
 }
 
 export interface PlayerUIState {
@@ -24,8 +25,6 @@ export type PlaylistSource = 'beatsaver' | 'mapper' | 'local';
 
 export interface PlayerScore {
   player_id: string;
-  score_id: number;
-  leaderboard_id: string;
   map_key?: string;
   hash: string;
   mode: string;

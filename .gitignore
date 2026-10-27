@@ -7,10 +7,12 @@
 
 # Dependencies
 node_modules/
+.build-cache/
 
 # Build outputs
 dist/
 src-tauri/target/
+BSR-Monitor*.exe
 
 # Environment
 .env

@@ -1,3 +1,4 @@
+import { useDataRefresh } from '../utils/useDataRefresh';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -322,6 +323,15 @@ export default function ScoreTable() {
       setLoadingData(false);
     }
   }, []); // 无依赖，完全稳定
+
+  useDataRefresh(['players-updated', 'playlists-updated'], async () => {
+    await loadPlaylists();
+    if (viewModeRef.current === 'single' && currentMapKeyRef.current) {
+      await fetchScores(currentMapKeyRef.current);
+    } else if (viewModeRef.current === 'playlist' && selectedPlaylistKeyRef.current) {
+      await searchPlaylist();
+    }
+  });
 
   // 切换歌单时重置页码和数据（但保留排序偏好）
   useEffect(() => {

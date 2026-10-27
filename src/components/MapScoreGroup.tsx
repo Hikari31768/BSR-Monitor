@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { Map, ScoreRowData, PlayerInfo } from '../types';
 import DiffBadge from './DiffBadge';
 import ModeIcon from './ModeIcon';
@@ -98,7 +99,15 @@ export default function MapScoreGroup({
           <div className="flex gap-3">
             <CoverWithAudio map={map} onPreviewUrlReady={onPreviewUrlReady} />
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-bs-text-primary truncate">{map.song_name}</p>
+              <a
+                href={'https://beatsaver.com/maps/' + encodeURIComponent(map.key)}
+                onClick={e => {
+                  e.preventDefault();
+                  void invoke('open_url', { url: 'https://beatsaver.com/maps/' + encodeURIComponent(map.key) }).catch(console.error);
+                }}
+                title="在 BeatSaver 中打开谱面"
+                className="block font-medium text-bs-text-primary truncate hover:text-bs-accent-primary hover:underline"
+              >{map.song_name}</a>
               <p className="text-xs text-bs-text-muted truncate">{map.level_author_name}</p>
               <div className="flex items-center gap-1 mt-1">
                 <p className="text-xs text-bs-text-secondary">{map.key}</p>
@@ -156,7 +165,15 @@ export default function MapScoreGroup({
         <div className="flex gap-3">
           <CoverWithAudio map={map} />
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-bs-text-primary truncate">{map.song_name}</p>
+            <a
+                href={'https://beatsaver.com/maps/' + encodeURIComponent(map.key)}
+                onClick={e => {
+                  e.preventDefault();
+                  void invoke('open_url', { url: 'https://beatsaver.com/maps/' + encodeURIComponent(map.key) }).catch(console.error);
+                }}
+                title="在 BeatSaver 中打开谱面"
+                className="block font-medium text-bs-text-primary truncate hover:text-bs-accent-primary hover:underline"
+              >{map.song_name}</a>
             <p className="text-xs text-bs-text-muted truncate">{map.level_author_name}</p>
             <div className="flex items-center gap-1 mt-1">
               <p className="text-xs text-bs-text-secondary">{map.key}</p>

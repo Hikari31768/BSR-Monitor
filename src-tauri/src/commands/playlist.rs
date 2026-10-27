@@ -1,5 +1,6 @@
 use tauri::AppHandle;
 use tauri::Manager;
+use tauri::Emitter;
 use tauri::State;
 use crate::api::BeatSaverApi;
 use crate::database::operations::{Playlist, PlaylistSource, BplistFile, BplistSong, MapDiff, Map};
@@ -26,6 +27,7 @@ pub async fn add_playlist(
     identifier: String,
     task_id: Option<String>,
 ) -> Result<AddPlaylistResult, String> {
+    let _permit = task_state.playlist_slots.acquire().await.map_err(|e| e.to_string())?;
     let task_id = task_id.unwrap_or_else(|| Uuid::new_v4().to_string());
     let api = BeatSaverApi::new().map_err(|e| e.to_string())?;
 
@@ -48,12 +50,13 @@ pub async fn add_playlist(
         return Err(format!("Playlist already exists: {}/{}", source, identifier));
     }
 
-    task_state.register(&task_id, "add_playlist", &format!("{}/{}", source, identifier));
+    let _task = task_state.begin(&task_id, "add_playlist", &format!("{}/{}", source, identifier), "添加歌单")?;
 
-    let result = process_playlist(&app, &task_state, &playlist_source, &identifier, task_id.clone(), api).await;
+    let result = process_playlist(&app, &task_state, &playlist_source, &identifier, task_id.clone(), api, true).await;
 
     task_state.remove(&task_id);
 
+    if result.is_ok() { let _ = app.emit("playlists-updated", format!("{}:{}", source, identifier)); }
     result.map(|playlist| AddPlaylistResult { task_id, playlist })
 }
 
@@ -67,8 +70,6 @@ pub async fn refresh_playlist(
     task_id: Option<String>,
 ) -> Result<AddPlaylistResult, String> {
     let task_id = task_id.unwrap_or_else(|| Uuid::new_v4().to_string());
-    let api = BeatSaverApi::new().map_err(|e| e.to_string())?;
-
     let playlist_source = match source.as_str() {
         "beatsaver" => PlaylistSource::Beatsaver,
         "mapper" => PlaylistSource::Mapper,
@@ -76,13 +77,38 @@ pub async fn refresh_playlist(
         _ => return Err(format!("Invalid playlist source: {}", source)),
     };
 
-    task_state.register(&task_id, "refresh_playlist", &format!("{}/{}", source, identifier));
+    let playlist = refresh_saved_playlist(&app, &task_state, &playlist_source, &identifier, task_id.clone(), true).await?;
+    Ok(AddPlaylistResult { task_id, playlist })
+}
 
-    let result = process_playlist(&app, &task_state, &playlist_source, &identifier, task_id.clone(), api).await;
-
-    task_state.remove(&task_id);
-
-    result.map(|playlist| AddPlaylistResult { task_id, playlist })
+pub(crate) async fn refresh_saved_playlist(
+    app: &AppHandle, task_state: &TaskState, source: &PlaylistSource, identifier: &str,
+    task_id: String, emit_events: bool,
+) -> Result<Playlist, String> {
+    let kind = if emit_events { "refresh_playlist" } else { "startup_playlist" };
+    let internal_target = format!("{}/{}", source.as_str(), identifier);
+    let _task = task_state.begin(&task_id, kind, &internal_target, identifier)?;
+    let name = {
+        let state = app.state::<Mutex<rusqlite::Connection>>();
+        let conn = state.lock().map_err(|e| e.to_string())?;
+        db::get_playlist(&conn, source, identifier).map_err(|e| e.to_string())?
+            .ok_or("Playlist not found")?.name
+    };
+    let target = format!("{}:{}", source.as_str(), identifier);
+    task_state.register_with_name(&task_id, kind, &internal_target, &name);
+    let _permit = task_state.playlist_slots.acquire().await.map_err(|e| e.to_string())?;
+    let result = match BeatSaverApi::new() {
+        Ok(api) => process_playlist(app, task_state, source, identifier, task_id.clone(), api, emit_events).await,
+        Err(error) => Err(error),
+    };
+    if result.is_ok() && emit_events { let _ = app.emit("playlists-updated", &target); }
+    else if emit_events {
+        let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id)
+            .with_progress("failed".into(), 100.0).with_target(target)
+            .with_message(result.as_ref().err().unwrap().clone());
+        let _ = emit_progress_event(app, &payload);
+    }
+    result
 }
 
 /// 统一处理歌单（添加或更新）
@@ -93,6 +119,7 @@ async fn process_playlist(
     identifier: &str,
     task_id: String,
     api: BeatSaverApi,
+    emit_events: bool,
 ) -> Result<Playlist, String> {
     let is_update = {
         let state = app.try_state::<Mutex<rusqlite::Connection>>()
@@ -107,7 +134,7 @@ async fn process_playlist(
     let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.clone())
         .with_progress("fetching_bplist".to_string(), 2.0)
         .with_message(format!("{}正在获取歌单信息...", action_prefix));
-    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    if emit_events { emit_progress_event(app, &payload.with_target(format!("{}:{}", source.as_str(), identifier))).map_err(|e| e.to_string())?; }
     task_state.update(&task_id, 2.0, &format!("{}正在获取歌单信息...", action_prefix));
 
     // 1. 获取 .bplist 内容并保存到 Playlists 目录
@@ -117,7 +144,7 @@ async fn process_playlist(
     let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.clone())
         .with_progress("parsing_bplist".to_string(), 10.0)
         .with_message("正在解析歌单文件...".to_string());
-    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    if emit_events { emit_progress_event(app, &payload.with_target(format!("{}:{}", source.as_str(), identifier))).map_err(|e| e.to_string())?; }
     task_state.update(&task_id, 10.0, "正在解析歌单文件...");
 
     // 2. 解析 .bplist
@@ -182,7 +209,7 @@ async fn process_playlist(
     let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.clone())
         .with_progress("saving_playlist_info".to_string(), 15.0)
         .with_message(format!("已获取歌单: {}", playlist.name));
-    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    if emit_events { emit_progress_event(app, &payload.with_target(format!("{}:{}", source.as_str(), identifier))).map_err(|e| e.to_string())?; }
     task_state.update(&task_id, 15.0, &format!("已获取歌单: {}", playlist.name));
 
     // 4. 后台任务：补全数据库中未收录的谱面信息（bplist hash 统一转小写，与数据库存储一致）
@@ -194,7 +221,7 @@ async fn process_playlist(
     let payload = ProgressPayload::new(TaskType::AddPlaylist, task_id.clone())
         .with_progress("completed".to_string(), 100.0)
         .with_message(msg.clone());
-    emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
+    if emit_events { emit_progress_event(app, &payload.with_target(format!("{}:{}", source.as_str(), identifier))).map_err(|e| e.to_string())?; }
     task_state.update(&task_id, 100.0, &msg);
 
     Ok(playlist)
@@ -223,7 +250,7 @@ async fn fetch_and_save_bplist(
                 .ok_or_else(|| "BeatSaver playlist has no downloadURL".to_string())?;
 
             let client = reqwest::Client::new();
-            let response = client.get(&download_url).send().await
+            let response = client.get(&download_url).send().await.and_then(|r| r.error_for_status())
                 .map_err(|e| format!("Failed to download bplist: {}", e))?;
             let content = response.text().await
                 .map_err(|e| format!("Failed to read bplist content: {}", e))?;
@@ -239,7 +266,7 @@ async fn fetch_and_save_bplist(
                 .ok_or_else(|| format!("User '{}' has no playlistUrl", identifier))?;
 
             let client = reqwest::Client::new();
-            let response = client.get(&playlist_url).send().await
+            let response = client.get(&playlist_url).send().await.and_then(|r| r.error_for_status())
                 .map_err(|e| format!("Failed to download bplist: {}", e))?;
             let content = response.text().await
                 .map_err(|e| format!("Failed to read bplist content: {}", e))?;
@@ -264,8 +291,16 @@ async fn fetch_and_save_bplist(
     };
 
     let target_path = playlists_dir.join(&filename);
-    std::fs::write(&target_path, &bplist_content)
+    // Validate first, then atomically replace the cache so failed refreshes and
+    // concurrent readers never observe an error page or a partial JSON file.
+    let _: BplistFile = serde_json::from_str(&bplist_content).map_err(|e| format!("Invalid bplist: {e}"))?;
+    let temporary = target_path.with_extension(format!("{}.tmp", Uuid::new_v4()));
+    std::fs::write(&temporary, &bplist_content)
         .map_err(|e| format!("Failed to save bplist file: {}", e))?;
+    if let Err(error) = std::fs::rename(&temporary, &target_path) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(format!("Failed to replace bplist file: {error}"));
+    }
 
     Ok((bplist_content, target_path.to_string_lossy().to_string()))
 }
@@ -304,10 +339,6 @@ fn spawn_complete_map_info(
     let task_id = format!("complete-{}", Uuid::new_v4());
     let display = format!("{} - 补全谱面信息", playlist_name);
 
-    if let Some(ts) = app.try_state::<crate::task_state::TaskState>() {
-        ts.register_with_name(&task_id, "complete_map_info", "complete", &display);
-    }
-
     let app_clone = app.clone();
     let task_id_clone = task_id.clone();
 
@@ -315,6 +346,12 @@ fn spawn_complete_map_info(
         let ts = match app_clone.try_state::<crate::task_state::TaskState>() {
             Some(s) => s,
             None => return,
+        };
+        let Ok(_task) = ts.begin(&task_id_clone, "complete_map_info", &task_id_clone, &display) else { return; };
+
+        let Ok(_permit) = ts.map_info_slots.acquire().await else {
+            ts.remove(&task_id_clone);
+            return;
         };
 
         let total = missing_hashes.len() as u64;
@@ -440,9 +477,8 @@ pub fn delete_playlist(app: AppHandle, task_state: State<'_, TaskState>, source:
         _ => return Err(format!("Invalid playlist source: {}", source)),
     };
 
-    if task_state.has_active_for_target(&format!("{}/{}", source, identifier)) {
-        return Err("无法删除正在处理中的歌单".to_string());
-    }
+    let delete_id = format!("delete-playlist-{}", Uuid::new_v4());
+    let _claim = task_state.begin(&delete_id, "delete_playlist", &format!("{}/{}", source, identifier), "删除歌单")?;
 
     // 获取歌单信息以获取 localPath
     let state = app.try_state::<Mutex<rusqlite::Connection>>()

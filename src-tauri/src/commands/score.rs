@@ -1,5 +1,6 @@
 use tauri::AppHandle;
-use tauri::Manager;
+use tauri::{Manager, Emitter, State};
+use crate::task_state::TaskState;
 use crate::api::BeatLeaderApi;
 use crate::database::operations::PlayerScore;
 use crate::database::operations as db;
@@ -9,45 +10,9 @@ use serde::{Deserialize, Serialize};
 
 // ============ 打谱查询相关命令 ============
 
-/// 单个谱面的难度信息
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CurrentDiffInfo {
-    pub mode: String,
-    pub difficulty: String,
-    pub hash: String,
-    #[serde(default)]
-    pub stars: Option<f32>,
-}
-
-/// 成绩行数据
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ScoreRowData {
-    pub mode: String,
-    pub difficulty: String,
-    pub is_current_version: bool,
-    #[serde(default)]
-    pub stars: Option<f32>,
-    pub scores: Vec<PlayerScoreCell>,
-}
-
-/// 单个玩家在某个难度的成绩单元格
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PlayerScoreCell {
-    pub player_id: String,
-    pub accuracy: f32,
-    /// 该成绩是否为旧版本（hash 不在当前版本中）
-    #[serde(default)]
-    pub is_expired: bool,
-}
-
-
-/// MapScoresResponse 结构
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct MapScoresResponse {
-    pub map: db::Map,
-    pub current_diffs: Vec<CurrentDiffInfo>,
-    pub scores: Vec<ScoreRowData>,
-}
+pub use crate::database::score_matching::MapScoresResponse;
+use crate::database::score_matching::build_map_scores_response;
+use std::collections::{HashMap, HashSet};
 
 /// PlaylistScoresResponse 结构
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -74,7 +39,9 @@ pub async fn get_map_scores(
         .ok_or_else(|| format!("Map not found: {}", key))?;
     let all_diffs = db::get_map_diffs_by_key(&guard, &key).map_err(|e| e.to_string())?;
 
-    build_map_scores_response(&guard, map, all_diffs, &player_ids)
+    let scores = db::get_scores_for_maps(&guard, &[map.key.clone()], &player_ids)
+        .map_err(|e| e.to_string())?;
+    Ok(build_map_scores_response(map, &all_diffs, &scores))
 }
 
 /// 查询歌单某页谱面在指定玩家下的成绩
@@ -111,31 +78,30 @@ pub async fn get_playlist_scores(
         (playlist, map_hashes, total_pages)
     };
 
-    // 3. 逐个查询每个谱面的成绩（通过 hash 查找 Map）
+    // 3. 批量读取本页谱面、所有版本难度和所选玩家成绩。
     let state = app.try_state::<Mutex<rusqlite::Connection>>()
         .ok_or("Database not initialized")?;
     let guard = state.lock().map_err(|e| e.to_string())?;
 
-    let mut maps: Vec<MapScoresResponse> = Vec::new();
-    for hash in map_hashes {
-        // 通过 hash 查找 MapDiff，再找到 key
-        let map_diffs_by_hash = db::get_map_diffs_by_key_for_hash(&guard, &hash).map_err(|e| e.to_string())?;
-        if map_diffs_by_hash.is_empty() {
-            continue;
+    let by_hash: HashMap<_, _> = db::get_maps_by_hashes(&guard, &map_hashes)
+        .map_err(|e| e.to_string())?.into_iter().collect();
+    let keys: Vec<String> = by_hash.values().map(|m| m.key.clone()).collect::<HashSet<_>>().into_iter().collect();
+    let mut diffs_by_key: HashMap<String, Vec<db::MapDiff>> = HashMap::new();
+    for diff in db::get_map_diffs_for_keys(&guard, &keys).map_err(|e| e.to_string())? {
+        diffs_by_key.entry(diff.key.clone()).or_default().push(diff);
+    }
+    let mut scores_by_key: HashMap<String, Vec<PlayerScore>> = HashMap::new();
+    for score in db::get_scores_for_maps(&guard, &keys, &player_ids).map_err(|e| e.to_string())? {
+        if let Some(key) = &score.map_key {
+            scores_by_key.entry(key.clone()).or_default().push(score);
         }
-
-        let key = &map_diffs_by_hash[0].key;
-        let map = match db::get_map_by_key(&guard, key).map_err(|e| e.to_string())? {
-            Some(m) => m,
-            None => continue,
-        };
-
-        // 获取该 key 下所有 MapDiff 记录（包含所有版本），用于正确判断 current_diffs
-        let all_diffs = db::get_map_diffs_by_key(&guard, key).map_err(|e| e.to_string())?;
-
-        match build_map_scores_response(&guard, map, all_diffs, &player_ids) {
-            Ok(response) => maps.push(response),
-            Err(_) => continue,
+    }
+    let mut maps = Vec::new();
+    for hash in map_hashes {
+        if let Some(map) = by_hash.get(&hash.to_lowercase()) {
+            let diffs = diffs_by_key.get(&map.key).map(Vec::as_slice).unwrap_or(&[]);
+            let scores = scores_by_key.get(&map.key).map(Vec::as_slice).unwrap_or(&[]);
+            maps.push(build_map_scores_response(map.clone(), diffs, scores));
         }
     }
 
@@ -147,175 +113,19 @@ pub async fn get_playlist_scores(
     })
 }
 
-/// 构建单个谱面的成绩响应（公共函数）
-fn build_map_scores_response(
-    guard: &std::sync::MutexGuard<rusqlite::Connection>,
-    map: db::Map,
-    all_diffs: Vec<db::MapDiff>,
-    player_ids: &[String],
-) -> Result<MapScoresResponse, String> {
-    // 1. 找出当前版本的难度列表（包含星级）
-    let current_diffs: Vec<CurrentDiffInfo> = all_diffs
-        .iter()
-        .filter(|d| d.is_current)
-        .map(|d| CurrentDiffInfo {
-            mode: d.mode.clone(),
-            difficulty: d.difficulty.clone(),
-            hash: d.hash.clone(),
-            stars: d.stars_rating,
-        })
-        .collect();
-
-    // 当前版本所有难度对应的 hash 集合（统一转小写）
-    let current_hashes: std::collections::HashSet<String> = current_diffs
-        .iter()
-        .map(|d| d.hash.to_lowercase())
-        .collect();
-
-    // 2. 按 map_key 查询所有指定玩家的成绩（包含旧版本成绩）
-    let mut all_scores: Vec<PlayerScore> = Vec::new();
-    for player_id in player_ids {
-        let player_scores = db::get_scores_by_key_and_player(guard, &map.key, player_id)
-            .map_err(|e| e.to_string())?;
-        all_scores.extend(player_scores);
-    }
-
-    // 3. 构建成绩行（从 all_diffs 中获取星级）
-    let score_rows = build_score_rows(&current_diffs, &all_diffs, &current_hashes, all_scores);
-
-    Ok(MapScoresResponse {
-        map,
-        current_diffs,
-        scores: score_rows,
-    })
-}
-
-/// 构建成绩行（每个难度一行，scores 为空表示无人打过）
-fn build_score_rows(
-    current_diffs: &[CurrentDiffInfo],
-    all_diffs: &[db::MapDiff],
-    current_hashes: &std::collections::HashSet<String>,
-    all_scores: Vec<PlayerScore>,
-) -> Vec<ScoreRowData> {
-    // 1. 构建当前版本难度集合 + 星级映射
-    let current_diff_set: std::collections::HashSet<(String, String)> = current_diffs
-        .iter()
-        .map(|d| (d.mode.clone(), d.difficulty.clone()))
-        .collect();
-
-    // 2. 按 (mode, difficulty) 分组成绩
-    let mut scores_by_diff: std::collections::HashMap<(String, String), Vec<(String, PlayerScore)>> = std::collections::HashMap::new();
-    for score in all_scores {
-        let key = (score.mode.clone(), score.difficulty.clone());
-        scores_by_diff.entry(key).or_default().push((score.player_id.clone(), score));
-    }
-
-    // 3. 为每个当前版本难度创建一行
-    let mut score_rows: Vec<ScoreRowData> = Vec::new();
-
-    for diff in current_diffs {
-        let key = (diff.mode.clone(), diff.difficulty.clone());
-        let player_scores = scores_by_diff.get(&key).cloned().unwrap_or_default();
-
-        // 对每个玩家，分别记录当前版本成绩和旧版本成绩
-        let mut player_current_best: std::collections::HashMap<String, f32> = std::collections::HashMap::new();
-        let mut player_expired_best: std::collections::HashMap<String, f32> = std::collections::HashMap::new();
-
-        for (player_id, score) in player_scores {
-            let is_expired = !current_hashes.contains(&score.hash.to_lowercase());
-            let entry = if is_expired {
-                player_expired_best.entry(player_id).or_insert(0.0)
-            } else {
-                player_current_best.entry(player_id).or_insert(0.0)
-            };
-            if score.accuracy > *entry {
-                *entry = score.accuracy;
-            }
-        }
-
-        // 记录已有当前版本成绩的玩家 ID（用于后续过滤）
-        let current_player_ids: std::collections::HashSet<String> = player_current_best.keys().cloned().collect();
-
-        let mut scores: Vec<PlayerScoreCell> = player_current_best
-            .into_iter()
-            .map(|(player_id, accuracy)| PlayerScoreCell {
-                player_id,
-                accuracy,
-                is_expired: false,
-            })
-            .collect();
-
-        // 对于没有当前版本成绩但有旧版本成绩的玩家，添加过期成绩
-        for (player_id, accuracy) in player_expired_best {
-            if !current_player_ids.contains(&player_id) {
-                scores.push(PlayerScoreCell {
-                    player_id,
-                    accuracy,
-                    is_expired: true,
-                });
-            }
-        }
-
-        // 查找该难度的星级（从 all_diffs 中按 hash+mode+difficulty 匹配）
-        let stars = all_diffs
-            .iter()
-            .find(|d| d.mode == diff.mode && d.difficulty == diff.difficulty && d.is_current)
-            .and_then(|d| d.stars_rating);
-
-        // 无论有无成绩都创建一行
-        score_rows.push(ScoreRowData {
-            mode: diff.mode.clone(),
-            difficulty: diff.difficulty.clone(),
-            is_current_version: true,
-            stars,
-            scores,
-        });
-    }
-
-    // 4. 添加有成绩但不在当前版本的难度（旧版本的难度在当前版本不存在）
-    for (key, player_scores) in &scores_by_diff {
-        if !current_diff_set.contains(key) {
-            let mut player_best: std::collections::HashMap<String, f32> = std::collections::HashMap::new();
-            for (player_id, score) in player_scores {
-                let entry = player_best.entry(player_id.clone()).or_insert(0.0);
-                if score.accuracy > *entry {
-                    *entry = score.accuracy;
-                }
-            }
-
-            let scores: Vec<PlayerScoreCell> = player_best
-                .into_iter()
-                .map(|(player_id, accuracy)| PlayerScoreCell {
-                    player_id,
-                    accuracy,
-                    is_expired: true,
-                })
-                .collect();
-
-            score_rows.push(ScoreRowData {
-                mode: key.0.clone(),
-                difficulty: key.1.clone(),
-                is_current_version: false,
-                stars: None,
-                scores,
-            });
-        }
-    }
-
-    score_rows
-}
-
 /// 增量更新玩家成绩
 #[tauri::command]
 pub async fn update_player_scores(
     app: AppHandle,
+    task_state: State<'_, TaskState>,
     player_id: String,
 ) -> Result<i64, String> {
+    let task_id = format!("update-player-{}", uuid::Uuid::new_v4());
+    let _task = task_state.begin(&task_id, "refresh_player_scores", &player_id, &player_id)?;
+    let _permit = task_state.player_slots.acquire().await.map_err(|e| e.to_string())?;
     let api = BeatLeaderApi::new().map_err(|e| e.to_string())?;
     let page_size = 100;
-    let mut page = 1;
     let mut total_updated = 0;
-    let mut should_stop = false;
 
     // 获取本地最新成绩时间
     let latest_local_epoch = {
@@ -325,16 +135,9 @@ pub async fn update_player_scores(
         db::get_latest_score_time(&guard, &player_id).map_err(|e| e.to_string())?
     };
 
-    loop {
-        if should_stop {
-            break;
-        }
-
-        // API 调用
-        let response = api.get_player_scores(&player_id, page, page_size)
-            .await
-            .map_err(|e| e.to_string())?;
-
+    let mut pager = crate::api::score_pager::ScorePager::new(api, player_id.clone(), page_size, latest_local_epoch);
+    while let Some((page, response)) = pager.next_page().await.map_err(|e| e.to_string())? {
+        let save_started = std::time::Instant::now();
         if response.data.is_empty() {
             break;
         }
@@ -346,7 +149,6 @@ pub async fn update_player_scores(
             // 增量更新逻辑：遇到不新于本地记录的成绩时停止
             if let Some(latest) = latest_local_epoch {
                 if score_data.score.epoch_time <= latest {
-                    should_stop = true;
                     break;
                 }
             }
@@ -356,8 +158,6 @@ pub async fn update_player_scores(
             let difficulty = db::difficulty_from_value(score_data.leaderboard.difficulty);
             scores_to_upsert.push(PlayerScore {
                 player_id: player_id.clone(),
-                score_id: score_data.score.id as i64,
-                leaderboard_id: score_data.leaderboard.id.clone(),
                 map_key,
                 hash: score_data.leaderboard.song_hash.to_lowercase(),
                 mode: score_data.leaderboard.mode_name.clone(),
@@ -372,22 +172,17 @@ pub async fn update_player_scores(
             let state = app.try_state::<Mutex<rusqlite::Connection>>()
                 .ok_or("Database not initialized")?;
             let guard = state.lock().map_err(|e| e.to_string())?;
-            for score in &scores_to_upsert {
-                db::insert_score(&guard, score).map_err(|e| e.to_string())?;
-            }
-            total_updated += scores_to_upsert.len() as i64;
+            total_updated += db::insert_scores_batch(&guard, &scores_to_upsert).map_err(|e| e.to_string())? as i64;
         }
-
-        // 检查是否还有更多页
-        let total_pages = (response.metadata.total + response.metadata.items_per_page - 1)
-            / response.metadata.items_per_page;
-        if page >= total_pages {
-            break;
-        }
-
-        page += 1;
+        eprintln!("Score page {page}: save={:?}", save_started.elapsed());
     }
 
+    {
+        let state = app.state::<Mutex<rusqlite::Connection>>();
+        let conn = state.lock().map_err(|e| e.to_string())?;
+        db::mark_player_updated(&conn, &player_id).map_err(|e| e.to_string())?;
+    }
+    let _ = app.emit("players-updated", &player_id);
     Ok(total_updated)
 }
 

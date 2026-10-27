@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAudio } from '../contexts/AudioContext';
 import { invoke } from '@tauri-apps/api/core';
-import { Target, User, List, FolderOpen, Globe } from 'lucide-react';
+import { Target, User, List, FolderOpen, Settings } from 'lucide-react';
 
 const navItems = [
   { path: '/', label: '打谱查询', icon: Target },
@@ -87,9 +87,11 @@ export default function Sidebar() {
         </button>
         <button
           className="p-1.5 rounded-lg text-bs-text-muted hover:text-bs-text-primary hover:bg-bs-bg-tertiary transition-colors opacity-50 cursor-not-allowed"
-          title="语言选择（开发中）"
+          title="设置（开发中）"
+          aria-label="设置（开发中）"
+          disabled
         >
-          <Globe size={16} />
+          <Settings size={16} />
         </button>
       </div>
     </aside>
