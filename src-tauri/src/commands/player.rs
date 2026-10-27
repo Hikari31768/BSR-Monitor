@@ -159,14 +159,11 @@ pub async fn fetch_and_save_player(
     // Step 5: 拉取成绩
     let page_size = 100;
     let mut total_scores = 0;
+    let mut successful_pages = 0usize;
 
     let mut pager = crate::api::score_pager::ScorePager::new(api, id.to_string(), page_size, latest_local_epoch);
     while let Some((page, response)) = pager.next_page().await.map_err(|e| e.to_string())? {
         let save_started = std::time::Instant::now();
-        if response.data.is_empty() {
-            break;
-        }
-
         // 处理每条成绩
         let mut scores_to_insert: Vec<crate::database::operations::PlayerScore> = Vec::new();
 
@@ -204,17 +201,18 @@ pub async fn fetch_and_save_player(
         // 计算总页数
         let per_page = if response.metadata.items_per_page > 0 { response.metadata.items_per_page } else { page_size };
         let total_pages = response.metadata.total.saturating_add(per_page - 1) / per_page;
+        successful_pages += 1;
 
         // 更新进度（8%-100%区间映射，成绩拉取占92%）
         let page_progress = if total_pages > 1 {
-            8.0 + ((page as f64 / total_pages as f64) * 92.0)
+            8.0 + ((successful_pages as f64 / total_pages as f64).min(1.0) * 92.0)
         } else {
             100.0
         };
         let msg = if is_incremental {
-            format!("{}/{} 页，已新增成绩 {} 条...", page, total_pages, total_scores)
+            format!("{}/{} 页，已新增成绩 {} 条...", successful_pages, total_pages, total_scores)
         } else {
-            format!("{}/{} 页，已拉取成绩 {} 条...", page, total_pages, total_scores)
+            format!("{}/{} 页，已拉取成绩 {} 条...", successful_pages, total_pages, total_scores)
         };
         if emit_events {
             let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone()).with_target(id.to_string())
