@@ -159,6 +159,7 @@ pub async fn update_player_scores(
             scores_to_upsert.push(PlayerScore {
                 player_id: player_id.clone(),
                 score_id: score_data.score.id as i64,
+                leaderboard_id: Some(score_data.leaderboard.id.clone()),
                 map_key,
                 hash: score_data.leaderboard.song_hash.to_lowercase(),
                 mode: score_data.leaderboard.mode_name.clone(),

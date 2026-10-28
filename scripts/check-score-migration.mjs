@@ -28,6 +28,11 @@ const metadataBefore = db.prepare(`
            starsRating, starsFetchedAt, passRating, accRating, techRating
     FROM MapDiff ORDER BY key, hash, mode, difficulty
 `).all();
+const leaderboardsBefore = db.prepare(`
+    SELECT DISTINCT LOWER(hash) AS hash, mode, difficulty, TRIM(leaderboardId) AS leaderboardId
+    FROM PlayerScore WHERE NULLIF(TRIM(leaderboardId), '') IS NOT NULL
+    ORDER BY hash, mode, difficulty, leaderboardId
+`).all();
 db.exec('PRAGMA foreign_keys = ON; BEGIN;');
 try {
     db.exec(await readFile('src-tauri/src/database/normalize_scores.sql', 'utf8'));
@@ -48,6 +53,11 @@ const metadataAfter = db.prepare(`
     FROM MapDiff WHERE metadataKnown = 1 ORDER BY key, hash, mode, difficulty
 `).all();
 assert.deepEqual(metadataAfter, metadataBefore, 'Existing map metadata changed');
+const leaderboardsAfter = db.prepare(`
+    SELECT hash, mode, difficulty, leaderboardId FROM MapDiff
+    WHERE leaderboardId IS NOT NULL ORDER BY hash, mode, difficulty, leaderboardId
+`).all();
+assert.deepEqual(leaderboardsAfter, leaderboardsBefore, 'Original leaderboard IDs changed');
 assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
 assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
 assert.deepEqual(db.prepare("SELECT name FROM pragma_table_info('PlayerScore')").all().map(r => r.name),
@@ -56,6 +66,7 @@ db.exec('VACUUM;');
 const results = {
     scoresPreserved: after.length,
     metadataPreserved: metadataAfter.length,
+    leaderboardsPreserved: leaderboardsAfter.length,
     beforeBytes,
     afterBytes: (await stat(scratch)).size,
     scratch,

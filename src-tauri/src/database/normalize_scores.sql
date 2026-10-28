@@ -8,6 +8,7 @@ CREATE TABLE MapDiff_new (
     metadataKnown INTEGER NOT NULL DEFAULT 0,
     mode TEXT NOT NULL,
     difficulty TEXT NOT NULL,
+    leaderboardId TEXT,
     starsRating REAL,
     starsFetchedAt INTEGER,
     passRating REAL,
@@ -28,11 +29,18 @@ FROM (
     ) AS priority FROM MapDiff
 ) WHERE priority = 1;
 
-INSERT INTO MapDiff_new (key, hash, mode, difficulty)
-SELECT MAX(mapKey), LOWER(hash), mode, difficulty FROM PlayerScore
-WHERE 1 GROUP BY LOWER(hash), mode, difficulty
+INSERT INTO MapDiff_new (key, hash, mode, difficulty, leaderboardId)
+SELECT matchedKey, LOWER(hash), mode, difficulty, NULLIF(TRIM(leaderboardId), '')
+FROM (
+    SELECT *, MAX(mapKey) OVER (PARTITION BY LOWER(hash), mode, difficulty) AS matchedKey,
+        ROW_NUMBER() OVER (
+            PARTITION BY LOWER(hash), mode, difficulty
+            ORDER BY (NULLIF(TRIM(leaderboardId), '') IS NOT NULL) DESC, epochTime DESC, scoreId DESC
+        ) AS priority FROM PlayerScore
+) WHERE priority = 1
 ON CONFLICT(hash, mode, difficulty) DO UPDATE SET
-    key = COALESCE(MapDiff_new.key, excluded.key);
+    key = COALESCE(MapDiff_new.key, excluded.key),
+    leaderboardId = excluded.leaderboardId;
 
 CREATE TABLE PlayerScore_new (
     playerId TEXT NOT NULL REFERENCES PlayerInfo(id),
@@ -61,4 +69,4 @@ ALTER TABLE PlayerScore_new RENAME TO PlayerScore;
 CREATE INDEX idx_mapdiff_key ON MapDiff(key);
 CREATE INDEX idx_playerscore_diff ON PlayerScore(mapDiffId);
 CREATE INDEX idx_playerscore_player_time ON PlayerScore(playerId, epochTime DESC);
-PRAGMA user_version = 2;
+PRAGMA user_version = 3;

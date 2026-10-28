@@ -7,6 +7,7 @@ pub struct CurrentDiffInfo {
     pub mode: String,
     pub difficulty: String,
     pub hash: String,
+    pub leaderboard_id: Option<String>,
     pub stars: Option<f32>,
 }
 
@@ -23,6 +24,7 @@ pub struct ScoreRowData {
 pub struct PlayerScoreCell {
     pub player_id: String,
     pub score_id: i64,
+    pub leaderboard_id: Option<String>,
     pub accuracy: f32,
     pub is_expired: bool,
 }
@@ -44,7 +46,7 @@ pub fn build_map_scores_response(map: Map, diffs: &[MapDiff], scores: &[PlayerSc
     for diff in diffs.iter().filter(|d| d.is_current) {
         current_diffs.push(CurrentDiffInfo {
             mode: diff.mode.clone(), difficulty: diff.difficulty.clone(),
-            hash: diff.hash.clone(), stars: diff.stars_rating,
+            hash: diff.hash.clone(), leaderboard_id: diff.leaderboard_id.clone(), stars: diff.stars_rating,
         });
         rows.entry((diff.mode.clone(), diff.difficulty.clone())).or_insert_with(|| ScoreRowData {
             mode: diff.mode.clone(), difficulty: diff.difficulty.clone(),
@@ -57,10 +59,12 @@ pub fn build_map_scores_response(map: Map, diffs: &[MapDiff], scores: &[PlayerSc
         let cell = best.entry((score.mode.clone(), score.difficulty.clone(), score.player_id.clone()))
             .or_insert_with(|| PlayerScoreCell {
                 player_id: score.player_id.clone(), score_id: score.score_id, accuracy: score.accuracy, is_expired: expired,
+                leaderboard_id: score.leaderboard_id.clone(),
             });
         if (cell.is_expired && !expired) || (cell.is_expired == expired && score.accuracy > cell.accuracy) {
             cell.accuracy = score.accuracy;
             cell.score_id = score.score_id;
+            cell.leaderboard_id = score.leaderboard_id.clone();
             cell.is_expired = expired;
         }
     }

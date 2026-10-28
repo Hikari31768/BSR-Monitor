@@ -52,6 +52,7 @@ pub fn create_tables(conn: &Connection) -> Result<bool, rusqlite::Error> {
             metadataKnown INTEGER NOT NULL DEFAULT 0,
             mode TEXT NOT NULL,
             difficulty TEXT NOT NULL,
+            leaderboardId TEXT,
             starsRating FLOAT,
             starsFetchedAt BIGINT,
             passRating FLOAT,
@@ -141,11 +142,27 @@ pub fn create_tables(conn: &Connection) -> Result<bool, rusqlite::Error> {
             WHERE NOT EXISTS (SELECT 1 FROM PlayerScore WHERE playerId = PlayerInfo.id AND scoreId = 0)", [])?;
         tx.commit()?;
     }
+    let has_leaderboard_id: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('MapDiff') WHERE name = 'leaderboardId')",
+        [], |row| row.get(0),
+    )?;
+    if !has_leaderboard_id {
+        let tx = conn.unchecked_transaction()?;
+        tx.execute("ALTER TABLE MapDiff ADD COLUMN leaderboardId TEXT", [])?;
+        // Previously normalized databases no longer have the original IDs.
+        // Re-fetch affected players once; ordinary page upserts fill MapDiff
+        // even when the corresponding score is already saved locally.
+        tx.execute("UPDATE PlayerInfo SET scoreSyncEpoch = NULL WHERE EXISTS (
+            SELECT 1 FROM PlayerScore s JOIN MapDiff d ON d.id = s.mapDiffId
+            WHERE s.playerId = PlayerInfo.id AND d.leaderboardId IS NULL
+        )", [])?;
+        tx.commit()?;
+    }
     conn.execute_batch(
         "CREATE INDEX IF NOT EXISTS idx_mapdiff_key ON MapDiff(key);
          CREATE INDEX IF NOT EXISTS idx_playerscore_diff ON PlayerScore(mapDiffId);
          CREATE INDEX IF NOT EXISTS idx_playerscore_player_time ON PlayerScore(playerId, epochTime DESC);
-         PRAGMA user_version = 2;"
+         PRAGMA user_version = 3;"
     )?;
     Ok(migrated)
 }

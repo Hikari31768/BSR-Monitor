@@ -182,6 +182,7 @@ pub async fn fetch_and_save_player(
             scores_to_insert.push(crate::database::operations::PlayerScore {
                 player_id: id.to_string(),
                 score_id: score_data.score.id as i64,
+                leaderboard_id: Some(score_data.leaderboard.id.clone()),
                 map_key,
                 hash: score_data.leaderboard.song_hash.to_lowercase(),
                 mode: score_data.leaderboard.mode_name.clone(),

@@ -14,11 +14,13 @@ fn database() -> Connection {
 
 fn score(player: &str, hash: &str, mode: &str, time: i64, accuracy: f32) -> PlayerScore {
     PlayerScore { player_id: player.into(), score_id: time, map_key: Some("abc".into()), hash: hash.into(),
+        leaderboard_id: Some(format!("{}-{mode}-71", hash.to_lowercase())),
         mode: mode.into(), difficulty: "Expert".into(), accuracy, epoch_time: time }
 }
 
 fn diff(hash: &str, mode: &str) -> MapDiff {
     MapDiff { key: "abc".into(), hash: hash.into(), is_current: true, mode: mode.into(),
+        leaderboard_id: None,
         difficulty: "Expert".into(), stars_rating: Some(5.0), stars_fetched_at: Some(100),
         pass_rating: Some(2.0), acc_rating: None, tech_rating: None }
 }
@@ -65,7 +67,7 @@ fn metadata_enrichment_keeps_score_links_and_version_history() {
     assert!(diffs.iter().any(|d| d.hash == "old" && !d.is_current && d.stars_rating == Some(5.0)));
     assert_eq!(get_scores_by_player(&db, "p1").unwrap()[0].hash, "old");
     insert_scores_batch(&db, &[score("p2", "new", "Lawless", 20, 0.8)]).unwrap();
-    update_diff_ratings(&db, "abc", "NEW", "Lawless", "Expert", Some(6.0), None, None, None).unwrap();
+    update_diff_ratings(&db, "abc", "NEW", "Lawless", "Expert", Some(6.0), None, None, None, Some("abcx77")).unwrap();
     assert!(get_map_diffs_by_key(&db, "abc").unwrap().iter().any(|d| d.mode == "Lawless" && d.is_current));
 }
 
@@ -98,8 +100,8 @@ fn legacy_migration_deduplicates_hash_case_without_losing_newest_score() {
         INSERT INTO MapDiff VALUES ('abc', 'HASH', 1, 'Standard', 'Expert');
         CREATE TABLE PlayerScore (playerId TEXT, scoreId INTEGER, leaderboardId TEXT, mapKey TEXT,
             hash TEXT, mode TEXT, difficulty TEXT, accuracy REAL, epochTime INTEGER);
-        INSERT INTO PlayerScore VALUES ('p1',1,'abc71','abc','HASH','Standard','Expert',0.99,1);
-        INSERT INTO PlayerScore VALUES ('p1',2,'abc71','abc','hash','Standard','Expert',0.8,2);
+        INSERT INTO PlayerScore VALUES ('p1',1,'abcxx71','abc','HASH','Standard','Expert',0.99,1);
+        INSERT INTO PlayerScore VALUES ('p1',2,'abcxx71','abc','hash','Standard','Expert',0.8,2);
     ").unwrap();
     assert!(schema::create_tables(&db).unwrap());
     assert!(!schema::create_tables(&db).unwrap());
@@ -109,6 +111,8 @@ fn legacy_migration_deduplicates_hash_case_without_losing_newest_score() {
     assert_eq!(scores[0].accuracy, 0.8);
     assert_eq!(scores[0].hash, "hash");
     assert_eq!(scores[0].score_id, 2);
+    assert_eq!(scores[0].leaderboard_id.as_deref(), Some("abcxx71"));
+    assert_eq!(get_map_diffs_by_key(&db, "abc").unwrap()[0].leaderboard_id.as_deref(), Some("abcxx71"));
     assert_eq!(get_score_sync_time(&db, "p1").unwrap(), Some(2));
     let violations: i64 = db.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| r.get(0)).unwrap();
     assert_eq!(violations, 0);
@@ -199,6 +203,8 @@ fn replay_id_follows_best_current_expired_and_removed_difficulty_scores() {
     ] {
         let cell = response.scores.iter().flat_map(|row| &row.scores).find(|cell| cell.player_id == player).unwrap();
         assert_eq!(cell.score_id, expected_id);
+        let selected = if player == "current" { "current" } else { "old-b" };
+        assert_eq!(cell.leaderboard_id.as_deref(), Some(format!("{selected}-Standard-71").as_str()));
         assert_eq!(cell.accuracy, expected_accuracy);
         assert_eq!(cell.is_expired, expired);
     }
@@ -209,7 +215,8 @@ fn earlier_normalized_database_upgrades_without_repeating_legacy_migration() {
     let db = database();
     insert_scores_batch(&db, &[score("p1", "hash", "Standard", 10, 0.9)]).unwrap();
     db.execute_batch("ALTER TABLE PlayerScore DROP COLUMN scoreId;
-        ALTER TABLE PlayerInfo DROP COLUMN scoreSyncEpoch; PRAGMA user_version = 1;").unwrap();
+        ALTER TABLE PlayerInfo DROP COLUMN scoreSyncEpoch;
+        ALTER TABLE MapDiff DROP COLUMN leaderboardId; PRAGMA user_version = 1;").unwrap();
     assert!(!schema::needs_score_migration(&db).unwrap());
     assert!(!schema::create_tables(&db).unwrap());
     assert_eq!(get_scores_by_player(&db, "p1").unwrap()[0].score_id, 0);
@@ -220,4 +227,81 @@ fn earlier_normalized_database_upgrades_without_repeating_legacy_migration() {
     mark_player_updated(&db, "p1").unwrap();
     assert_eq!(get_score_sync_time(&db, "p1").unwrap(), Some(10));
     assert!(!schema::create_tables(&db).unwrap());
+}
+
+#[test]
+fn leaderboard_ids_are_shared_and_survive_metadata_and_score_refreshes() {
+    let db = database();
+    let mut first = score("p1", "ABC", "Standard", 10, 0.9);
+    first.leaderboard_id = Some("abcxx71".into());
+    let mut second = score("p2", "abc", "Standard", 20, 0.8);
+    second.leaderboard_id = first.leaderboard_id.clone();
+    insert_scores_batch(&db, &[first.clone(), second]).unwrap();
+    assert_eq!(db.query_row("SELECT COUNT(*) FROM MapDiff WHERE leaderboardId = 'abcxx71'", [], |r| r.get::<_, i64>(0)).unwrap(), 1);
+    assert!(!db.query_row("SELECT EXISTS(SELECT 1 FROM pragma_table_info('PlayerScore') WHERE name = 'leaderboardId')", [], |r| r.get::<_, bool>(0)).unwrap());
+    // BeatSaver metadata and incomplete API responses must not erase an ID.
+    insert_map_diffs_batch(&db, "abc", &[diff("abc", "Standard")]).unwrap();
+    first.leaderboard_id = Some("  ".into());
+    first.epoch_time = 30;
+    insert_scores_batch(&db, &[first]).unwrap();
+    let diffs = get_map_diffs_by_key(&db, "abc").unwrap();
+    assert_eq!(diffs[0].leaderboard_id.as_deref(), Some("abcxx71"));
+    let scores = get_scores_for_maps(&db, &["abc".into()], &["p1".into(), "p2".into()]).unwrap();
+    assert_eq!(scores.len(), 2);
+    assert!(scores.iter().all(|s| s.leaderboard_id.as_deref() == Some("abcxx71")));
+    let map = Map { key: "abc".into(), song_name: "Song".into(), song_author_name: "Author".into(),
+        level_author_name: "Mapper".into(), rating: None, cover_url: None, preview_url: None };
+    let response = build_map_scores_response(map, &diffs, &scores);
+    assert_eq!(response.current_diffs[0].leaderboard_id.as_deref(), Some("abcxx71"));
+    assert!(response.scores[0].scores.iter().all(|s| s.leaderboard_id.as_deref() == Some("abcxx71")));
+}
+
+#[test]
+fn rating_enrichment_saves_leaderboard_ids_for_new_and_existing_difficulties() {
+    let db = database();
+    update_diff_ratings(&db, "abc", "HASH", "Standard", "Expert", Some(5.0), None, None, None, Some("abcx71")).unwrap();
+    update_diff_ratings(&db, "abc", "hash", "Standard", "Expert", Some(6.0), None, None, None, None).unwrap();
+    let found = get_map_diffs_by_key(&db, "abc").unwrap();
+    assert_eq!(found[0].leaderboard_id.as_deref(), Some("abcx71"));
+    assert_eq!(found[0].stars_rating, Some(6.0));
+    let mut known_diff = diff("other", "Lawless");
+    known_diff.leaderboard_id = Some("abcxx77".into());
+    insert_map_diffs_batch(&db, "abc", &[known_diff]).unwrap();
+    assert!(get_map_diffs_by_key(&db, "abc").unwrap().iter().any(|d| d.hash == "other" && d.leaderboard_id.as_deref() == Some("abcxx77")));
+    update_diff_ratings(&db, "abc", "other", "Lawless", "Expert", None, None, None, None, Some("abcxx77")).unwrap();
+    assert!(get_map_diffs_by_key(&db, "abc").unwrap().iter().any(|d| d.mode == "Lawless" && d.leaderboard_id.as_deref() == Some("abcxx77")));
+}
+
+#[test]
+fn normalized_upgrade_backfills_old_scores_once_without_replacing_them() {
+    let db = database();
+    let saved = score("p1", "hash", "Standard", 10, 0.9);
+    insert_scores_batch(&db, &[saved.clone()]).unwrap();
+    mark_player_updated(&db, "p1").unwrap();
+    db.execute_batch("ALTER TABLE MapDiff DROP COLUMN leaderboardId; PRAGMA user_version = 2;").unwrap();
+    assert!(!schema::create_tables(&db).unwrap());
+    assert_eq!(get_score_sync_time(&db, "p1").unwrap(), None);
+    assert_eq!(get_scores_by_player(&db, "p1").unwrap()[0].leaderboard_id, None);
+    assert_eq!(db.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0)).unwrap(), 3);
+    // A full retry enriches the shared record even though no score is newer.
+    assert_eq!(insert_scores_batch(&db, &[saved]).unwrap(), 0);
+    let scores = get_scores_by_player(&db, "p1").unwrap();
+    assert_eq!(scores.len(), 1);
+    assert_eq!(scores[0].score_id, 10);
+    assert_eq!(scores[0].accuracy, 0.9);
+    assert_eq!(scores[0].leaderboard_id.as_deref(), Some("hash-Standard-71"));
+    mark_player_updated(&db, "p1").unwrap();
+    assert!(!schema::create_tables(&db).unwrap());
+    assert_eq!(get_score_sync_time(&db, "p1").unwrap(), Some(10));
+}
+
+#[test]
+fn failed_score_page_rolls_back_shared_leaderboard_id_updates() {
+    let db = database();
+    let original = score("p1", "hash", "Standard", 10, 0.9);
+    insert_scores_batch(&db, &[original.clone()]).unwrap();
+    let mut replacement = original.clone();
+    replacement.leaderboard_id = Some("replacement".into());
+    assert!(insert_scores_batch(&db, &[replacement, score("unknown-player", "other", "Standard", 20, 0.8)]).is_err());
+    assert_eq!(get_scores_by_player(&db, "p1").unwrap()[0].leaderboard_id, original.leaderboard_id);
 }
