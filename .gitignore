@@ -1,9 +1,13 @@
 .claude/settings.local.json
 
+.claude/skills/brainstorming
+
 .playwright/
 .playwright-cli/
 .thunder/
 .vscode/
+
+.superpowers/
 
 # Dependencies
 node_modules/
@@ -23,3 +27,6 @@ BSR-Monitor*.exe
 *.log
 
 skills-lock.json
+
+# Terminal Paste Image folder
+.cp-images/
