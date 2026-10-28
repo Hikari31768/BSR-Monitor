@@ -22,8 +22,10 @@ BeatLeader API 不同端点、BeatSaver API 不同端点、.bplist 歌单文件�
 | 命令 | 行为 |
 |------|------|
 | `npm run build` | 构建前端（tsc + vite build） |
-| `npm run build:tauri` | 构建完整 Tauri 应用 |
+| `npm run build:tauri` | 构建可直接运行的 Tauri 应用 EXE，不生成安装包 |
 | `npm run preview` | 预览前端构建结果 |
+
+Windows Release 仅提供 `bsr-monitor.exe` 和 `SHA256SUMS.txt`。Tauri 配置中关闭了安装包生成，默认构建不再额外产出 NSIS / MSI 安装程序。
 
 ## CDP 远程调试
 
