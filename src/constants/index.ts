@@ -20,3 +20,13 @@ export const modeNames: Record<string, string> = {
 };
 
 export type GameMode = keyof typeof modeNames;
+
+// URL前缀
+export const urlPrefixes = {
+  BeatSaverMap: 'https://beatsaver.com/maps/',
+  ScoreSaberMap: 'https://scoresaber.com/map/',
+  ScoreSaberLeaderboard: 'https://scoresaber.com/leaderboard/',
+  ScoreSaberReplay: 'https://watch.scoresaber.com/?scoreId=',
+  BeatLeaderLeaderboard: 'https://beatleader.com/leaderboard/global/',
+  BeatLeaderReplay: 'https://replay.beatleader.com/?scoreId=',
+} as const;

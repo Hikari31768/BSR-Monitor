@@ -3,8 +3,10 @@ import { Map, ScoreRowData, PlayerInfo } from '../types';
 import DiffBadge from './DiffBadge';
 import ModeIcon from './ModeIcon';
 import CoverWithAudio from './CoverWithAudio';
-import CopyKeyButton from './CopyKeyButton';
+import MapKeyButtons from './MapKeyButtons';
 import { formatAccuracy } from '../utils/format';
+import { invoke } from '@tauri-apps/api/core';
+import { urlPrefixes } from '../constants';
 
 interface MapScoreGroupProps {
   map: Map;
@@ -23,6 +25,15 @@ const modeOrderValue = (m: string) => {
   const map: Record<string, number> = { Standard: 1, OneSaber: 2, NoArrows: 3, '90Degree': 4, '360Degree': 5, Lightshow: 6, Lawless: 7, Legacy: 8 };
   return map[m] ?? 99;
 };
+
+// 观看回放
+const watchReplay = async (score_id: number) => {
+  try {
+    await invoke("open_url", { url: urlPrefixes.BeatLeaderReplay + score_id });
+  } catch (e) {
+    console.error('打开链接失败:', e);
+  }
+}
 
 export default function MapScoreGroup({
   map,
@@ -90,7 +101,7 @@ export default function MapScoreGroup({
       <div
         className={`grid border-b border-bs-border hover:bg-bs-bg-tertiary/50 transition-colors min-w-fit ${
           showMapDivider ? 'border-t-2 border-bs-accent-primary/30' : ''
-        }`}
+          }`}
         style={{ gridTemplateColumns: gridColumns }}
       >
         {/* 谱面信息 */}
@@ -100,10 +111,7 @@ export default function MapScoreGroup({
             <div className="flex-1 min-w-0">
               <p className="font-medium text-bs-text-primary truncate">{map.song_name}</p>
               <p className="text-xs text-bs-text-muted truncate">{map.level_author_name}</p>
-              <div className="flex items-center gap-1 mt-1">
-                <p className="text-xs text-bs-text-secondary">{map.key}</p>
-                <CopyKeyButton mapKey={map.key} />
-              </div>
+              <MapKeyButtons mapKey={map.key} />
             </div>
           </div>
           {noScoreDiffGroups.length > 0 && (
@@ -145,7 +153,7 @@ export default function MapScoreGroup({
     <div
       className={`grid border-b border-bs-border hover:bg-bs-bg-tertiary/50 transition-colors min-w-fit ${
         showMapDivider ? 'border-t-2 border-bs-accent-primary/30' : ''
-      }`}
+        }`}
       style={{
         gridTemplateColumns: gridColumns,
         gridTemplateRows: `repeat(${filteredScores.length}, minmax(3.5rem, auto))`,
@@ -158,10 +166,7 @@ export default function MapScoreGroup({
           <div className="flex-1 min-w-0">
             <p className="font-medium text-bs-text-primary truncate">{map.song_name}</p>
             <p className="text-xs text-bs-text-muted truncate">{map.level_author_name}</p>
-            <div className="flex items-center gap-1 mt-1">
-              <p className="text-xs text-bs-text-secondary">{map.key}</p>
-              <CopyKeyButton mapKey={map.key} />
-            </div>
+            <MapKeyButtons mapKey={map.key} />
           </div>
         </div>
         {/* 无成绩难度徽章 */}
@@ -189,7 +194,7 @@ export default function MapScoreGroup({
             key={`diff-${index}`}
             className={`sticky-col-2 p-4 border-r border-bs-border flex items-center gap-2 ${
               index > 0 ? 'border-t border-bs-border/50' : ''
-            }`}
+              }`}
           >
             <ModeIcon mode={scoreRow.mode} size={18} />
             <DiffBadge difficulty={scoreRow.difficulty} stars={scoreRow.stars ?? undefined} />
@@ -206,14 +211,14 @@ export default function MapScoreGroup({
                 key={`score-${index}-${player.id}`}
                 className={`p-4 border-r border-bs-border flex items-center justify-center ${
                   index > 0 ? 'border-t border-bs-border/50' : ''
-                }`}
+                  }`}
               >
                 {score ? (
-                  <span className={`font-mono font-medium ${
+                  <span className={`font-mono font-medium cursor-pointer underline decoration-transparent hover:decoration-inherit transition-colors duration-100 decoration-solid ${
                     score.is_expired
                       ? 'text-bs-text-muted'
                       : 'text-bs-status-success'
-                  }`}>
+                    }`} onClick={() => { watchReplay(score.score_id) }}>
                     {score.is_expired && (
                       <svg className="inline-block w-3 h-3 mr-1 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <circle cx="12" cy="12" r="10"/>
