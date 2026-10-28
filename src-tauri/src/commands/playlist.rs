@@ -397,6 +397,7 @@ fn spawn_complete_map_info(
                             is_current: true,
                             mode: mode_name,
                             difficulty: difficulty_name,
+                            leaderboard_id: Some(entry.id.clone()),
                             stars_rating: diff.stars,
                             stars_fetched_at: Some(std::time::SystemTime::now()
                                 .duration_since(std::time::UNIX_EPOCH)
@@ -601,6 +602,7 @@ pub async fn refresh_playlist_ratings(
                                 diff.pass_rating,
                                 diff.acc_rating,
                                 diff.tech_rating,
+                                Some(&entry.id),
                             );
                         }
                     }

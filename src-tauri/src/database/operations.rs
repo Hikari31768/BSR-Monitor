@@ -21,6 +21,7 @@ pub struct MapDiff {
     pub is_current: bool,
     pub mode: String,
     pub difficulty: String,
+    pub leaderboard_id: Option<String>,
     pub stars_rating: Option<f32>,
     pub stars_fetched_at: Option<i64>,
     pub pass_rating: Option<f32>,
@@ -48,6 +49,8 @@ pub struct PlayerScore {
     pub hash: String,
     pub mode: String,
     pub difficulty: String,
+    /// Projected from MapDiff; the ID is stored once per shared difficulty.
+    pub leaderboard_id: Option<String>,
     pub accuracy: f32,
     pub epoch_time: i64,
 }
@@ -270,10 +273,11 @@ pub fn insert_map_diffs_batch(conn: &Connection, key: &str, diffs: &[MapDiff]) -
     for diff in diffs {
         let normalized_hash = diff.hash.to_lowercase();
         tx.execute(
-            "INSERT INTO MapDiff (key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating, metadataKnown)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1)
+            "INSERT INTO MapDiff (key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating, metadataKnown, leaderboardId)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1, NULLIF(TRIM(?11), ''))
              ON CONFLICT(hash, mode, difficulty) DO UPDATE SET
                  key = excluded.key, isCurrent = excluded.isCurrent, metadataKnown = 1,
+                 leaderboardId = COALESCE(excluded.leaderboardId, MapDiff.leaderboardId),
                  starsRating = COALESCE(excluded.starsRating, MapDiff.starsRating),
                  starsFetchedAt = COALESCE(excluded.starsFetchedAt, MapDiff.starsFetchedAt),
                  passRating = COALESCE(excluded.passRating, MapDiff.passRating),
@@ -290,6 +294,7 @@ pub fn insert_map_diffs_batch(conn: &Connection, key: &str, diffs: &[MapDiff]) -
                 diff.pass_rating,
                 diff.acc_rating,
                 diff.tech_rating,
+                diff.leaderboard_id,
             ],
         )?;
     }
@@ -303,7 +308,7 @@ fn read_diff(row: &rusqlite::Row<'_>) -> rusqlite::Result<MapDiff> {
         key: row.get(0)?, hash: row.get(1)?, is_current: row.get(2)?,
         mode: row.get(3)?, difficulty: row.get(4)?, stars_rating: row.get(5)?,
         stars_fetched_at: row.get(6)?, pass_rating: row.get(7)?,
-        acc_rating: row.get(8)?, tech_rating: row.get(9)?,
+        acc_rating: row.get(8)?, tech_rating: row.get(9)?, leaderboard_id: row.get(10)?,
     })
 }
 
@@ -317,7 +322,7 @@ pub fn get_map_diffs_for_keys(conn: &Connection, keys: &[String]) -> rusqlite::R
         let slots = vec!["?"; keys.len()].join(",");
         let mut stmt = conn.prepare(&format!(
             "SELECT key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt,
-                    passRating, accRating, techRating FROM MapDiff WHERE key IN ({slots})"
+                    passRating, accRating, techRating, leaderboardId FROM MapDiff WHERE key IN ({slots})"
         ))?;
         diffs.extend(stmt.query_map(rusqlite::params_from_iter(keys.iter()), read_diff)?
             .collect::<rusqlite::Result<Vec<_>>>()?);
@@ -358,6 +363,7 @@ pub fn update_diff_ratings(
     pass_rating: Option<f32>,
     acc_rating: Option<f32>,
     tech_rating: Option<f32>,
+    leaderboard_id: Option<&str>,
 ) -> Result<(), rusqlite::Error> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -375,7 +381,8 @@ pub fn update_diff_ratings(
             starsFetchedAt = ?6,
             passRating = ?7,
             accRating = ?8,
-            techRating = ?9
+            techRating = ?9,
+            leaderboardId = COALESCE(NULLIF(TRIM(?10), ''), leaderboardId)
          WHERE hash = LOWER(?1) AND mode = ?2 AND difficulty = ?3",
         rusqlite::params![
             hash, mode, difficulty,
@@ -385,6 +392,7 @@ pub fn update_diff_ratings(
             pass_rating,
             acc_rating,
             tech_rating,
+            leaderboard_id,
         ],
     )?;
 
@@ -392,8 +400,8 @@ pub fn update_diff_ratings(
     if updated == 0 {
         let normalized_hash = hash.to_lowercase();
         conn.execute(
-            "INSERT OR IGNORE INTO MapDiff (key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating, metadataKnown)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1)",
+            "INSERT OR IGNORE INTO MapDiff (key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating, metadataKnown, leaderboardId)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1, NULLIF(TRIM(?11), ''))",
             rusqlite::params![
                 key, normalized_hash, true, mode, difficulty,
                 stars,
@@ -401,6 +409,7 @@ pub fn update_diff_ratings(
                 pass_rating,
                 acc_rating,
                 tech_rating,
+                leaderboard_id,
             ],
         )?;
     }
@@ -612,14 +621,14 @@ pub fn update_player(conn: &Connection, player: &PlayerInfo) -> Result<(), rusql
 
 // Shared map fields are projected for callers, but stored only in MapDiff.
 const SCORE_SELECT: &str =
-    "SELECT s.playerId, d.key, d.hash, d.mode, d.difficulty, s.accuracy, s.epochTime, s.scoreId
+    "SELECT s.playerId, d.key, d.hash, d.mode, d.difficulty, s.accuracy, s.epochTime, s.scoreId, d.leaderboardId
      FROM PlayerScore s JOIN MapDiff d ON d.id = s.mapDiffId";
 
 fn read_score(row: &rusqlite::Row<'_>) -> rusqlite::Result<PlayerScore> {
     Ok(PlayerScore {
         player_id: row.get(0)?, map_key: row.get(1)?, hash: row.get(2)?,
         mode: row.get(3)?, difficulty: row.get(4)?,
-        accuracy: row.get(5)?, epoch_time: row.get(6)?, score_id: row.get(7)?,
+        accuracy: row.get(5)?, epoch_time: row.get(6)?, score_id: row.get(7)?, leaderboard_id: row.get(8)?,
     })
 }
 
@@ -629,9 +638,10 @@ pub fn insert_scores_batch(conn: &Connection, scores: &[PlayerScore]) -> rusqlit
     let mut changed = 0;
     {
         let mut diff = tx.prepare_cached(
-            "INSERT INTO MapDiff (key, hash, mode, difficulty) VALUES (?1, ?2, ?3, ?4)
+            "INSERT INTO MapDiff (key, hash, mode, difficulty, leaderboardId) VALUES (?1, ?2, ?3, ?4, NULLIF(TRIM(?5), ''))
              ON CONFLICT(hash, mode, difficulty) DO UPDATE SET
-                 key = COALESCE(MapDiff.key, excluded.key)"
+                 key = COALESCE(MapDiff.key, excluded.key),
+                 leaderboardId = COALESCE(excluded.leaderboardId, MapDiff.leaderboardId)"
         )?;
         let mut score_stmt = tx.prepare_cached(
             "INSERT INTO PlayerScore (playerId, mapDiffId, accuracy, epochTime, scoreId)
@@ -644,7 +654,7 @@ pub fn insert_scores_batch(conn: &Connection, scores: &[PlayerScore]) -> rusqlit
         )?;
         for score in scores {
             let hash = score.hash.to_lowercase();
-            diff.execute(rusqlite::params![score.map_key, hash, score.mode, score.difficulty])?;
+            diff.execute(rusqlite::params![score.map_key, hash, score.mode, score.difficulty, score.leaderboard_id])?;
             changed += score_stmt.execute(rusqlite::params![
                 score.player_id, hash, score.mode, score.difficulty, score.accuracy, score.epoch_time, score.score_id,
             ])?;
@@ -685,7 +695,7 @@ pub fn get_scores_for_maps(
             // Start with this page's difficulties instead of scanning every
             // selected player's complete score history on each query.
             let sql = format!(
-                "SELECT s.playerId, d.key, d.hash, d.mode, d.difficulty, s.accuracy, s.epochTime, s.scoreId
+                "SELECT s.playerId, d.key, d.hash, d.mode, d.difficulty, s.accuracy, s.epochTime, s.scoreId, d.leaderboardId
                  FROM MapDiff d CROSS JOIN PlayerScore s ON s.mapDiffId = d.id
                  WHERE d.key IN ({key_slots}) AND s.playerId IN ({player_slots})"
             );

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { PlayerInfo } from '../types';
-import { User, Plus, X, RefreshCw, ArrowRight, ArrowLeft } from 'lucide-react';
+import { PlayerInfo, PlayerFilterState } from '../types';
+import { User, Plus, X, RefreshCw, ArrowRight, ArrowLeft, Check, Minus } from 'lucide-react';
 
 interface ScoreTableHeaderProps {
   players: PlayerInfo[];
@@ -13,6 +13,9 @@ interface ScoreTableHeaderProps {
   showMapSort: boolean;
   diffSort: 'asc' | 'desc';
   onToggleDiffSort: () => void;
+  viewMode: 'single' | 'playlist' | null;
+  playerFilters: Record<string, PlayerFilterState>;
+  onTogglePlayerFilter: (playerId: string, type: 'has_scores' | 'no_scores') => void;
 }
 
 export default function ScoreTableHeader({
@@ -26,6 +29,9 @@ export default function ScoreTableHeader({
   showMapSort,
   diffSort,
   onToggleDiffSort,
+  viewMode,
+  playerFilters,
+  onTogglePlayerFilter,
 }: ScoreTableHeaderProps) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -139,6 +145,13 @@ export default function ScoreTableHeader({
         {players.map((player) => {
           const isDragged = draggedId === player.id;
           const isDropTarget = dropTargetId === player.id && !isDragged;
+          const filter = playerFilters[player.id] ?? 'none';
+          const showFilterButtons = viewMode === 'playlist';
+          const isFilterActive = showFilterButtons && filter !== 'none';
+          const filterVisibility = isFilterActive
+            ? 'opacity-100'
+            : 'opacity-0 group-hover:opacity-100 focus:opacity-100 touch-manipulation:opacity-100';
+
           return (
             <div
               key={player.id}
@@ -157,18 +170,54 @@ export default function ScoreTableHeader({
               }`}
               onMouseDown={(e) => handleMouseDown(e, player.id)}
             >
+              {/* 有成绩筛选按钮 */}
+              {showFilterButtons && (
+                <button
+                  onClick={() => onTogglePlayerFilter(player.id, 'has_scores')}
+                  className={`absolute top-1 left-1 w-5 h-5 rounded bg-bs-status-success text-white ${filterVisibility} transition-opacity flex items-center justify-center hover:bg-green-600 z-10`}
+                  title="筛选此人有过成绩的谱面（任何难度）"
+                  aria-label={`筛选 ${player.alias || player.name} 有过成绩的谱面`}
+                  aria-pressed={filter === 'has_scores'}
+                >
+                  <Check size={12} />
+                </button>
+              )}
+
+              {/* 无成绩筛选按钮 */}
+              {showFilterButtons && (
+                <button
+                  onClick={() => onTogglePlayerFilter(player.id, 'no_scores')}
+                  className={`absolute top-7 left-1 w-5 h-5 rounded bg-gray-500 text-white ${filterVisibility} transition-opacity flex items-center justify-center hover:bg-gray-600 z-10`}
+                  title="筛选此人没有成绩的谱面（所有难度）"
+                  aria-label={`筛选 ${player.alias || player.name} 没有成绩的谱面`}
+                  aria-pressed={filter === 'no_scores'}
+                >
+                  <Minus size={12} />
+                </button>
+              )}
+
               <div className="flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing select-none">
-                {player.avatar_url ? (
-                  <img
-                    src={player.avatar_url}
-                    alt={player.name}
-                    className="w-10 h-10 rounded-full object-cover pointer-events-none"
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-full bg-bs-bg-hover flex items-center justify-center pointer-events-none">
-                    <User size={20} className="text-bs-text-muted pointer-events-none" />
-                  </div>
-                )}
+                <div className="relative">
+                  {player.avatar_url ? (
+                    <img
+                      src={player.avatar_url}
+                      alt={player.name}
+                      className="w-10 h-10 rounded-full object-cover pointer-events-none"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-bs-bg-hover flex items-center justify-center pointer-events-none">
+                      <User size={20} className="text-bs-text-muted pointer-events-none" />
+                    </div>
+                  )}
+                  {isFilterActive && (
+                    <span
+                      className={`absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 ${
+                        filter === 'has_scores' ? 'bg-bs-status-success' : 'bg-gray-500'
+                      }`}
+                      style={{ borderColor: 'var(--color-bg-tertiary)' }}
+                    />
+                  )}
+                </div>
                 <span className="text-xs text-bs-text-primary truncate w-full text-center pointer-events-none">
                   {player.alias || player.name}
                 </span>

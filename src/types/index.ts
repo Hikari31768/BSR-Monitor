@@ -15,6 +15,9 @@ export interface PlayerUIState {
   updatingMessage?: string;
 }
 
+/** 打谱查询页玩家成绩筛选状态 */
+export type PlayerFilterState = 'none' | 'has_scores' | 'no_scores';
+
 export interface PlaylistUIState {
   loading: boolean;
   progress: number;
@@ -26,6 +29,7 @@ export type PlaylistSource = 'beatsaver' | 'mapper' | 'local';
 export interface PlayerScore {
   player_id: string;
   score_id: number;
+  leaderboard_id?: string | null;
   map_key?: string;
   hash: string;
   mode: string;
@@ -50,6 +54,7 @@ export interface MapDiff {
   is_current: boolean;
   mode: string;
   difficulty: string;
+  leaderboard_id?: string | null;
 }
 
 export interface Playlist {
@@ -97,6 +102,7 @@ export interface ScoreRowData {
 export interface PlayerScoreCell {
   player_id: string;
   score_id: number;
+  leaderboard_id?: string | null;
   accuracy: number;
   is_expired: boolean;
 }
@@ -111,6 +117,7 @@ export interface CurrentDiffInfo {
   mode: string;
   difficulty: string;
   hash: string;
+  leaderboard_id?: string | null;
 }
 
 export interface PlaylistScoresResponse {
