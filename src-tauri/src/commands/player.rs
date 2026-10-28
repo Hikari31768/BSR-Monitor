@@ -1,5 +1,6 @@
 use tauri::AppHandle;
 use tauri::Manager;
+use tauri::Emitter;
 use tauri::State;
 use tauri_plugin_opener::OpenerExt;
 use crate::api::BeatLeaderApi;
@@ -36,6 +37,7 @@ pub async fn add_player(
     alias: Option<String>,
     task_id: Option<String>,
 ) -> Result<AddPlayerResult, String> {
+    let _permit = task_state.player_slots.acquire().await.map_err(|e| e.to_string())?;
     let task_id = task_id.unwrap_or_else(|| Uuid::new_v4().to_string());
     let api = BeatLeaderApi::new().map_err(|e| e.to_string())?;
 
@@ -48,7 +50,7 @@ pub async fn add_player(
     let canonical_id = player_response.id.clone();
 
     // 使用原始 ID 注册任务，确保前端进度恢复能正确匹配
-    task_state.register(&task_id, "add_player", &canonical_id);
+    let _task = task_state.begin(&task_id, "add_player", &canonical_id, &player_response.name)?;
 
     // 使用原始 ID 检查是否已存在
     let existing = {
@@ -70,11 +72,13 @@ pub async fn add_player(
         api,
         is_incremental,
         true,
+        app.state::<crate::settings::SettingsState>().concurrency.add_player_pages,
     ).await;
 
     // 无论成功失败都移除任务记录
     task_state.remove(&task_id);
 
+    if result.is_ok() { let _ = app.emit("players-updated", &canonical_id); }
     result.map(|player| AddPlayerResult { task_id, player })
 }
 
@@ -90,13 +94,14 @@ pub async fn fetch_and_save_player(
     api: BeatLeaderApi,
     is_incremental: bool,
     emit_events: bool,
+    page_concurrency: usize,
 ) -> Result<PlayerInfo, String> {
     let message_prefix = if is_incremental { "更新" } else { "" };
 
     // Step 1: 发送初始进度
     let msg = format!("{}{}正在获取玩家信息...", message_prefix, if is_incremental { "" } else { "正在" });
     if emit_events {
-        let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
+        let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone()).with_target(id.to_string())
             .with_progress("fetching_player_info".to_string(), 2.0)
             .with_message(msg.clone());
         emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
@@ -104,18 +109,19 @@ pub async fn fetch_and_save_player(
     task_state.update(&task_id, 2.0, &msg);
 
     // 构建玩家信息 — 使用 API 返回的原始数字 ID
-    let player_info = PlayerInfo {
+    let mut player_info = PlayerInfo {
         id: id.to_string(),
         name: player_response.name.clone(),
         avatar_url: Some(player_response.avatar.clone()),
         live_url,
         alias,
+        updated_at: None,
     };
 
     // 发送第二阶段进度（含玩家信息，前端可先行显示）
     let msg = format!("已获取玩家: {}", player_response.name);
     if emit_events {
-        let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
+        let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone()).with_target(id.to_string())
             .with_progress("saving_player_info".to_string(), 5.0)
             .with_message(msg.clone())
             .with_player_name(player_response.name.clone())
@@ -137,7 +143,7 @@ pub async fn fetch_and_save_player(
         let state = app.try_state::<Mutex<rusqlite::Connection>>()
             .ok_or("Database not initialized")?;
         let guard = state.lock().map_err(|e| e.to_string())?;
-        db::get_latest_score_time(&guard, id).map_err(|e| e.to_string())?
+        db::get_score_sync_time(&guard, id).map_err(|e| e.to_string())?
     } else {
         None
     };
@@ -145,7 +151,7 @@ pub async fn fetch_and_save_player(
     // Step 4: 发送开始拉取成绩进度
     let progress_msg = if is_incremental { "正在拉取新成绩..." } else { "开始拉取成绩..." };
     if emit_events {
-        let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
+        let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone()).with_target(id.to_string())
             .with_progress("fetching_scores".to_string(), 8.0)
             .with_message(progress_msg.to_string());
         emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
@@ -154,24 +160,12 @@ pub async fn fetch_and_save_player(
 
     // Step 5: 拉取成绩
     let page_size = 100;
-    let mut page = 1;
     let mut total_scores = 0;
-    let mut should_stop = false;
+    let mut successful_pages = 0usize;
 
-    loop {
-        if should_stop {
-            break;
-        }
-
-        // API 调用
-        let response = api.get_player_scores(id, page, page_size)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        if response.data.is_empty() {
-            break;
-        }
-
+    let mut pager = crate::api::score_pager::ScorePager::new(api, id.to_string(), page_size, latest_local_epoch, page_concurrency);
+    while let Some((page, response)) = pager.next_page().await.map_err(|e| e.to_string())? {
+        let save_started = std::time::Instant::now();
         // 处理每条成绩
         let mut scores_to_insert: Vec<crate::database::operations::PlayerScore> = Vec::new();
 
@@ -179,8 +173,7 @@ pub async fn fetch_and_save_player(
             // 增量更新逻辑：遇到不新于本地记录的成绩时停止
             if let Some(latest) = latest_local_epoch {
                 if score_data.score.epoch_time <= latest {
-                    should_stop = true;
-                    break;
+                    continue;
                 }
             }
 
@@ -189,7 +182,6 @@ pub async fn fetch_and_save_player(
             scores_to_insert.push(crate::database::operations::PlayerScore {
                 player_id: id.to_string(),
                 score_id: score_data.score.id as i64,
-                leaderboard_id: score_data.leaderboard.id.clone(),
                 map_key,
                 hash: score_data.leaderboard.song_hash.to_lowercase(),
                 mode: score_data.leaderboard.mode_name.clone(),
@@ -204,40 +196,42 @@ pub async fn fetch_and_save_player(
             let state = app.try_state::<Mutex<rusqlite::Connection>>()
                 .ok_or("Database not initialized")?;
             let guard = state.lock().map_err(|e| e.to_string())?;
-            for score in &scores_to_insert {
-                db::insert_score(&guard, score).map_err(|e| e.to_string())?;
-            }
-            total_scores += scores_to_insert.len();
+            total_scores += db::insert_scores_batch(&guard, &scores_to_insert).map_err(|e| e.to_string())?;
         }
 
+        eprintln!("Score page {page}: save={:?}", save_started.elapsed());
+
         // 计算总页数
-        let total_pages = (response.metadata.total + response.metadata.items_per_page - 1)
-            / response.metadata.items_per_page;
+        let per_page = if response.metadata.items_per_page > 0 { response.metadata.items_per_page } else { page_size };
+        let total_pages = response.metadata.total.saturating_add(per_page - 1) / per_page;
+        successful_pages += 1;
 
         // 更新进度（8%-100%区间映射，成绩拉取占92%）
         let page_progress = if total_pages > 1 {
-            8.0 + ((page as f64 / total_pages as f64) * 92.0)
+            8.0 + ((successful_pages as f64 / total_pages as f64).min(1.0) * 92.0)
         } else {
             100.0
         };
         let msg = if is_incremental {
-            format!("{}/{} 页，已新增成绩 {} 条...", page, total_pages, total_scores)
+            format!("{}/{} 页，已新增成绩 {} 条...", successful_pages, total_pages, total_scores)
         } else {
-            format!("{}/{} 页，已拉取成绩 {} 条...", page, total_pages, total_scores)
+            format!("{}/{} 页，已拉取成绩 {} 条...", successful_pages, total_pages, total_scores)
         };
         if emit_events {
-            let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
+            let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone()).with_target(id.to_string())
                 .with_progress("fetching_scores".to_string(), page_progress)
                 .with_message(msg.clone());
             emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
         }
         task_state.update(&task_id, page_progress, &msg);
 
-        // 检查是否还有更多页
-        if page >= total_pages {
-            break;
-        }
-        page += 1;
+    }
+
+    // Only a fully successful sync advances the visible update time.
+    {
+        let state = app.state::<Mutex<rusqlite::Connection>>();
+        let conn = state.lock().map_err(|e| e.to_string())?;
+        player_info.updated_at = Some(db::mark_player_updated(&conn, id).map_err(|e| e.to_string())?);
     }
 
     // 发送完成进度
@@ -246,7 +240,7 @@ pub async fn fetch_and_save_player(
         if is_incremental { "新增" } else { "共拉取" },
         total_scores);
     if emit_events {
-        let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone())
+        let payload = ProgressPayload::new(TaskType::AddPlayer, task_id.clone()).with_target(id.to_string())
             .with_progress("completed".to_string(), 100.0)
             .with_message(msg.clone());
         emit_progress_event(app, &payload).map_err(|e| e.to_string())?;
@@ -311,9 +305,8 @@ pub fn get_player(app: AppHandle, id: String) -> Result<Option<PlayerInfo>, Stri
 #[tauri::command]
 pub fn delete_player(app: AppHandle, task_state: State<'_, TaskState>, id: String) -> Result<(), String> {
     // 检查是否有正在进行的添加任务
-    if task_state.has_active_for_target(&id) {
-        return Err("无法删除正在处理中的玩家".to_string());
-    }
+    let delete_id = format!("delete-player-{}", Uuid::new_v4());
+    let _claim = task_state.begin(&delete_id, "delete_player", &id, "删除玩家")?;
     let state = app.try_state::<Mutex<rusqlite::Connection>>()
         .ok_or("Database not initialized")?;
     let guard = state.lock().map_err(|e| e.to_string())?;
@@ -345,45 +338,41 @@ pub async fn refresh_player_scores(
     player_id: String,
 ) -> Result<String, String> {
     let task_id = format!("refresh-player-{}", Uuid::new_v4());
-    let api = BeatLeaderApi::new().map_err(|e| e.to_string())?;
+    refresh_saved_player(&app, &task_state, &player_id, task_id.clone(), true).await?;
+    Ok(task_id)
+}
 
-    // 先获取玩家信息（支持原始 ID 或自定义 ID）
-    let player_response = api.get_player(&player_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // 使用 API 返回的原始数字 ID
-    let canonical_id = player_response.id.clone();
-
-    // 获取玩家名字用于显示
+/// Shared by manual refresh and the bounded startup workers.
+pub(crate) async fn refresh_saved_player(
+    app: &AppHandle, task_state: &TaskState, player_id: &str, task_id: String, emit_events: bool,
+) -> Result<PlayerInfo, String> {
+    let kind = if emit_events { "refresh_player_scores" } else { "startup_player" };
+    let _task = task_state.begin(&task_id, kind, player_id, player_id)?;
     let display_name = {
-        let state = app.try_state::<Mutex<rusqlite::Connection>>()
-            .ok_or("Database not initialized")?;
-        let guard = state.lock().map_err(|e| e.to_string())?;
-        let name = get_player_name(&guard, &canonical_id)
-            .map_err(|e| e.to_string())?
-            .unwrap_or_else(|| player_response.name.clone());
-        format!("刷新: {}", name)
+        let state = app.state::<Mutex<rusqlite::Connection>>();
+        let conn = state.lock().map_err(|e| e.to_string())?;
+        let player = db::get_player_by_id(&conn, player_id).map_err(|e| e.to_string())?
+            .ok_or("玩家已移除，跳过刷新")?;
+        player.alias.unwrap_or(player.name)
     };
-
-    task_state.register_with_name(&task_id, "refresh_player_scores", &canonical_id, &display_name);
-
-    // 复用 fetch_and_save_player（is_incremental=true, emit_events=true）
-    let result = fetch_and_save_player(
-        &app,
-        &task_state,
-        &canonical_id,
-        player_response,
-        task_id.clone(),
-        None,
-        None,
-        api,
-        true,
-        true,
-    ).await;
-
-    // 清理任务状态
-    task_state.remove(&task_id);
-
-    result.map(|_| task_id)
+    task_state.register_with_name(&task_id, kind, player_id, &display_name);
+    let _permit = task_state.player_slots.acquire().await.map_err(|e| e.to_string())?;
+    let result = async {
+        let api = BeatLeaderApi::new().map_err(|e| e.to_string())?;
+        let response = api.get_player(player_id).await.map_err(|e| e.to_string())?;
+        let canonical_id = response.id.clone();
+        fetch_and_save_player(app, task_state, &canonical_id, response,
+            task_id.clone(), None, None, api, true, emit_events, crate::settings::MAX_CONCURRENCY).await
+    }.await;
+    match &result {
+        Ok(player) if emit_events => { let _ = app.emit("players-updated", &player.id); }
+        Err(error) if emit_events => {
+            let payload = ProgressPayload::new(TaskType::RefreshPlayerScores, task_id)
+                .with_progress("failed".into(), 100.0)
+                .with_target(player_id.to_string()).with_message(error.clone());
+            let _ = emit_progress_event(app, &payload);
+        }
+        _ => {}
+    }
+    result
 }

@@ -105,6 +105,7 @@ pub struct LeaderboardEntry {
     pub difficulty: DifficultyResponse,
 }
 
+#[derive(Clone)]
 pub struct BeatLeaderApi {
     client: ApiClient,
 }

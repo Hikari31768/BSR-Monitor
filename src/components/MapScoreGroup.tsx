@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { Map, ScoreRowData, PlayerInfo } from '../types';
 import DiffBadge from './DiffBadge';
 import ModeIcon from './ModeIcon';
 import CoverWithAudio from './CoverWithAudio';
 import MapKeyButtons from './MapKeyButtons';
 import { formatAccuracy } from '../utils/format';
-import { invoke } from '@tauri-apps/api/core';
 import { urlPrefixes } from '../constants';
 
 interface MapScoreGroupProps {
@@ -109,7 +109,15 @@ export default function MapScoreGroup({
           <div className="flex gap-3">
             <CoverWithAudio map={map} onPreviewUrlReady={onPreviewUrlReady} />
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-bs-text-primary truncate">{map.song_name}</p>
+              <a
+                href={'https://beatsaver.com/maps/' + encodeURIComponent(map.key)}
+                onClick={e => {
+                  e.preventDefault();
+                  void invoke('open_url', { url: 'https://beatsaver.com/maps/' + encodeURIComponent(map.key) }).catch(console.error);
+                }}
+                title="在 BeatSaver 中打开谱面"
+                className="block font-medium text-bs-text-primary truncate hover:text-bs-accent-primary hover:underline"
+              >{map.song_name}</a>
               <p className="text-xs text-bs-text-muted truncate">{map.level_author_name}</p>
               <MapKeyButtons mapKey={map.key} />
             </div>
@@ -164,7 +172,15 @@ export default function MapScoreGroup({
         <div className="flex gap-3">
           <CoverWithAudio map={map} />
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-bs-text-primary truncate">{map.song_name}</p>
+            <a
+                href={'https://beatsaver.com/maps/' + encodeURIComponent(map.key)}
+                onClick={e => {
+                  e.preventDefault();
+                  void invoke('open_url', { url: 'https://beatsaver.com/maps/' + encodeURIComponent(map.key) }).catch(console.error);
+                }}
+                title="在 BeatSaver 中打开谱面"
+                className="block font-medium text-bs-text-primary truncate hover:text-bs-accent-primary hover:underline"
+              >{map.song_name}</a>
             <p className="text-xs text-bs-text-muted truncate">{map.level_author_name}</p>
             <MapKeyButtons mapKey={map.key} />
           </div>
@@ -214,7 +230,9 @@ export default function MapScoreGroup({
                   }`}
               >
                 {score ? (
-                  <span className={`font-mono font-medium cursor-pointer underline decoration-transparent hover:decoration-inherit transition-colors duration-100 decoration-solid ${
+                  <button type="button" disabled={score.score_id <= 0}
+                    title={score.score_id > 0 ? '观看 BeatLeader 回放' : '此成绩暂无回放 ID'}
+                    className={`font-mono font-medium enabled:cursor-pointer enabled:underline decoration-transparent enabled:hover:decoration-inherit transition-colors duration-100 decoration-solid ${
                     score.is_expired
                       ? 'text-bs-text-muted'
                       : 'text-bs-status-success'
@@ -226,7 +244,7 @@ export default function MapScoreGroup({
                       </svg>
                     )}
                     {formatAccuracy(score.accuracy)}
-                  </span>
+                  </button>
                 ) : (
                   <span className="text-bs-border">-</span>
                 )}

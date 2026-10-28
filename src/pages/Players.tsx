@@ -1,3 +1,4 @@
+import { useDataRefresh } from '../utils/useDataRefresh';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
@@ -126,29 +127,15 @@ export default function Players() {
   const restoreActiveTasks = useCallback(async () => {
     try {
       const tasks = await invoke<[string, { task_type: string; target_id: string; progress: number; message: string }][]>('get_active_tasks');
-      const playerTasks = tasks.filter(([, s]) => s.task_type === 'add_player');
-      if (playerTasks.length === 0) return;
-
-      setPlayerUIStates(prev => {
-        const updated = { ...prev };
-        for (const [, status] of playerTasks) {
-          updated[status.target_id] = {
-            loading: true,
-            progress: status.progress,
-            statusMessage: status.message || '处理中...'
-          };
-        }
-        return updated;
-      });
-
-      // 同时恢复 taskId 映射，否则事件监听器找不到 playerId
-      setPlayerTaskIds(prev => {
-        const updated = { ...prev };
-        for (const [taskId, status] of playerTasks) {
-          updated[status.target_id] = taskId;
-        }
-        return updated;
-      });
+      const playerTasks = tasks.filter(([, s]) => ['add_player', 'refresh_player_scores', 'startup_player'].includes(s.task_type));
+      const states: Record<string, PlayerUIState> = {};
+      const ids: Record<string, string> = {};
+      for (const [id, status] of playerTasks) {
+        states[status.target_id] = { loading: true, progress: status.progress, statusMessage: status.message };
+        ids[status.target_id] = id;
+      }
+      setPlayerUIStates(states);
+      setPlayerTaskIds(ids);
     } catch (e) {
       console.error('恢复任务状态失败:', e);
     }
@@ -177,14 +164,15 @@ export default function Players() {
         message?: string;
         player_name?: string;
         player_avatar_url?: string;
+        target_id?: string;
       };
 
       // 只处理 add_player 类型的进度
-      if (progressData.task_type === 'add_player') {
+      if (['add_player', 'refresh_player_scores'].includes(progressData.task_type)) {
         // 查找对应此 task_id 的 playerId
         const playerId = Object.keys(playerTaskIdsRef.current).find(
           id => playerTaskIdsRef.current[id] === progressData.task_id
-        );
+        ) || progressData.target_id;
         if (!playerId) return;
 
         // 更新玩家基本信息（名称、头像）
@@ -199,7 +187,7 @@ export default function Players() {
           return p;
         }));
 
-        const isCompleted = progressData.stage === 'completed';
+        const isCompleted = progressData.stage === 'completed' || progressData.stage === 'failed';
 
         // 更新 UI 状态
         setPlayerUIStates(prev => {
@@ -233,6 +221,11 @@ export default function Players() {
       unlistenRef.current = null;
     };
   }, []);
+
+  useDataRefresh(['players-updated'], async () => {
+    await refreshPlayers();
+    await restoreActiveTasks();
+  });
 
   async function handleAddPlayer() {
     if (!addForm.id.trim()) return;

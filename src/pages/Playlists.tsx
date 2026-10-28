@@ -1,3 +1,4 @@
+import { useDataRefresh } from '../utils/useDataRefresh';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -35,7 +36,7 @@ export default function Playlists() {
   const [addFilePath, setAddFilePath] = useState('');
   const [addFormError, setAddFormError] = useState('');
   const [inlineError, setInlineError] = useState<string>('');
-  const [updatingKey, setUpdatingKey] = useState<string | null>(null);
+  const [updatingKeys, setUpdatingKeys] = useState<Record<string, boolean>>({});
   const [refreshingRatingsKey, setRefreshingRatingsKey] = useState<string | null>(null);
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
@@ -65,21 +66,16 @@ export default function Playlists() {
   const restoreActiveTasks = useCallback(async () => {
     try {
       const tasks = await invoke<[string, { task_type: string; target_id: string; progress: number; message: string }][]>('get_active_tasks');
-      const playlistTasks = tasks.filter(([, s]) => s.task_type === 'add_playlist' || s.task_type === 'refresh_playlist');
-      if (playlistTasks.length === 0) return;
-
-      setPlaylistUIStates(prev => {
-        const updated = { ...prev };
-        for (const [, status] of playlistTasks) {
-          const targetKey = status.target_id;
-          updated[targetKey] = {
-            loading: true,
-            progress: status.progress,
-            statusMessage: status.message || '处理中...'
-          };
-        }
-        return updated;
-      });
+      const playlistTasks = tasks.filter(([, s]) => ['add_playlist', 'refresh_playlist', 'startup_playlist'].includes(s.task_type));
+      const states: Record<string, PlaylistUIState> = {};
+      const ids: Record<string, string> = {};
+      for (const [id, status] of playlistTasks) {
+        const target = status.target_id.replace(/^([^/]+)\//, '$1:');
+        states[target] = { loading: true, progress: status.progress, statusMessage: status.message };
+        ids[target] = id;
+      }
+      setPlaylistUIStates(states);
+      setPlaylistTaskIds(ids);
     } catch (e) {
       console.error('恢复任务状态失败:', e);
     }
@@ -106,17 +102,18 @@ export default function Playlists() {
         stage: string;
         progress: number;
         message?: string;
+        target_id?: string;
       };
 
       // 只处理 add_playlist 类型的进度
       if (progressData.task_type === 'add_playlist') {
         // 查找对应此 task_id 的 playlist key
-        const pKey = Object.keys(playlistTaskIdsRef.current).find(
+        const pKey = progressData.target_id || Object.keys(playlistTaskIdsRef.current).find(
           key => playlistTaskIdsRef.current[key] === progressData.task_id
         );
         if (!pKey) return;
 
-        const isCompleted = progressData.stage === 'completed';
+        const isCompleted = progressData.stage === 'completed' || progressData.stage === 'failed';
 
         // 更新 UI 状态
         setPlaylistUIStates(prev => {
@@ -145,6 +142,11 @@ export default function Playlists() {
       unlistenRef.current = null;
     };
   }, []);
+
+  useDataRefresh(['playlists-updated'], async () => {
+    await refreshPlaylists();
+    await restoreActiveTasks();
+  });
 
   async function handleAddPlaylist() {
     const source = addSource;
@@ -266,7 +268,7 @@ export default function Playlists() {
   }
 
   async function handleUpdatePlaylist(pKey: string) {
-    setUpdatingKey(pKey);
+    setUpdatingKeys(prev => ({ ...prev, [pKey]: true }));
     setInlineError('');
 
     const [source, ...identifierParts] = pKey.split(':');
@@ -301,7 +303,7 @@ export default function Playlists() {
       });
       setInlineError(`更新失败: ${e}`);
     } finally {
-      setUpdatingKey(null);
+      setUpdatingKeys(prev => { const next = { ...prev }; delete next[pKey]; return next; });
     }
   }
 
@@ -351,7 +353,7 @@ export default function Playlists() {
                 onViewMaps={() => handleViewMaps(pKey)}
                 onUpdate={() => handleUpdatePlaylist(pKey)}
                 onRefreshRatings={() => setShowRefreshRatingsModal(pKey)}
-                updating={updatingKey === pKey}
+                updating={!!updatingKeys[pKey]}
                 refreshingRatings={refreshingRatingsKey === pKey}
               />
             );

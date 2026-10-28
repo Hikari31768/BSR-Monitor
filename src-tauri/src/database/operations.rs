@@ -36,6 +36,7 @@ pub struct PlayerInfo {
     pub avatar_url: Option<String>,
     pub live_url: Option<String>,
     pub alias: Option<String>,
+    pub updated_at: Option<i64>,
 }
 
 // PlayerScore 表数据结构
@@ -43,7 +44,6 @@ pub struct PlayerInfo {
 pub struct PlayerScore {
     pub player_id: String,
     pub score_id: i64,
-    pub leaderboard_id: String,
     pub map_key: Option<String>,
     pub hash: String,
     pub mode: String,
@@ -59,6 +59,12 @@ pub enum PlaylistSource {
     Beatsaver,
     Mapper,
     Local,
+}
+
+impl PlaylistSource {
+    pub fn as_str(&self) -> &'static str {
+        match self { Self::Beatsaver => "beatsaver", Self::Mapper => "mapper", Self::Local => "local" }
+    }
 }
 
 impl rusqlite::types::ToSql for PlaylistSource {
@@ -237,7 +243,7 @@ pub fn get_map_by_key(conn: &Connection, key: &str) -> Result<Option<Map>, rusql
 
 /// 获取谱面的首个 hash（用于 BeatLeader 查询）
 pub fn get_map_hash_by_key(conn: &Connection, key: &str) -> Result<Option<String>, rusqlite::Error> {
-    let mut stmt = conn.prepare("SELECT hash FROM MapDiff WHERE key = ?1 LIMIT 1")?;
+    let mut stmt = conn.prepare("SELECT hash FROM MapDiff WHERE key = ?1 AND metadataKnown = 1 ORDER BY isCurrent DESC LIMIT 1")?;
     let result = stmt.query_row([key], |row| row.get(0));
     match result {
         Ok(hash) => Ok(Some(hash)),
@@ -252,8 +258,10 @@ pub fn insert_map_diffs_batch(conn: &Connection, key: &str, diffs: &[MapDiff]) -
         return Ok(());
     }
 
+    let tx = conn.unchecked_transaction()?;
+
     // 先将该 key 下所有记录的 isCurrent 改为 false（标记为旧版本）
-    conn.execute(
+    tx.execute(
         "UPDATE MapDiff SET isCurrent = 0 WHERE key = ?1",
         [key],
     )?;
@@ -261,10 +269,16 @@ pub fn insert_map_diffs_batch(conn: &Connection, key: &str, diffs: &[MapDiff]) -
     // 批量插入新记录（都标记为当前版本，hash 统一转小写）
     for diff in diffs {
         let normalized_hash = diff.hash.to_lowercase();
-        conn.execute(
-            "INSERT INTO MapDiff (key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
-             ON CONFLICT(key, hash, mode, difficulty) DO UPDATE SET isCurrent = excluded.isCurrent",
+        tx.execute(
+            "INSERT INTO MapDiff (key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating, metadataKnown)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1)
+             ON CONFLICT(hash, mode, difficulty) DO UPDATE SET
+                 key = excluded.key, isCurrent = excluded.isCurrent, metadataKnown = 1,
+                 starsRating = COALESCE(excluded.starsRating, MapDiff.starsRating),
+                 starsFetchedAt = COALESCE(excluded.starsFetchedAt, MapDiff.starsFetchedAt),
+                 passRating = COALESCE(excluded.passRating, MapDiff.passRating),
+                 accRating = COALESCE(excluded.accRating, MapDiff.accRating),
+                 techRating = COALESCE(excluded.techRating, MapDiff.techRating)",
             rusqlite::params![
                 diff.key,
                 normalized_hash,
@@ -279,56 +293,59 @@ pub fn insert_map_diffs_batch(conn: &Connection, key: &str, diffs: &[MapDiff]) -
             ],
         )?;
     }
+    tx.commit()?;
     Ok(())
 }
 
 
-pub fn get_map_diffs_by_key(conn: &Connection, key: &str) -> Result<Vec<MapDiff>, rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        "SELECT key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating FROM MapDiff WHERE key = ?1"
-    )?;
+fn read_diff(row: &rusqlite::Row<'_>) -> rusqlite::Result<MapDiff> {
+    Ok(MapDiff {
+        key: row.get(0)?, hash: row.get(1)?, is_current: row.get(2)?,
+        mode: row.get(3)?, difficulty: row.get(4)?, stars_rating: row.get(5)?,
+        stars_fetched_at: row.get(6)?, pass_rating: row.get(7)?,
+        acc_rating: row.get(8)?, tech_rating: row.get(9)?,
+    })
+}
 
-    let diffs = stmt.query_map([key], |row| {
-        Ok(MapDiff {
-            key: row.get(0)?,
-            hash: row.get(1)?,
-            is_current: row.get(2)?,
-            mode: row.get(3)?,
-            difficulty: row.get(4)?,
-            stars_rating: row.get(5)?,
-            stars_fetched_at: row.get(6)?,
-            pass_rating: row.get(7)?,
-            acc_rating: row.get(8)?,
-            tech_rating: row.get(9)?,
-        })
-    })?.collect::<Result<Vec<_>, _>>()?;
+pub fn get_map_diffs_by_key(conn: &Connection, key: &str) -> rusqlite::Result<Vec<MapDiff>> {
+    get_map_diffs_for_keys(conn, &[key.to_string()])
+}
 
+pub fn get_map_diffs_for_keys(conn: &Connection, keys: &[String]) -> rusqlite::Result<Vec<MapDiff>> {
+    let mut diffs = Vec::new();
+    for keys in keys.chunks(400) {
+        let slots = vec!["?"; keys.len()].join(",");
+        let mut stmt = conn.prepare(&format!(
+            "SELECT key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt,
+                    passRating, accRating, techRating FROM MapDiff WHERE key IN ({slots})"
+        ))?;
+        diffs.extend(stmt.query_map(rusqlite::params_from_iter(keys.iter()), read_diff)?
+            .collect::<rusqlite::Result<Vec<_>>>()?);
+    }
     Ok(diffs)
 }
 
-/// 通过 hash 查找 MapDiff 记录（用于歌单模式通过 hash 反查 key）
-pub fn get_map_diffs_by_key_for_hash(conn: &Connection, hash: &str) -> Result<Vec<MapDiff>, rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        "SELECT key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating FROM MapDiff WHERE LOWER(hash) = LOWER(?1)"
-    )?;
-
-    let diffs = stmt.query_map([hash], |row| {
-        Ok(MapDiff {
-            key: row.get(0)?,
-            hash: row.get(1)?,
-            is_current: row.get(2)?,
-            mode: row.get(3)?,
-            difficulty: row.get(4)?,
-            stars_rating: row.get(5)?,
-            stars_fetched_at: row.get(6)?,
-            pass_rating: row.get(7)?,
-            acc_rating: row.get(8)?,
-            tech_rating: row.get(9)?,
-        })
-    })?.collect::<Result<Vec<_>, _>>()?;
-
-    Ok(diffs)
+/// One batch resolves playlist hashes to downloaded map metadata.
+pub fn get_maps_by_hashes(conn: &Connection, hashes: &[String]) -> rusqlite::Result<Vec<(String, Map)>> {
+    let mut maps = Vec::new();
+    for hashes in hashes.chunks(400) {
+        let hashes: Vec<_> = hashes.iter().map(|h| h.to_lowercase()).collect();
+        let slots = vec!["?"; hashes.len()].join(",");
+        let mut stmt = conn.prepare(&format!(
+            "SELECT DISTINCT d.hash, m.key, m.songName, m.songAuthorName, m.levelAuthorName,
+                             m.rating, m.coverURL, m.previewURL
+             FROM MapDiff d JOIN Map m ON m.key = d.key WHERE d.hash IN ({slots})"
+        ))?;
+        maps.extend(stmt.query_map(rusqlite::params_from_iter(hashes.iter()), |r| Ok((
+            r.get(0)?,
+            Map { key: r.get(1)?, song_name: r.get(2)?, song_author_name: r.get(3)?,
+                  level_author_name: r.get(4)?, rating: r.get(5)?, cover_url: r.get(6)?,
+                  preview_url: r.get(7)? },
+        )))?.collect::<rusqlite::Result<Vec<_>>>()?);
+    }
+    Ok(maps)
 }
+
 
 /// 更新指定 MapDiff 记录的评级信息（按 hash + mode + difficulty 匹配）
 pub fn update_diff_ratings(
@@ -349,13 +366,17 @@ pub fn update_diff_ratings(
 
     let updated = conn.execute(
         "UPDATE MapDiff SET
-            hash = ?10,
+            key = ?4,
+            isCurrent = CASE WHEN EXISTS (
+                SELECT 1 FROM MapDiff c WHERE c.key = ?4 AND c.hash = LOWER(?1) AND c.isCurrent = 1
+            ) THEN 1 ELSE isCurrent END,
+            metadataKnown = 1,
             starsRating = ?5,
             starsFetchedAt = ?6,
             passRating = ?7,
             accRating = ?8,
             techRating = ?9
-         WHERE LOWER(hash) = LOWER(?1) AND mode = ?2 AND difficulty = ?3",
+         WHERE hash = LOWER(?1) AND mode = ?2 AND difficulty = ?3",
         rusqlite::params![
             hash, mode, difficulty,
             key,
@@ -364,7 +385,6 @@ pub fn update_diff_ratings(
             pass_rating,
             acc_rating,
             tech_rating,
-            hash.to_lowercase(),
         ],
     )?;
 
@@ -372,8 +392,8 @@ pub fn update_diff_ratings(
     if updated == 0 {
         let normalized_hash = hash.to_lowercase();
         conn.execute(
-            "INSERT OR IGNORE INTO MapDiff (key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT OR IGNORE INTO MapDiff (key, hash, isCurrent, mode, difficulty, starsRating, starsFetchedAt, passRating, accRating, techRating, metadataKnown)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1)",
             rusqlite::params![
                 key, normalized_hash, true, mode, difficulty,
                 stars,
@@ -425,7 +445,7 @@ pub fn get_existing_hashes(conn: &Connection, hashes: &[String]) -> Result<Vec<S
     let lower_hashes: Vec<String> = hashes.iter().map(|h| h.to_lowercase()).collect();
     let placeholders = lower_hashes.iter().map(|_| "?").collect::<Vec<_>>().join(",");
     let sql = format!(
-        "SELECT DISTINCT hash FROM MapDiff WHERE hash IN ({})",
+        "SELECT DISTINCT hash FROM MapDiff WHERE metadataKnown = 1 AND hash IN ({})",
         placeholders
     );
 
@@ -453,6 +473,7 @@ pub fn update_map_preview_url(conn: &Connection, key: &str, preview_url: &str) -
 
 // ============ PlayerInfo CRUD ============
 
+/// Profile refreshes preserve the last successful score-sync timestamp.
 pub fn insert_player(conn: &Connection, player: &PlayerInfo) -> Result<(), rusqlite::Error> {
     conn.execute(
         "INSERT INTO PlayerInfo (id, name, avatarURL, liveURL, alias)
@@ -475,7 +496,7 @@ pub fn insert_player(conn: &Connection, player: &PlayerInfo) -> Result<(), rusql
 
 pub fn get_player_by_id(conn: &Connection, id: &str) -> Result<Option<PlayerInfo>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, avatarURL, liveURL, alias FROM PlayerInfo WHERE id = ?1"
+        "SELECT id, name, avatarURL, liveURL, alias, updatedAt FROM PlayerInfo WHERE id = ?1"
     )?;
 
     let result = stmt.query_row([id], |row| {
@@ -485,6 +506,7 @@ pub fn get_player_by_id(conn: &Connection, id: &str) -> Result<Option<PlayerInfo
             avatar_url: row.get(2)?,
             live_url: row.get(3)?,
             alias: row.get(4)?,
+            updated_at: row.get(5)?,
         })
     });
 
@@ -497,7 +519,7 @@ pub fn get_player_by_id(conn: &Connection, id: &str) -> Result<Option<PlayerInfo
 
 pub fn get_all_players(conn: &Connection) -> Result<Vec<PlayerInfo>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, avatarURL, liveURL, alias FROM PlayerInfo"
+        "SELECT id, name, avatarURL, liveURL, alias, updatedAt FROM PlayerInfo"
     )?;
 
     let players = stmt.query_map([], |row| {
@@ -507,6 +529,7 @@ pub fn get_all_players(conn: &Connection) -> Result<Vec<PlayerInfo>, rusqlite::E
             avatar_url: row.get(2)?,
             live_url: row.get(3)?,
             alias: row.get(4)?,
+            updated_at: row.get(5)?,
         })
     })?.collect::<Result<Vec<_>, _>>()?;
 
@@ -516,7 +539,7 @@ pub fn get_all_players(conn: &Connection) -> Result<Vec<PlayerInfo>, rusqlite::E
 /// 批量获取所有玩家及其成绩数量
 pub fn get_players_with_score_counts(conn: &Connection) -> Result<Vec<(PlayerInfo, i64)>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT p.id, p.name, p.avatarURL, p.liveURL, p.alias, COUNT(ps.playerId) as score_count
+        "SELECT p.id, p.name, p.avatarURL, p.liveURL, p.alias, p.updatedAt, COUNT(ps.playerId) as score_count
          FROM PlayerInfo p
          LEFT JOIN PlayerScore ps ON p.id = ps.playerId
          GROUP BY p.id"
@@ -529,8 +552,9 @@ pub fn get_players_with_score_counts(conn: &Connection) -> Result<Vec<(PlayerInf
             avatar_url: row.get(2)?,
             live_url: row.get(3)?,
             alias: row.get(4)?,
+            updated_at: row.get(5)?,
         };
-        let score_count: i64 = row.get(5)?;
+        let score_count: i64 = row.get(6)?;
         Ok((player, score_count))
     })?.collect::<Result<Vec<_>, _>>()?;
 
@@ -557,6 +581,17 @@ pub fn delete_player(conn: &Connection, id: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub fn mark_player_updated(conn: &Connection, id: &str) -> rusqlite::Result<i64> {
+    let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default().as_secs() as i64;
+    if conn.execute("UPDATE PlayerInfo SET updatedAt = ?2,
+        scoreSyncEpoch = (SELECT MAX(epochTime) FROM PlayerScore WHERE playerId = ?1) WHERE id = ?1",
+        rusqlite::params![id, timestamp])? == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(timestamp)
+}
+
 pub fn update_player(conn: &Connection, player: &PlayerInfo) -> Result<(), rusqlite::Error> {
     conn.execute(
         "UPDATE PlayerInfo SET name = ?2, avatarURL = ?3, liveURL = ?4, alias = ?5 WHERE id = ?1",
@@ -573,152 +608,95 @@ pub fn update_player(conn: &Connection, player: &PlayerInfo) -> Result<(), rusql
 
 // ============ PlayerScore CRUD ============
 
-/// 原子化插入：仅当记录不存在或新成绩时间更晚时才更新/插入
-pub fn insert_score(conn: &Connection, score: &PlayerScore) -> Result<bool, rusqlite::Error> {
-    let normalized_hash = score.hash.to_lowercase();
-    let updated = conn.execute(
-        "UPDATE PlayerScore SET scoreId = ?2, leaderboardId = ?3, mapKey = ?4, accuracy = ?5, epochTime = ?6
-         WHERE playerId = ?1 AND LOWER(hash) = LOWER(?7) AND mode = ?8 AND difficulty = ?9
-         AND epochTime < ?10",
-        rusqlite::params![
-            score.player_id,
-            score.score_id,
-            score.leaderboard_id,
-            score.map_key,
-            score.accuracy,
-            score.epoch_time,
-            normalized_hash,
-            score.mode,
-            score.difficulty,
-            score.epoch_time,
-        ],
-    )?;
-
-    if updated > 0 {
-        return Ok(true);
-    }
-
-    let inserted = conn.execute(
-        "INSERT INTO PlayerScore (playerId, scoreId, leaderboardId, mapKey, hash, mode, difficulty, accuracy, epochTime)
-         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9
-         WHERE NOT EXISTS (
-             SELECT 1 FROM PlayerScore
-             WHERE playerId = ?1 AND LOWER(hash) = LOWER(?5) AND mode = ?6 AND difficulty = ?7
-         )",
-        rusqlite::params![
-            score.player_id,
-            score.score_id,
-            score.leaderboard_id,
-            score.map_key,
-            normalized_hash,
-            score.mode,
-            score.difficulty,
-            score.accuracy,
-            score.epoch_time,
-        ],
-    )?;
-
-    Ok(inserted > 0)
-}
-
-pub fn get_score_by_pk(conn: &Connection, player_id: &str, hash: &str, mode: &str, difficulty: &str) -> Result<Option<PlayerScore>, rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        "SELECT playerId, scoreId, leaderboardId, mapKey, hash, mode, difficulty, accuracy, epochTime
-         FROM PlayerScore WHERE playerId = ?1 AND hash = ?2 AND mode = ?3 AND difficulty = ?4"
-    )?;
-
-    let result = stmt.query_row(rusqlite::params![player_id, hash, mode, difficulty], |row| {
-        Ok(PlayerScore {
-            player_id: row.get(0)?,
-            score_id: row.get(1)?,
-            leaderboard_id: row.get(2)?,
-            map_key: row.get(3)?,
-            hash: row.get(4)?,
-            mode: row.get(5)?,
-            difficulty: row.get(6)?,
-            accuracy: row.get(7)?,
-            epoch_time: row.get(8)?,
-        })
-    });
-
-    match result {
-        Ok(score) => Ok(Some(score)),
-        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(e),
-    }
-}
-
-pub fn get_scores_by_player(conn: &Connection, player_id: &str) -> Result<Vec<PlayerScore>, rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        "SELECT playerId, scoreId, leaderboardId, mapKey, hash, mode, difficulty, accuracy, epochTime
-         FROM PlayerScore WHERE playerId = ?1 ORDER BY epochTime DESC"
-    )?;
-
-    let scores = stmt.query_map([player_id], |row| {
-        Ok(PlayerScore {
-            player_id: row.get(0)?,
-            score_id: row.get(1)?,
-            leaderboard_id: row.get(2)?,
-            map_key: row.get(3)?,
-            hash: row.get(4)?,
-            mode: row.get(5)?,
-            difficulty: row.get(6)?,
-            accuracy: row.get(7)?,
-            epoch_time: row.get(8)?,
-        })
-    })?.collect::<Result<Vec<_>, _>>()?;
-
-    Ok(scores)
-}
-
-pub fn get_score_count_by_player(conn: &Connection, player_id: &str) -> Result<i64, rusqlite::Error> {
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM PlayerScore WHERE playerId = ?1",
-        [player_id],
-        |row| row.get(0),
-    )?;
-    Ok(count)
-}
-
-/// 获取玩家最新成绩的 epoch_time
-pub fn get_latest_score_time(conn: &Connection, player_id: &str) -> Result<Option<i64>, rusqlite::Error> {
-    let result: Option<i64> = conn.query_row(
-        "SELECT MAX(epochTime) FROM PlayerScore WHERE playerId = ?1",
-        [player_id],
-        |row| row.get(0),
-    )?;
-    Ok(result)
-}
-
-/// 按 map_key 查询指定玩家的成绩（包含所有版本）
-pub fn get_scores_by_key_and_player(
-    conn: &Connection,
-    map_key: &str,
-    player_id: &str,
-) -> Result<Vec<PlayerScore>, rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        "SELECT playerId, scoreId, leaderboardId, mapKey, hash, mode, difficulty, accuracy, epochTime
-         FROM PlayerScore WHERE playerId = ? AND mapKey = ?"
-    )?;
-
-    let scores = stmt.query_map([player_id, map_key], |row| {
-        Ok(PlayerScore {
-            player_id: row.get(0)?,
-            score_id: row.get(1)?,
-            leaderboard_id: row.get(2)?,
-            map_key: row.get(3)?,
-            hash: row.get(4)?,
-            mode: row.get(5)?,
-            difficulty: row.get(6)?,
-            accuracy: row.get(7)?,
-            epoch_time: row.get(8)?,
-        })
-    })?.collect::<Result<Vec<_>, _>>()?;
-
-    Ok(scores)
-}
-
 // ============ Playlist CRUD ============
+
+// Shared map fields are projected for callers, but stored only in MapDiff.
+const SCORE_SELECT: &str =
+    "SELECT s.playerId, d.key, d.hash, d.mode, d.difficulty, s.accuracy, s.epochTime, s.scoreId
+     FROM PlayerScore s JOIN MapDiff d ON d.id = s.mapDiffId";
+
+fn read_score(row: &rusqlite::Row<'_>) -> rusqlite::Result<PlayerScore> {
+    Ok(PlayerScore {
+        player_id: row.get(0)?, map_key: row.get(1)?, hash: row.get(2)?,
+        mode: row.get(3)?, difficulty: row.get(4)?,
+        accuracy: row.get(5)?, epoch_time: row.get(6)?, score_id: row.get(7)?,
+    })
+}
+
+/// A page is atomic, including creation of previously unknown difficulties.
+pub fn insert_scores_batch(conn: &Connection, scores: &[PlayerScore]) -> rusqlite::Result<usize> {
+    let tx = conn.unchecked_transaction()?;
+    let mut changed = 0;
+    {
+        let mut diff = tx.prepare_cached(
+            "INSERT INTO MapDiff (key, hash, mode, difficulty) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(hash, mode, difficulty) DO UPDATE SET
+                 key = COALESCE(MapDiff.key, excluded.key)"
+        )?;
+        let mut score_stmt = tx.prepare_cached(
+            "INSERT INTO PlayerScore (playerId, mapDiffId, accuracy, epochTime, scoreId)
+             SELECT ?1, id, ?5, ?6, ?7 FROM MapDiff
+             WHERE hash = ?2 AND mode = ?3 AND difficulty = ?4
+             ON CONFLICT(playerId, mapDiffId) DO UPDATE SET
+                 accuracy = excluded.accuracy, epochTime = excluded.epochTime, scoreId = excluded.scoreId
+             WHERE excluded.epochTime > PlayerScore.epochTime
+                OR (excluded.epochTime = PlayerScore.epochTime AND PlayerScore.scoreId = 0 AND excluded.scoreId > 0)"
+        )?;
+        for score in scores {
+            let hash = score.hash.to_lowercase();
+            diff.execute(rusqlite::params![score.map_key, hash, score.mode, score.difficulty])?;
+            changed += score_stmt.execute(rusqlite::params![
+                score.player_id, hash, score.mode, score.difficulty, score.accuracy, score.epoch_time, score.score_id,
+            ])?;
+        }
+    }
+    tx.commit()?;
+    Ok(changed)
+}
+
+pub fn get_scores_by_player(conn: &Connection, player_id: &str) -> rusqlite::Result<Vec<PlayerScore>> {
+    let mut stmt = conn.prepare(&format!("{SCORE_SELECT} WHERE s.playerId = ?1 ORDER BY s.epochTime DESC"))?;
+    let scores = stmt.query_map([player_id], read_score)?.collect();
+    scores
+}
+
+pub fn get_score_count_by_player(conn: &Connection, player_id: &str) -> rusqlite::Result<i64> {
+    conn.query_row("SELECT COUNT(*) FROM PlayerScore WHERE playerId = ?1", [player_id], |r| r.get(0))
+}
+
+pub fn get_latest_score_time(conn: &Connection, player_id: &str) -> rusqlite::Result<Option<i64>> {
+    conn.query_row("SELECT MAX(epochTime) FROM PlayerScore WHERE playerId = ?1", [player_id], |r| r.get(0))
+}
+
+/// Only completed syncs advance this checkpoint; partially saved pages must be retried.
+pub fn get_score_sync_time(conn: &Connection, player_id: &str) -> rusqlite::Result<Option<i64>> {
+    conn.query_row("SELECT scoreSyncEpoch FROM PlayerInfo WHERE id = ?1", [player_id], |r| r.get(0))
+}
+
+/// Batch maps and selected players, keeping parameter counts below SQLite's limit.
+pub fn get_scores_for_maps(
+    conn: &Connection, keys: &[String], player_ids: &[String],
+) -> rusqlite::Result<Vec<PlayerScore>> {
+    let mut scores = Vec::new();
+    for keys in keys.chunks(400) {
+        for players in player_ids.chunks(400) {
+            let key_slots = vec!["?"; keys.len()].join(",");
+            let player_slots = vec!["?"; players.len()].join(",");
+            // Start with this page's difficulties instead of scanning every
+            // selected player's complete score history on each query.
+            let sql = format!(
+                "SELECT s.playerId, d.key, d.hash, d.mode, d.difficulty, s.accuracy, s.epochTime, s.scoreId
+                 FROM MapDiff d CROSS JOIN PlayerScore s ON s.mapDiffId = d.id
+                 WHERE d.key IN ({key_slots}) AND s.playerId IN ({player_slots})"
+            );
+            let mut stmt = conn.prepare(&sql)?;
+            scores.extend(stmt.query_map(
+                rusqlite::params_from_iter(keys.iter().chain(players.iter())), read_score,
+            )?.collect::<rusqlite::Result<Vec<_>>>()?);
+        }
+    }
+    Ok(scores)
+}
 
 pub fn insert_playlist(conn: &Connection, playlist: &Playlist) -> Result<(), rusqlite::Error> {
     conn.execute(
@@ -831,51 +809,6 @@ pub fn get_playlist_hashes(conn: &Connection, source: &PlaylistSource, identifie
     };
 
     get_playlist_hashes_from_bplist(&bplist_path)
-}
-
-/// 获取玩家在指定 hash 列表中的成绩
-pub fn get_scores_by_hashes_and_player(
-    conn: &Connection,
-    hashes: &[String],
-    player_id: &str,
-) -> Result<Vec<PlayerScore>, rusqlite::Error> {
-    if hashes.is_empty() {
-        return Ok(vec![]);
-    }
-
-    // BeatLeader API 不同端点返回的 hash 大小写不一致：
-    // MapDiff 中是大写，PlayerScore 中是小写。
-    // 使用 LOWER() 进行不区分大小写的匹配。
-    let lower_hashes: Vec<String> = hashes.iter().map(|h| h.to_lowercase()).collect();
-    let placeholders = lower_hashes.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-    let sql = format!(
-        "SELECT playerId, scoreId, leaderboardId, mapKey, hash, mode, difficulty, accuracy, epochTime
-         FROM PlayerScore WHERE playerId = ? AND LOWER(hash) IN ({})",
-        placeholders
-    );
-
-    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(player_id.to_string())];
-    for hash in lower_hashes {
-        params.push(Box::new(hash));
-    }
-    let raw_params: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-
-    let mut stmt = conn.prepare(&sql)?;
-    let scores = stmt.query_map(rusqlite::params_from_iter(raw_params), |row| {
-        Ok(PlayerScore {
-            player_id: row.get(0)?,
-            score_id: row.get(1)?,
-            leaderboard_id: row.get(2)?,
-            map_key: row.get(3)?,
-            hash: row.get(4)?,
-            mode: row.get(5)?,
-            difficulty: row.get(6)?,
-            accuracy: row.get(7)?,
-            epoch_time: row.get(8)?,
-        })
-    })?.collect::<Result<Vec<_>, _>>()?;
-
-    Ok(scores)
 }
 
 /// 获取歌单谱面分页（按 .bplist 中 songs 顺序）

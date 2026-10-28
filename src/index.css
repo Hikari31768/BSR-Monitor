@@ -1,5 +1,36 @@
 @import "tailwindcss";
 
+.settings-slider {
+  appearance: none;
+  height: 0.5rem;
+  border-radius: 9999px;
+  cursor: pointer;
+}
+
+.settings-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: var(--color-accent-primary);
+  box-shadow: 0 0 0 3px var(--color-bg-secondary);
+}
+
+.settings-slider::-moz-range-thumb {
+  width: 1rem;
+  height: 1rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-accent-primary);
+}
+
+.settings-slider:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 6px;
+}
+
+.settings-slider:disabled { opacity: 0.5; cursor: not-allowed; }
+
 @theme {
   /* 难度颜色 */
   --color-difficulty-easy-bg: rgba(52, 126, 85, 0.2);

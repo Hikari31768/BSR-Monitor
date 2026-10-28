@@ -77,6 +77,16 @@ export default function PlayerCard({ player, uiState, scoreCount, onUpdateScores
           {player.alias && !isLoading && (
             <p className="text-bs-text-secondary text-sm truncate">{player.name}</p>
           )}
+          {!isLoading && (
+            <p className="text-bs-text-muted text-xs flex items-center gap-1 mt-1">
+              <Clock size={12} />
+              {player.updated_at
+                ? `${new Date(player.updated_at * 1000).toLocaleDateString('zh-CN', {
+                    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+                  })}`
+                : '尚未更新'}
+            </p>
+          )}
           <div className="flex items-center gap-2 mt-2">
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
               isLoading

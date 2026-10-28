@@ -7,6 +7,7 @@ const BEATSAVER_BASE_URL: &str = "https://api.beatsaver.com";
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
+#[derive(Clone)]
 pub struct ApiClient {
     client: Client,
     bl_base_url: String,

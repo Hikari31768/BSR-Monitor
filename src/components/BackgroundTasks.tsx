@@ -69,15 +69,17 @@ export default function BackgroundTasks() {
         progress: number;
         message?: string;
         player_name?: string;
+        display_name?: string;
+        target_id?: string;
       };
 
       if (!DISPLAY_TASKS.includes(payload.task_type)) return;
 
-      const isCompleted = payload.stage === 'completed';
+      const isCompleted = payload.stage === 'completed' || payload.stage === 'failed';
 
       setTasks(prev => {
         const existing = prev[payload.task_id];
-        let displayName = existing?.display_name || '';
+        let displayName = payload.display_name || existing?.display_name || '';
         if (!displayName && payload.player_name) {
           displayName = payload.task_type === 'add_player'
             ? `更新玩家: ${payload.player_name}`

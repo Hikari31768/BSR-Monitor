@@ -38,6 +38,8 @@ pub struct ProgressPayload {
     pub message: Option<String>,
     pub player_name: Option<String>,
     pub player_avatar_url: Option<String>,
+    pub target_id: Option<String>,
+    pub display_name: Option<String>,
 }
 
 impl ProgressPayload {
@@ -52,6 +54,8 @@ impl ProgressPayload {
             message: None,
             player_name: None,
             player_avatar_url: None,
+            target_id: None,
+            display_name: None,
         }
     }
 
@@ -81,6 +85,16 @@ impl ProgressPayload {
 
     pub fn with_player_avatar_url(mut self, avatar_url: String) -> Self {
         self.player_avatar_url = Some(avatar_url);
+        self
+    }
+
+    pub fn with_target(mut self, target_id: String) -> Self {
+        self.target_id = Some(target_id);
+        self
+    }
+
+    pub fn with_display_name(mut self, display_name: String) -> Self {
+        self.display_name = Some(display_name);
         self
     }
 }

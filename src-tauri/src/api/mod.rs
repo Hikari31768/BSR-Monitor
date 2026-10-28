@@ -3,6 +3,7 @@ pub mod error;
 pub mod beatleader;
 pub mod beatsaver;
 pub mod types;
+pub mod score_pager;
 
 #[cfg(test)]
 mod tests;
