@@ -72,6 +72,7 @@ pub async fn add_player(
         api,
         is_incremental,
         true,
+        app.state::<crate::settings::SettingsState>().concurrency.add_player_pages,
     ).await;
 
     // 无论成功失败都移除任务记录
@@ -93,6 +94,7 @@ pub async fn fetch_and_save_player(
     api: BeatLeaderApi,
     is_incremental: bool,
     emit_events: bool,
+    page_concurrency: usize,
 ) -> Result<PlayerInfo, String> {
     let message_prefix = if is_incremental { "更新" } else { "" };
 
@@ -161,7 +163,7 @@ pub async fn fetch_and_save_player(
     let mut total_scores = 0;
     let mut successful_pages = 0usize;
 
-    let mut pager = crate::api::score_pager::ScorePager::new(api, id.to_string(), page_size, latest_local_epoch);
+    let mut pager = crate::api::score_pager::ScorePager::new(api, id.to_string(), page_size, latest_local_epoch, page_concurrency);
     while let Some((page, response)) = pager.next_page().await.map_err(|e| e.to_string())? {
         let save_started = std::time::Instant::now();
         // 处理每条成绩
@@ -359,7 +361,7 @@ pub(crate) async fn refresh_saved_player(
         let response = api.get_player(player_id).await.map_err(|e| e.to_string())?;
         let canonical_id = response.id.clone();
         fetch_and_save_player(app, task_state, &canonical_id, response,
-            task_id.clone(), None, None, api, true, emit_events).await
+            task_id.clone(), None, None, api, true, emit_events, crate::settings::MAX_CONCURRENCY).await
     }.await;
     match &result {
         Ok(player) if emit_events => { let _ = app.emit("players-updated", &player.id); }

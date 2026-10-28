@@ -1,6 +1,5 @@
 use crate::api::MapDetail;
 use crate::database::operations::Map;
-use tauri::Manager;
 use std::path::PathBuf;
 
 /// 将 API MapDetail 转换为数据库 Map 结构
@@ -29,8 +28,8 @@ pub fn get_version() -> String {
 /// 打开应用数据目录
 #[tauri::command]
 pub fn open_data_dir(app: tauri::AppHandle) -> Result<(), String> {
-    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    open::that(dir).map_err(|e| e.to_string())
+    let dir = crate::settings::data_directory(&app);
+    open::that(crate::settings::display_directory(&dir)).map_err(|e| e.to_string())
 }
 
 /// 用户偏好数据结构
@@ -67,9 +66,7 @@ impl Default for UserPrefs {
 }
 
 fn get_prefs_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    app.path().app_data_dir()
-        .map(|dir| dir.join("user_prefs.json"))
-        .map_err(|e| e.to_string())
+    Ok(crate::settings::data_directory(app).join("user_prefs.json"))
 }
 
 /// 加载用户偏好

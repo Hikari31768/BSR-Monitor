@@ -235,7 +235,7 @@ async fn fetch_and_save_bplist(
     api: &BeatSaverApi,
     _task_id: &str,
 ) -> Result<(String, String), String> {
-    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let app_data_dir = crate::settings::data_directory(app);
     let playlists_dir = app_data_dir.join("Playlists");
     std::fs::create_dir_all(&playlists_dir).map_err(|e| e.to_string())?;
 

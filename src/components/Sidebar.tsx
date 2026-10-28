@@ -85,14 +85,14 @@ export default function Sidebar() {
         >
           <FolderOpen size={16} />
         </button>
-        <button
-          className="p-1.5 rounded-lg text-bs-text-muted hover:text-bs-text-primary hover:bg-bs-bg-tertiary transition-colors opacity-50 cursor-not-allowed"
-          title="设置（开发中）"
-          aria-label="设置（开发中）"
-          disabled
+        <NavLink
+          to="/settings"
+          className={({ isActive }) => `p-1.5 rounded-lg transition-colors ${isActive ? 'text-bs-accent-primary bg-bs-accent-primary/10' : 'text-bs-text-muted hover:text-bs-text-primary hover:bg-bs-bg-tertiary'}`}
+          title="设置"
+          aria-label="设置"
         >
           <Settings size={16} />
-        </button>
+        </NavLink>
       </div>
     </aside>
   );

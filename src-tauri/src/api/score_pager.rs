@@ -2,8 +2,6 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use tokio::task::JoinSet;
 use super::{ApiError, BeatLeaderApi, CompactScoreResponseWithMetadata};
 
-const PAGE_CONCURRENCY: usize = 5;
-
 type Page = CompactScoreResponseWithMetadata;
 type Fetch = Arc<dyn Fn(i32) -> Pin<Box<dyn Future<Output = Result<Page, ApiError>> + Send>> + Send + Sync>;
 
@@ -20,11 +18,12 @@ pub struct ScorePager {
     boundary_in_batch: bool,
     initialized: bool,
     done: bool,
+    concurrency: usize,
 }
 
 impl ScorePager {
-    pub fn new(api: BeatLeaderApi, player_id: String, count: i32, latest: Option<i64>) -> Self {
-        Self::with_fetch(Arc::new(move |page| {
+    pub fn new(api: BeatLeaderApi, player_id: String, count: i32, latest: Option<i64>, concurrency: usize) -> Self {
+        let mut pager = Self::with_fetch(Arc::new(move |page| {
             let api = api.clone();
             let player_id = player_id.clone();
             Box::pin(async move {
@@ -33,7 +32,9 @@ impl ScorePager {
                 eprintln!("Score page {page}: request={:?}", started.elapsed());
                 result
             })
-        }), count, latest)
+        }), count, latest);
+        pager.concurrency = concurrency.clamp(1, crate::settings::MAX_CONCURRENCY);
+        pager
     }
 
     fn with_fetch(fetch: Fetch, count: i32, latest: Option<i64>) -> Self {
@@ -48,6 +49,7 @@ impl ScorePager {
             boundary_in_batch: false,
             initialized: false,
             done: false,
+            concurrency: crate::settings::MAX_CONCURRENCY,
         }
     }
 
@@ -109,7 +111,7 @@ impl ScorePager {
 
     fn spawn_batch(&mut self) {
         self.boundary_in_batch = false;
-        while self.batch_remaining < PAGE_CONCURRENCY && self.page <= self.total_pages {
+        while self.batch_remaining < self.concurrency && self.page <= self.total_pages {
             let page = self.page;
             self.page += 1;
             let fetch = self.fetch.clone();
@@ -136,6 +138,34 @@ mod tests {
             "data": [{"score": {"id": number, "accuracy": 0.9, "epochTime": epoch},
                       "leaderboard": {"id": "abc71"}}]
         })).unwrap()
+    }
+
+    #[tokio::test]
+    async fn configured_limit_bounds_requests_and_allows_out_of_order_results() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let gates = Arc::new((0..9).map(|_| tokio::sync::Notify::new()).collect::<Vec<_>>());
+        let (worker_calls, worker_gates) = (calls.clone(), gates.clone());
+        let mut pager = ScorePager::with_fetch(Arc::new(move |n| {
+            let (calls, gates) = (worker_calls.clone(), worker_gates.clone());
+            Box::pin(async move {
+                calls.fetch_add(1, Ordering::SeqCst);
+                if n != 1 { gates[n as usize].notified().await; }
+                Ok(page(n, 20, 8))
+            })
+        }), 1, None);
+        pager.concurrency = 2;
+        assert_eq!(pager.next_page().await.unwrap().unwrap().0, 1);
+        tokio::task::yield_now().await;
+        assert_eq!(calls.load(Ordering::SeqCst), 3);
+        gates[3].notify_one();
+        assert_eq!(pager.next_page().await.unwrap().unwrap().0, 3);
+        assert_eq!(calls.load(Ordering::SeqCst), 3);
+        gates[2].notify_one();
+        assert_eq!(pager.next_page().await.unwrap().unwrap().0, 2);
+        gates[4].notify_one();
+        assert_eq!(pager.next_page().await.unwrap().unwrap().0, 4);
+        tokio::task::yield_now().await;
+        assert_eq!(calls.load(Ordering::SeqCst), 5);
     }
 
     #[tokio::test]

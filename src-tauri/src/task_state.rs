@@ -21,11 +21,17 @@ pub struct TaskState {
 
 impl Default for TaskState {
     fn default() -> Self {
+        Self::with_limits(&crate::settings::ConcurrencySettings::default())
+    }
+}
+
+impl TaskState {
+    pub fn with_limits(settings: &crate::settings::ConcurrencySettings) -> Self {
         Self {
             tasks: Mutex::new(HashMap::new()),
-            player_slots: tokio::sync::Semaphore::new(crate::sync_batch::PLAYER_CONCURRENCY),
-            playlist_slots: tokio::sync::Semaphore::new(crate::sync_batch::PLAYLIST_CONCURRENCY),
-            map_info_slots: tokio::sync::Semaphore::new(crate::sync_batch::MAP_INFO_CONCURRENCY),
+            player_slots: tokio::sync::Semaphore::new(settings.startup_players),
+            playlist_slots: tokio::sync::Semaphore::new(settings.startup_playlists),
+            map_info_slots: tokio::sync::Semaphore::new(settings.map_info),
         }
     }
 }

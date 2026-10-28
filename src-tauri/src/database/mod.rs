@@ -8,7 +8,7 @@ use tauri::AppHandle;
 use tauri::Manager;
 
 pub fn init_database(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    let app_dir = app.path().app_data_dir()?;
+    let app_dir = crate::settings::data_directory(app);
     std::fs::create_dir_all(&app_dir)?;
 
     // 创建 Playlists 目录

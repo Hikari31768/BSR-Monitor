@@ -135,7 +135,7 @@ pub async fn update_player_scores(
         db::get_latest_score_time(&guard, &player_id).map_err(|e| e.to_string())?
     };
 
-    let mut pager = crate::api::score_pager::ScorePager::new(api, player_id.clone(), page_size, latest_local_epoch);
+    let mut pager = crate::api::score_pager::ScorePager::new(api, player_id.clone(), page_size, latest_local_epoch, crate::settings::MAX_CONCURRENCY);
     while let Some((page, response)) = pager.next_page().await.map_err(|e| e.to_string())? {
         let save_started = std::time::Instant::now();
         if response.data.is_empty() {

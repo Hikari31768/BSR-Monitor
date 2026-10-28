@@ -5,8 +5,10 @@ pub mod progress;
 pub mod task_state;
 mod sync_batch;
 mod startup;
+mod settings;
 
 use task_state::TaskState;
+use tauri::Manager;
 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -14,9 +16,12 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .manage(TaskState::default())
         .setup(|app| {
             let app_handle = app.handle();
+            let settings = settings::SettingsState::load(app.path().app_data_dir()?)
+                .map_err(std::io::Error::other)?;
+            app.manage(TaskState::with_limits(&settings.concurrency));
+            app.manage(settings);
             database::init_database(&app_handle)?;
 
             startup::spawn(app_handle.clone());
@@ -52,6 +57,9 @@ pub fn run() {
             commands::common::open_data_dir,
             commands::common::load_user_prefs,
             commands::common::save_user_prefs,
+            settings::get_settings,
+            settings::save_settings,
+            settings::restart_app,
             task_state::get_active_tasks,
         ])
         .run(tauri::generate_context!())

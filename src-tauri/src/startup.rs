@@ -1,7 +1,7 @@
 use std::{sync::Mutex, time::Duration};
 use tauri::{AppHandle, Manager, Emitter};
 use crate::{commands, database::operations as db, progress::{emit_progress_event, ProgressPayload, TaskType},
-    sync_batch::{run_bounded, BatchSummary, PLAYER_CONCURRENCY, PLAYLIST_CONCURRENCY}, task_state::TaskState};
+    sync_batch::{run_bounded, BatchSummary}, task_state::TaskState};
 
 pub fn spawn(app: AppHandle) {
     // Use the application's runtime so playlist enrichment can outlive the
@@ -49,7 +49,8 @@ async fn refresh_players(app: AppHandle, players: Vec<db::PlayerInfo>) {
     let total = players.len();
     report(&app, &task_id, "刷新玩家成绩", total, &BatchSummary::default(), false);
     let worker_app = app.clone();
-    let summary = run_bounded(players, PLAYER_CONCURRENCY, move |player| {
+    let limit = app.state::<crate::settings::SettingsState>().concurrency.startup_players;
+    let summary = run_bounded(players, limit, move |player| {
         let app = worker_app.clone();
         async move {
             let state = app.state::<TaskState>();
@@ -72,7 +73,8 @@ async fn refresh_playlists(app: AppHandle, playlists: Vec<db::Playlist>) {
     let total = playlists.len();
     report(&app, &task_id, "刷新歌单", total, &BatchSummary::default(), false);
     let worker_app = app.clone();
-    let summary = run_bounded(playlists, PLAYLIST_CONCURRENCY, move |playlist| {
+    let limit = app.state::<crate::settings::SettingsState>().concurrency.startup_playlists;
+    let summary = run_bounded(playlists, limit, move |playlist| {
         let app = worker_app.clone();
         async move {
             let state = app.state::<TaskState>();
