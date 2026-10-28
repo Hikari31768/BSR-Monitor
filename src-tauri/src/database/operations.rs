@@ -43,6 +43,7 @@ pub struct PlayerInfo {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlayerScore {
     pub player_id: String,
+    pub score_id: i64,
     pub map_key: Option<String>,
     pub hash: String,
     pub mode: String,
@@ -583,7 +584,8 @@ pub fn delete_player(conn: &Connection, id: &str) -> Result<(), String> {
 pub fn mark_player_updated(conn: &Connection, id: &str) -> rusqlite::Result<i64> {
     let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default().as_secs() as i64;
-    if conn.execute("UPDATE PlayerInfo SET updatedAt = ?2 WHERE id = ?1",
+    if conn.execute("UPDATE PlayerInfo SET updatedAt = ?2,
+        scoreSyncEpoch = (SELECT MAX(epochTime) FROM PlayerScore WHERE playerId = ?1) WHERE id = ?1",
         rusqlite::params![id, timestamp])? == 0 {
         return Err(rusqlite::Error::QueryReturnedNoRows);
     }
@@ -610,14 +612,14 @@ pub fn update_player(conn: &Connection, player: &PlayerInfo) -> Result<(), rusql
 
 // Shared map fields are projected for callers, but stored only in MapDiff.
 const SCORE_SELECT: &str =
-    "SELECT s.playerId, d.key, d.hash, d.mode, d.difficulty, s.accuracy, s.epochTime
+    "SELECT s.playerId, d.key, d.hash, d.mode, d.difficulty, s.accuracy, s.epochTime, s.scoreId
      FROM PlayerScore s JOIN MapDiff d ON d.id = s.mapDiffId";
 
 fn read_score(row: &rusqlite::Row<'_>) -> rusqlite::Result<PlayerScore> {
     Ok(PlayerScore {
         player_id: row.get(0)?, map_key: row.get(1)?, hash: row.get(2)?,
         mode: row.get(3)?, difficulty: row.get(4)?,
-        accuracy: row.get(5)?, epoch_time: row.get(6)?,
+        accuracy: row.get(5)?, epoch_time: row.get(6)?, score_id: row.get(7)?,
     })
 }
 
@@ -632,18 +634,19 @@ pub fn insert_scores_batch(conn: &Connection, scores: &[PlayerScore]) -> rusqlit
                  key = COALESCE(MapDiff.key, excluded.key)"
         )?;
         let mut score_stmt = tx.prepare_cached(
-            "INSERT INTO PlayerScore (playerId, mapDiffId, accuracy, epochTime)
-             SELECT ?1, id, ?5, ?6 FROM MapDiff
+            "INSERT INTO PlayerScore (playerId, mapDiffId, accuracy, epochTime, scoreId)
+             SELECT ?1, id, ?5, ?6, ?7 FROM MapDiff
              WHERE hash = ?2 AND mode = ?3 AND difficulty = ?4
              ON CONFLICT(playerId, mapDiffId) DO UPDATE SET
-                 accuracy = excluded.accuracy, epochTime = excluded.epochTime
-             WHERE excluded.epochTime > PlayerScore.epochTime"
+                 accuracy = excluded.accuracy, epochTime = excluded.epochTime, scoreId = excluded.scoreId
+             WHERE excluded.epochTime > PlayerScore.epochTime
+                OR (excluded.epochTime = PlayerScore.epochTime AND PlayerScore.scoreId = 0 AND excluded.scoreId > 0)"
         )?;
         for score in scores {
             let hash = score.hash.to_lowercase();
             diff.execute(rusqlite::params![score.map_key, hash, score.mode, score.difficulty])?;
             changed += score_stmt.execute(rusqlite::params![
-                score.player_id, hash, score.mode, score.difficulty, score.accuracy, score.epoch_time,
+                score.player_id, hash, score.mode, score.difficulty, score.accuracy, score.epoch_time, score.score_id,
             ])?;
         }
     }
@@ -665,6 +668,11 @@ pub fn get_latest_score_time(conn: &Connection, player_id: &str) -> rusqlite::Re
     conn.query_row("SELECT MAX(epochTime) FROM PlayerScore WHERE playerId = ?1", [player_id], |r| r.get(0))
 }
 
+/// Only completed syncs advance this checkpoint; partially saved pages must be retried.
+pub fn get_score_sync_time(conn: &Connection, player_id: &str) -> rusqlite::Result<Option<i64>> {
+    conn.query_row("SELECT scoreSyncEpoch FROM PlayerInfo WHERE id = ?1", [player_id], |r| r.get(0))
+}
+
 /// Batch maps and selected players, keeping parameter counts below SQLite's limit.
 pub fn get_scores_for_maps(
     conn: &Connection, keys: &[String], player_ids: &[String],
@@ -677,7 +685,7 @@ pub fn get_scores_for_maps(
             // Start with this page's difficulties instead of scanning every
             // selected player's complete score history on each query.
             let sql = format!(
-                "SELECT s.playerId, d.key, d.hash, d.mode, d.difficulty, s.accuracy, s.epochTime
+                "SELECT s.playerId, d.key, d.hash, d.mode, d.difficulty, s.accuracy, s.epochTime, s.scoreId
                  FROM MapDiff d CROSS JOIN PlayerScore s ON s.mapDiffId = d.id
                  WHERE d.key IN ({key_slots}) AND s.playerId IN ({player_slots})"
             );

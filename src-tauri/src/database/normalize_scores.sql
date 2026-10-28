@@ -37,18 +37,19 @@ ON CONFLICT(hash, mode, difficulty) DO UPDATE SET
 CREATE TABLE PlayerScore_new (
     playerId TEXT NOT NULL REFERENCES PlayerInfo(id),
     mapDiffId INTEGER NOT NULL REFERENCES MapDiff_new(id),
+    scoreId INTEGER NOT NULL DEFAULT 0,
     accuracy REAL NOT NULL,
     epochTime INTEGER NOT NULL,
     PRIMARY KEY(playerId, mapDiffId)
 ) WITHOUT ROWID;
 
-INSERT INTO PlayerScore_new (playerId, mapDiffId, accuracy, epochTime)
-SELECT s.playerId, d.id, s.accuracy, s.epochTime
+INSERT INTO PlayerScore_new (playerId, mapDiffId, scoreId, accuracy, epochTime)
+SELECT s.playerId, d.id, s.scoreId, s.accuracy, s.epochTime
 FROM PlayerScore s JOIN MapDiff_new d
   ON d.hash = LOWER(s.hash) AND d.mode = s.mode AND d.difficulty = s.difficulty
 WHERE 1
 ON CONFLICT(playerId, mapDiffId) DO UPDATE SET
-    accuracy = excluded.accuracy, epochTime = excluded.epochTime
+    scoreId = excluded.scoreId, accuracy = excluded.accuracy, epochTime = excluded.epochTime
 WHERE excluded.epochTime > PlayerScore_new.epochTime
    OR (excluded.epochTime = PlayerScore_new.epochTime
        AND excluded.accuracy > PlayerScore_new.accuracy);
@@ -60,4 +61,4 @@ ALTER TABLE PlayerScore_new RENAME TO PlayerScore;
 CREATE INDEX idx_mapdiff_key ON MapDiff(key);
 CREATE INDEX idx_playerscore_diff ON PlayerScore(mapDiffId);
 CREATE INDEX idx_playerscore_player_time ON PlayerScore(playerId, epochTime DESC);
-PRAGMA user_version = 1;
+PRAGMA user_version = 2;

@@ -14,7 +14,7 @@ source.close();
 const db = new DatabaseSync(scratch);
 const beforeBytes = (await stat(scratch)).size;
 const before = db.prepare(`
-    SELECT playerId, LOWER(hash) AS hash, mode, difficulty, accuracy, epochTime
+    SELECT playerId, scoreId, LOWER(hash) AS hash, mode, difficulty, accuracy, epochTime
     FROM (
       SELECT *, ROW_NUMBER() OVER (
         PARTITION BY playerId, LOWER(hash), mode, difficulty
@@ -37,7 +37,7 @@ try {
     throw error;
 }
 const after = db.prepare(`
-    SELECT s.playerId, d.hash, d.mode, d.difficulty, s.accuracy, s.epochTime
+    SELECT s.playerId, s.scoreId, d.hash, d.mode, d.difficulty, s.accuracy, s.epochTime
     FROM PlayerScore s JOIN MapDiff d ON s.mapDiffId = d.id
     ORDER BY s.playerId, d.hash, d.mode, d.difficulty
 `).all();
@@ -51,7 +51,7 @@ assert.deepEqual(metadataAfter, metadataBefore, 'Existing map metadata changed')
 assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
 assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
 assert.deepEqual(db.prepare("SELECT name FROM pragma_table_info('PlayerScore')").all().map(r => r.name),
-    ['playerId', 'mapDiffId', 'accuracy', 'epochTime']);
+    ['playerId', 'mapDiffId', 'scoreId', 'accuracy', 'epochTime']);
 db.exec('VACUUM;');
 const results = {
     scoresPreserved: after.length,

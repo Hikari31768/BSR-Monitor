@@ -25,6 +25,7 @@ export type PlaylistSource = 'beatsaver' | 'mapper' | 'local';
 
 export interface PlayerScore {
   player_id: string;
+  score_id: number;
   map_key?: string;
   hash: string;
   mode: string;
@@ -95,6 +96,7 @@ export interface ScoreRowData {
 
 export interface PlayerScoreCell {
   player_id: string;
+  score_id: number;
   accuracy: number;
   is_expired: boolean;
 }

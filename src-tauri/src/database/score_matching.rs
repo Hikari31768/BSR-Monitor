@@ -22,6 +22,7 @@ pub struct ScoreRowData {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlayerScoreCell {
     pub player_id: String,
+    pub score_id: i64,
     pub accuracy: f32,
     pub is_expired: bool,
 }
@@ -55,10 +56,11 @@ pub fn build_map_scores_response(map: Map, diffs: &[MapDiff], scores: &[PlayerSc
         let expired = !current.contains(&(score.hash.to_lowercase(), score.mode.clone(), score.difficulty.clone()));
         let cell = best.entry((score.mode.clone(), score.difficulty.clone(), score.player_id.clone()))
             .or_insert_with(|| PlayerScoreCell {
-                player_id: score.player_id.clone(), accuracy: score.accuracy, is_expired: expired,
+                player_id: score.player_id.clone(), score_id: score.score_id, accuracy: score.accuracy, is_expired: expired,
             });
         if (cell.is_expired && !expired) || (cell.is_expired == expired && score.accuracy > cell.accuracy) {
             cell.accuracy = score.accuracy;
+            cell.score_id = score.score_id;
             cell.is_expired = expired;
         }
     }

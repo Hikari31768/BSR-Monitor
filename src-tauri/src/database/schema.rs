@@ -22,7 +22,7 @@ fn add_column_if_not_exists(
 
 pub fn needs_score_migration(conn: &Connection) -> Result<bool, rusqlite::Error> {
     conn.query_row(
-        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('PlayerScore') WHERE name = 'scoreId')",
+        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('PlayerScore') WHERE name = 'hash')",
         [], |row| row.get(0),
     )
 }
@@ -77,18 +77,24 @@ pub fn create_tables(conn: &Connection) -> Result<bool, rusqlite::Error> {
             avatarURL TEXT,
             liveURL TEXT,
             alias TEXT,
-            updatedAt BIGINT
+            updatedAt BIGINT,
+            scoreSyncEpoch BIGINT
         )",
         [],
     )?;
 
     add_column_if_not_exists(conn, "PlayerInfo", "updatedAt", "BIGINT")?;
+    let has_sync_epoch: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('PlayerInfo') WHERE name = 'scoreSyncEpoch')",
+        [], |row| row.get(0),
+    )?;
 
     // PlayerScore 表 - 玩家成绩记录
     conn.execute(
         "CREATE TABLE IF NOT EXISTS PlayerScore (
             playerId TEXT NOT NULL REFERENCES PlayerInfo(id),
             mapDiffId INTEGER NOT NULL REFERENCES MapDiff(id),
+            scoreId INTEGER NOT NULL DEFAULT 0,
             accuracy REAL NOT NULL,
             epochTime INTEGER NOT NULL,
             PRIMARY KEY (playerId, mapDiffId)
@@ -124,11 +130,22 @@ pub fn create_tables(conn: &Connection) -> Result<bool, rusqlite::Error> {
         tx.execute_batch(include_str!("normalize_scores.sql"))?;
         tx.commit()?;
     }
+    // Accept databases produced by the earlier normalization without replay IDs.
+    add_column_if_not_exists(conn, "PlayerScore", "scoreId", "INTEGER NOT NULL DEFAULT 0")?;
+    if !has_sync_epoch {
+        let tx = conn.unchecked_transaction()?;
+        tx.execute("ALTER TABLE PlayerInfo ADD COLUMN scoreSyncEpoch BIGINT", [])?;
+        // Earlier normalized databases discarded IDs. Re-fetch those players
+        // once so their existing replay links can be restored as well.
+        tx.execute("UPDATE PlayerInfo SET scoreSyncEpoch = (SELECT MAX(epochTime) FROM PlayerScore WHERE playerId = PlayerInfo.id)
+            WHERE NOT EXISTS (SELECT 1 FROM PlayerScore WHERE playerId = PlayerInfo.id AND scoreId = 0)", [])?;
+        tx.commit()?;
+    }
     conn.execute_batch(
         "CREATE INDEX IF NOT EXISTS idx_mapdiff_key ON MapDiff(key);
          CREATE INDEX IF NOT EXISTS idx_playerscore_diff ON PlayerScore(mapDiffId);
          CREATE INDEX IF NOT EXISTS idx_playerscore_player_time ON PlayerScore(playerId, epochTime DESC);
-         PRAGMA user_version = 1;"
+         PRAGMA user_version = 2;"
     )?;
     Ok(migrated)
 }

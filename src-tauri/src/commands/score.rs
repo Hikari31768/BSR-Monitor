@@ -132,7 +132,7 @@ pub async fn update_player_scores(
         let state = app.try_state::<Mutex<rusqlite::Connection>>()
             .ok_or("Database not initialized")?;
         let guard = state.lock().map_err(|e| e.to_string())?;
-        db::get_latest_score_time(&guard, &player_id).map_err(|e| e.to_string())?
+        db::get_score_sync_time(&guard, &player_id).map_err(|e| e.to_string())?
     };
 
     let mut pager = crate::api::score_pager::ScorePager::new(api, player_id.clone(), page_size, latest_local_epoch, crate::settings::MAX_CONCURRENCY);
@@ -158,6 +158,7 @@ pub async fn update_player_scores(
             let difficulty = db::difficulty_from_value(score_data.leaderboard.difficulty);
             scores_to_upsert.push(PlayerScore {
                 player_id: player_id.clone(),
+                score_id: score_data.score.id as i64,
                 map_key,
                 hash: score_data.leaderboard.song_hash.to_lowercase(),
                 mode: score_data.leaderboard.mode_name.clone(),

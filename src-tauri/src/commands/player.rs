@@ -143,7 +143,7 @@ pub async fn fetch_and_save_player(
         let state = app.try_state::<Mutex<rusqlite::Connection>>()
             .ok_or("Database not initialized")?;
         let guard = state.lock().map_err(|e| e.to_string())?;
-        db::get_latest_score_time(&guard, id).map_err(|e| e.to_string())?
+        db::get_score_sync_time(&guard, id).map_err(|e| e.to_string())?
     } else {
         None
     };
@@ -181,6 +181,7 @@ pub async fn fetch_and_save_player(
             let difficulty = db::difficulty_from_value(score_data.leaderboard.difficulty);
             scores_to_insert.push(crate::database::operations::PlayerScore {
                 player_id: id.to_string(),
+                score_id: score_data.score.id as i64,
                 map_key,
                 hash: score_data.leaderboard.song_hash.to_lowercase(),
                 mode: score_data.leaderboard.mode_name.clone(),

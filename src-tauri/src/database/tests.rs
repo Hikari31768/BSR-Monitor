@@ -13,7 +13,7 @@ fn database() -> Connection {
 }
 
 fn score(player: &str, hash: &str, mode: &str, time: i64, accuracy: f32) -> PlayerScore {
-    PlayerScore { player_id: player.into(), map_key: Some("abc".into()), hash: hash.into(),
+    PlayerScore { player_id: player.into(), score_id: time, map_key: Some("abc".into()), hash: hash.into(),
         mode: mode.into(), difficulty: "Expert".into(), accuracy, epoch_time: time }
 }
 
@@ -35,6 +35,7 @@ fn page_upsert_shares_difficulties_and_only_accepts_newer_scores() {
     assert_eq!(insert_scores_batch(&db, &[score("p1", "abc", "Standard", 30, 0.7)]).unwrap(), 1);
     assert_eq!(get_latest_score_time(&db, "p1").unwrap(), Some(30));
     assert_eq!(get_scores_by_player(&db, "p1").unwrap()[0].accuracy, 0.7);
+    assert_eq!(get_scores_by_player(&db, "p1").unwrap()[0].score_id, 30);
     assert_eq!(get_scores_for_maps(&db, &["abc".into()], &["p1".into(), "p2".into()]).unwrap().len(), 2);
     assert!(get_scores_for_maps(&db, &[], &["p1".into()]).unwrap().is_empty());
     assert!(get_scores_for_maps(&db, &["abc".into()], &[]).unwrap().is_empty());
@@ -107,6 +108,8 @@ fn legacy_migration_deduplicates_hash_case_without_losing_newest_score() {
     assert_eq!(scores[0].epoch_time, 2);
     assert_eq!(scores[0].accuracy, 0.8);
     assert_eq!(scores[0].hash, "hash");
+    assert_eq!(scores[0].score_id, 2);
+    assert_eq!(get_score_sync_time(&db, "p1").unwrap(), Some(2));
     let violations: i64 = db.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| r.get(0)).unwrap();
     assert_eq!(violations, 0);
 }
@@ -152,4 +155,69 @@ fn successful_sync_time_persists_and_is_not_overwritten_by_profile_updates() {
     assert_eq!(player.updated_at, Some(timestamp));
     assert_eq!(*count, 0);
     assert!(mark_player_updated(&db, "deleted-player").is_err());
+}
+
+#[test]
+fn incomplete_sync_does_not_advance_retry_checkpoint() {
+    let db = database();
+    insert_scores_batch(&db, &[score("p1", "first-page", "Standard", 100, 0.9)]).unwrap();
+    // The initial import failed after its newest page. A retry must still fetch all pages.
+    assert_eq!(get_score_sync_time(&db, "p1").unwrap(), None);
+    insert_scores_batch(&db, &[score("p1", "last-page", "Standard", 10, 0.8)]).unwrap();
+    mark_player_updated(&db, "p1").unwrap();
+    assert_eq!(get_score_sync_time(&db, "p1").unwrap(), Some(100));
+    // A later refresh saves newer pages out of order, then fails before finishing.
+    insert_scores_batch(&db, &[score("p1", "new-first-page", "Standard", 300, 0.95)]).unwrap();
+    assert_eq!(get_latest_score_time(&db, "p1").unwrap(), Some(300));
+    assert_eq!(get_score_sync_time(&db, "p1").unwrap(), Some(100));
+    assert!(!schema::create_tables(&db).unwrap());
+    assert_eq!(get_score_sync_time(&db, "p1").unwrap(), Some(100));
+    insert_scores_batch(&db, &[score("p1", "missing-page", "Standard", 200, 0.85)]).unwrap();
+    mark_player_updated(&db, "p1").unwrap();
+    assert_eq!(get_score_sync_time(&db, "p1").unwrap(), Some(300));
+    assert_eq!(get_score_count_by_player(&db, "p1").unwrap(), 4);
+}
+
+#[test]
+fn replay_id_follows_best_current_expired_and_removed_difficulty_scores() {
+    let map = Map { key: "abc".into(), song_name: "Song".into(), song_author_name: "Author".into(),
+        level_author_name: "Mapper".into(), rating: None, cover_url: None, preview_url: None };
+    let mut removed_a = score("removed", "old-a", "Standard", 5, 0.8);
+    removed_a.difficulty = "Hard".into();
+    let mut removed_b = score("removed", "old-b", "Standard", 6, 0.96);
+    removed_b.difficulty = "Hard".into();
+    let response = build_map_scores_response(map, &[diff("current", "Standard")], &[
+        score("current", "current", "Standard", 1, 0.8),
+        score("current", "current", "Standard", 2, 0.9),
+        score("current", "old-a", "Standard", 7, 0.99),
+        score("expired", "old-a", "Standard", 3, 0.8),
+        score("expired", "old-b", "Standard", 4, 0.95),
+        removed_a, removed_b,
+    ]);
+    for (player, expected_id, expected_accuracy, expired) in [
+        ("current", 2, 0.9, false), ("expired", 4, 0.95, true), ("removed", 6, 0.96, true),
+    ] {
+        let cell = response.scores.iter().flat_map(|row| &row.scores).find(|cell| cell.player_id == player).unwrap();
+        assert_eq!(cell.score_id, expected_id);
+        assert_eq!(cell.accuracy, expected_accuracy);
+        assert_eq!(cell.is_expired, expired);
+    }
+}
+
+#[test]
+fn earlier_normalized_database_upgrades_without_repeating_legacy_migration() {
+    let db = database();
+    insert_scores_batch(&db, &[score("p1", "hash", "Standard", 10, 0.9)]).unwrap();
+    db.execute_batch("ALTER TABLE PlayerScore DROP COLUMN scoreId;
+        ALTER TABLE PlayerInfo DROP COLUMN scoreSyncEpoch; PRAGMA user_version = 1;").unwrap();
+    assert!(!schema::needs_score_migration(&db).unwrap());
+    assert!(!schema::create_tables(&db).unwrap());
+    assert_eq!(get_scores_by_player(&db, "p1").unwrap()[0].score_id, 0);
+    assert_eq!(get_score_sync_time(&db, "p1").unwrap(), None);
+    // Refreshing an equal-timestamp score can restore its previously discarded ID.
+    assert_eq!(insert_scores_batch(&db, &[score("p1", "hash", "Standard", 10, 0.9)]).unwrap(), 1);
+    assert_eq!(get_scores_by_player(&db, "p1").unwrap()[0].score_id, 10);
+    mark_player_updated(&db, "p1").unwrap();
+    assert_eq!(get_score_sync_time(&db, "p1").unwrap(), Some(10));
+    assert!(!schema::create_tables(&db).unwrap());
 }
