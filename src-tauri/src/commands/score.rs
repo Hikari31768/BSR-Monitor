@@ -230,7 +230,7 @@ fn build_score_rows(
                 player_current_best.entry(player_id).or_insert((0.0, score.score_id))
             };
             if score.accuracy > entry.0 {
-                entry.0 = score.accuracy;
+                *entry = (score.accuracy, score.score_id);
             }
         }
 
@@ -282,7 +282,7 @@ fn build_score_rows(
             for (player_id, score) in player_scores {
                 let entry = player_best.entry(player_id.clone()).or_insert((0.0, score.score_id));
                 if score.accuracy > entry.0 {
-                    entry.0 = score.accuracy;
+                    *entry = (score.accuracy, score.score_id);
                 }
             }
 
@@ -307,6 +307,40 @@ fn build_score_rows(
     }
 
     score_rows
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replay_id_follows_best_score_for_current_and_expired_difficulties() {
+        let current = vec![CurrentDiffInfo {
+            mode: "Standard".into(), difficulty: "Expert".into(),
+            hash: "current".into(), stars: None,
+        }];
+        let make_score = |player: &str, difficulty: &str, hash: &str, id, accuracy| PlayerScore {
+            player_id: player.into(), score_id: id, leaderboard_id: "board".into(),
+            map_key: Some("abc".into()), hash: hash.into(), mode: "Standard".into(),
+            difficulty: difficulty.into(), accuracy, epoch_time: id,
+        };
+        let rows = build_score_rows(&current, &[], &std::collections::HashSet::from(["current".into()]), vec![
+            make_score("current", "Expert", "current", 1, 0.8),
+            make_score("current", "Expert", "current", 2, 0.9),
+            make_score("expired", "Expert", "old-a", 3, 0.8),
+            make_score("expired", "Expert", "old-b", 4, 0.95),
+            make_score("removed", "Hard", "old-a", 5, 0.8),
+            make_score("removed", "Hard", "old-b", 6, 0.96),
+        ]);
+        for (player, expected_id, expected_accuracy, expired) in [
+            ("current", 2, 0.9, false), ("expired", 4, 0.95, true), ("removed", 6, 0.96, true),
+        ] {
+            let cell = rows.iter().flat_map(|row| &row.scores).find(|cell| cell.player_id == player).unwrap();
+            assert_eq!(cell.score_id, expected_id);
+            assert_eq!(cell.accuracy, expected_accuracy);
+            assert_eq!(cell.is_expired, expired);
+        }
+    }
 }
 
 /// 增量更新玩家成绩

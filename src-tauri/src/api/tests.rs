@@ -2,7 +2,7 @@ use crate::api::{BeatLeaderApi, BeatSaverApi, ApiError};
 
 #[tokio::test]
 async fn test_beatleader_get_player() {
-    let api = BeatLeaderApi::new();
+    let api = BeatLeaderApi::new().expect("HTTP client");
     let player_id = "76561198159152141"; // YoLeax 的 Steam ID
 
     let result = api.get_player(player_id).await;
@@ -16,7 +16,7 @@ async fn test_beatleader_get_player() {
 
 #[tokio::test]
 async fn test_beatleader_get_player_scores() {
-    let api = BeatLeaderApi::new();
+    let api = BeatLeaderApi::new().expect("HTTP client");
     let player_id = "76561198159152141";
 
     let result = api.get_player_scores(player_id, 1, 10).await;
@@ -40,7 +40,7 @@ async fn test_beatleader_get_player_scores() {
 
 #[tokio::test]
 async fn test_beatsaver_get_map_by_key() {
-    let api = BeatSaverApi::new();
+    let api = BeatSaverApi::new().expect("HTTP client");
     let key = "4c89a"; // Windows 7 Startup
 
     let result = api.get_map_by_key(key).await;
@@ -53,7 +53,7 @@ async fn test_beatsaver_get_map_by_key() {
 
 #[tokio::test]
 async fn test_beatsaver_get_map_by_hash() {
-    let api = BeatSaverApi::new();
+    let api = BeatSaverApi::new().expect("HTTP client");
     let hash = "f01764441f594952b39013bd774feae7533afcc8";
 
     let result = api.get_map_by_hash(hash).await;
@@ -65,7 +65,7 @@ async fn test_beatsaver_get_map_by_hash() {
 
 #[tokio::test]
 async fn test_beatsaver_get_playlist() {
-    let api = BeatSaverApi::new();
+    let api = BeatSaverApi::new().expect("HTTP client");
     let playlist_id = 123; // 示例歌单
 
     let result = api.get_playlist(playlist_id, 0).await;
